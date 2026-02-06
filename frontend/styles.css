@@ -353,6 +353,55 @@ body {
     color: var(--accent);
 }
 
+/* Randomize Button */
+.randomize-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    width: 100%;
+    margin-top: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-surface);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s var(--ease-out);
+}
+
+.randomize-btn svg {
+    width: 18px;
+    height: 18px;
+    color: var(--text-muted);
+    transition: all 0.3s var(--ease-out);
+}
+
+.randomize-btn span {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.randomize-btn:hover {
+    background: var(--bg-elevated);
+    border-color: var(--accent);
+}
+
+.randomize-btn:hover svg {
+    color: var(--accent);
+    transform: rotate(180deg);
+}
+
+.randomize-btn:hover span {
+    color: var(--accent);
+}
+
+.randomize-btn.clicked svg {
+    transform: rotate(360deg);
+}
+
 /* Knob Controls */
 .knob-row {
     display: grid;
