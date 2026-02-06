@@ -1145,6 +1145,7 @@ class KaleidoscopeStudio {
 
     /**
      * Geometric style - orbiting polygons with radial symmetry (uses shapeSeed for variation)
+     * All mirrors are IDENTICAL to maintain kaleidoscope symmetry
      */
     renderGeometricStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
@@ -1154,59 +1155,56 @@ class KaleidoscopeStudio {
         const brightness = this.smoothedValues.spectralBrightness;
         const orbitDistance = config.orbitRadius * (0.5 + harmonic * 0.5);
 
-        // Seed-based variation parameters
+        // Seed-based variation parameters (GLOBAL - same for all mirrors)
         const rotationDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
         const innerRotationSpeed = 1 + this.seededRandom(seed + 1) * 1.5;
         const hueShift = this.seededRandom(seed + 2) * 60;
-        const sizeVariation = 0.7 + this.seededRandom(seed + 3) * 0.6;
+        const sizeMultiplier = 0.8 + this.seededRandom(seed + 3) * 0.4;
+        const outerSidesBonus = Math.floor(this.seededRandom(seed + 4) * 3);
+        const innerSidesBonus = Math.floor(this.seededRandom(seed + 5) * 2);
+        const hasTinyPolygon = this.seededRandom(seed + 6) > 0.4;
+        const tinySides = 3 + Math.floor(this.seededRandom(seed + 7) * 3);
 
-        // Draw kaleidoscope pattern
+        // Draw kaleidoscope pattern - ALL MIRRORS IDENTICAL
         for (let i = 0; i < config.mirrors; i++) {
-            const iSeed = seed + i * 17;
             const mirrorAngle = (Math.PI * 2 * i / config.mirrors) + this.accumulatedRotation * 0.3 * rotationDir;
 
-            // Seed-based per-mirror variation
-            const orbitVar = 0.9 + this.seededRandom(iSeed) * 0.2;
-            const sizeVar = 0.8 + this.seededRandom(iSeed + 1) * 0.4;
-            const sidesVar = Math.floor(this.seededRandom(iSeed + 2) * 3);
+            const orbitX = centerX + orbitDistance * Math.cos(mirrorAngle);
+            const orbitY = centerY + orbitDistance * Math.sin(mirrorAngle);
 
-            const orbitX = centerX + orbitDistance * orbitVar * Math.cos(mirrorAngle);
-            const orbitY = centerY + orbitDistance * orbitVar * Math.sin(mirrorAngle);
-
-            // Outer polygon with seed variation
-            const outerSides = numSides + sidesVar;
-            const outerHue = (hue + i * (hueShift / config.mirrors)) % 360;
+            // Outer polygon (same for all mirrors)
+            const outerSides = numSides + outerSidesBonus;
             this.drawPolygon(
                 ctx,
                 orbitX, orbitY,
-                radius * 0.8 * sizeVar * sizeVariation,
+                radius * 0.8 * sizeMultiplier,
                 outerSides,
                 this.accumulatedRotation * rotationDir + mirrorAngle,
-                `hsl(${outerHue}, ${config.saturation}%, ${65 + energy * 15}%)`,
+                `hsl(${hue}, ${config.saturation}%, ${65 + energy * 15}%)`,
                 thickness * (0.8 + energy * 0.4)
             );
 
-            // Inner polygon (counter-rotating) with variation
+            // Inner polygon (counter-rotating, same for all mirrors)
             const innerHue = (hue + 180 + hueShift) % 360;
-            const innerSides = Math.max(3, outerSides - 1 - Math.floor(this.seededRandom(iSeed + 3) * 2));
+            const innerSides = Math.max(3, outerSides - 1 - innerSidesBonus);
             this.drawPolygon(
                 ctx,
                 orbitX, orbitY,
-                radius * 0.35 * sizeVar,
+                radius * 0.35 * sizeMultiplier,
                 innerSides,
                 -this.accumulatedRotation * innerRotationSpeed * rotationDir + mirrorAngle,
                 `hsl(${innerHue}, ${config.saturation * 0.8}%, ${55 + energy * 20}%)`,
                 Math.max(1, thickness / 2)
             );
 
-            // Extra tiny polygon on some mirrors (seed-based)
-            if (this.seededRandom(iSeed + 4) > 0.5) {
-                const tinyHue = (outerHue + 90) % 360;
+            // Extra tiny polygon (same for all mirrors if enabled)
+            if (hasTinyPolygon) {
+                const tinyHue = (hue + 90) % 360;
                 this.drawPolygon(
                     ctx,
                     orbitX, orbitY,
                     radius * 0.15 * (1 + energy * 0.5),
-                    3 + Math.floor(this.seededRandom(iSeed + 5) * 3),
+                    tinySides,
                     this.accumulatedRotation * 2 * rotationDir,
                     `hsl(${tinyHue}, ${config.saturation}%, ${70 + brightness * 20}%)`,
                     1 + energy
@@ -1504,6 +1502,7 @@ class KaleidoscopeStudio {
 
     /**
      * Flower style - petal-like shapes radiating from center (uses shapeSeed for variation)
+     * All petals in each layer are IDENTICAL to maintain kaleidoscope symmetry
      */
     renderFlowerStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
@@ -1513,79 +1512,74 @@ class KaleidoscopeStudio {
         const harmonic = this.smoothedValues.harmonicEnergy;
         const brightness = this.smoothedValues.spectralBrightness;
 
-        // Seed-based variation parameters
+        // Seed-based variation parameters (GLOBAL - same for all petals)
         const rotationDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
         const petalShape = this.seededRandom(seed + 1); // 0-1 affects curve shape
         const hueSpread = 20 + this.seededRandom(seed + 2) * 60;
         const layerCount = 3 + Math.floor(this.seededRandom(seed + 3) * 2);
+        const hasFill = this.seededRandom(seed + 4) > 0.5;
+        const hasVein = this.seededRandom(seed + 5) > 0.4;
+        const curveStyle1 = 0.2 + this.seededRandom(seed + 6) * 0.2;
+        const curveStyle2 = 0.7 + this.seededRandom(seed + 7) * 0.2;
+        const widthMult1 = 1 + this.seededRandom(seed + 8) * 0.3;
+        const widthMult2 = 0.4 + this.seededRandom(seed + 9) * 0.3;
 
         ctx.save();
         ctx.translate(centerX, centerY);
 
-        // Multiple layers of petals with seed variation
+        // Multiple layers of petals - ALL petals in a layer are identical
         for (let layer = 0; layer < layerCount; layer++) {
             const layerSeed = seed + layer * 31;
             const layerRadius = radius * (0.4 + layer * 0.35) * (1 + energy * 0.3);
             const rotSpeed = (1 - layer * 0.25) * (this.seededRandom(layerSeed) > 0.5 ? 1 : -1);
             const layerRotation = this.accumulatedRotation * rotSpeed * rotationDir;
-            const basePetalCount = mirrors + layer * 2;
-            const petalCount = basePetalCount + Math.floor(this.seededRandom(layerSeed + 1) * 3);
+            const petalCount = mirrors + layer * 2;
             const layerHue = (hue + layer * hueSpread) % 360;
+
+            // Per-layer seed-based parameters (same for all petals in this layer)
+            const layerPetalLength = layerRadius * (0.7 + harmonic * 0.5);
+            const layerPetalWidth = layerRadius * (0.25 + petalShape * 0.15) * (1 + energy * 0.5);
 
             ctx.save();
             ctx.rotate(layerRotation);
 
             for (let i = 0; i < petalCount; i++) {
-                const petalSeed = layerSeed + i * 13;
                 const petalAngle = (Math.PI * 2 * i) / petalCount;
-
-                // Seed-based petal size variation
-                const sizeVar = 0.8 + this.seededRandom(petalSeed) * 0.4;
-                const petalLength = layerRadius * (0.7 + harmonic * 0.5) * sizeVar;
-                const petalWidth = layerRadius * (0.25 + petalShape * 0.15) * (1 + energy * 0.5);
-
-                // Seed-based curve variation
-                const curveVar1 = 0.2 + this.seededRandom(petalSeed + 1) * 0.2;
-                const curveVar2 = 0.7 + this.seededRandom(petalSeed + 2) * 0.2;
 
                 ctx.save();
                 ctx.rotate(petalAngle);
 
-                // Draw petal shape using bezier curves with variation
+                // Draw petal shape - ALL IDENTICAL
                 ctx.beginPath();
                 ctx.moveTo(0, 0);
                 ctx.bezierCurveTo(
-                    petalWidth * (1 + this.seededRandom(petalSeed + 3) * 0.3), petalLength * curveVar1,
-                    petalWidth * (0.4 + this.seededRandom(petalSeed + 4) * 0.3), petalLength * curveVar2,
-                    0, petalLength
+                    layerPetalWidth * widthMult1, layerPetalLength * curveStyle1,
+                    layerPetalWidth * widthMult2, layerPetalLength * curveStyle2,
+                    0, layerPetalLength
                 );
                 ctx.bezierCurveTo(
-                    -petalWidth * (0.4 + this.seededRandom(petalSeed + 5) * 0.3), petalLength * curveVar2,
-                    -petalWidth * (1 + this.seededRandom(petalSeed + 6) * 0.3), petalLength * curveVar1,
+                    -layerPetalWidth * widthMult2, layerPetalLength * curveStyle2,
+                    -layerPetalWidth * widthMult1, layerPetalLength * curveStyle1,
                     0, 0
                 );
 
                 const alpha = 0.35 + brightness * 0.35 + energy * 0.2 - layer * 0.08;
-                const petalHue = (layerHue + this.seededRandom(petalSeed + 7) * 20) % 360;
-                ctx.strokeStyle = `hsla(${petalHue}, ${config.saturation}%, ${55 + layer * 8 + energy * 15}%, ${alpha})`;
+                ctx.strokeStyle = `hsla(${layerHue}, ${config.saturation}%, ${55 + layer * 8 + energy * 15}%, ${alpha})`;
                 ctx.lineWidth = thickness * (1 - layer * 0.15) * (0.8 + energy * 0.4);
                 ctx.stroke();
 
-                // Optional fill for some petals (seed-based)
-                if (this.seededRandom(petalSeed + 8) > 0.6) {
-                    ctx.fillStyle = `hsla(${petalHue}, ${config.saturation * 0.8}%, ${60 + energy * 20}%, ${alpha * 0.3})`;
+                // Optional fill (same for all petals in layer)
+                if (hasFill) {
+                    ctx.fillStyle = `hsla(${layerHue}, ${config.saturation * 0.8}%, ${60 + energy * 20}%, ${alpha * 0.3})`;
                     ctx.fill();
                 }
 
-                // Inner vein with variation
-                if (this.seededRandom(petalSeed + 9) > 0.3) {
+                // Inner vein (same for all petals in layer)
+                if (hasVein) {
                     ctx.beginPath();
-                    ctx.moveTo(0, petalLength * 0.15);
-                    ctx.quadraticCurveTo(
-                        this.seededRandom(petalSeed + 10) * 4 - 2, petalLength * 0.5,
-                        0, petalLength * 0.85
-                    );
-                    ctx.strokeStyle = `hsla(${petalHue}, ${config.saturation}%, 75%, ${alpha * 0.4})`;
+                    ctx.moveTo(0, layerPetalLength * 0.15);
+                    ctx.lineTo(0, layerPetalLength * 0.85);
+                    ctx.strokeStyle = `hsla(${layerHue}, ${config.saturation}%, 75%, ${alpha * 0.4})`;
                     ctx.lineWidth = thickness * 0.25;
                     ctx.stroke();
                 }
@@ -1608,13 +1602,13 @@ class KaleidoscopeStudio {
         ctx.arc(0, 0, stamenRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Extra center details (seed-based)
+        // Center dots (identical spacing)
         if (this.seededRandom(seed + 22) > 0.4) {
             const dotCount = 5 + Math.floor(this.seededRandom(seed + 23) * 4);
+            const dotDist = stamenRadius * 0.6;
+            const dotSize = 2 + energy * 3;
             for (let d = 0; d < dotCount; d++) {
                 const dotAngle = (Math.PI * 2 * d) / dotCount + this.accumulatedRotation * 0.5;
-                const dotDist = stamenRadius * (0.5 + this.seededRandom(seed + 24 + d) * 0.4);
-                const dotSize = 2 + energy * 3;
                 ctx.beginPath();
                 ctx.arc(
                     Math.cos(dotAngle) * dotDist,
