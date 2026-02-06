@@ -31,6 +31,18 @@ Built-in geometric visualizer that maps audio features to transformations:
 - **Spectral Brightness** → Polygon complexity (3 sides → 12 sides)
 - **Dominant Pitch** → Hue colors (musical notes map to spectrum)
 
+### Kaleidoscope Studio (Web UI)
+
+A premium web-based interface designed for musicians:
+
+- **Drag & drop** audio files
+- **Real-time preview** with live canvas rendering
+- **Rotary knob controls** that feel like studio hardware
+- **Waveform timeline** with visual playhead
+- **One-click export** to HD video
+
+![Kaleidoscope Studio Interface](docs/screenshots/studio-ui.png)
+
 ## Quick Start
 
 ### Installation
@@ -89,6 +101,15 @@ audio-analyze song.mp3 -o manifest.json --fps 60 --summary
 python -m audio_analysisussy.render_video song.mp3 -o output.mp4
 ```
 
+### Web Interface (Kaleidoscope Studio)
+
+```bash
+# Start the web server
+python frontend/server.py
+
+# Open http://localhost:8080 in your browser
+```
+
 ## Output Format
 
 The Visual Driver Manifest is a JSON file with frame-by-frame data:
@@ -139,6 +160,12 @@ src/audio_analysisussy/
 ├── pipeline.py         # Main orchestration
 ├── render_video.py     # Video export with ffmpeg
 └── cli.py              # Command-line interface
+
+frontend/
+├── index.html          # Main application
+├── styles.css          # Studio-grade dark theme
+├── app.js              # Visualization engine & controls
+└── server.py           # Development server
 ```
 
 ### Pipeline Phases

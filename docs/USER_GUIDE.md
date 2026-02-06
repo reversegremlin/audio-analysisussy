@@ -6,12 +6,13 @@ Complete guide to using Audio Analysisussy for audio analysis and visualization.
 
 1. [Installation](#installation)
 2. [Quick Start](#quick-start)
-3. [Understanding the Output](#understanding-the-output)
-4. [Using the Pipeline](#using-the-pipeline)
-5. [Creating Visualizations](#creating-visualizations)
-6. [Advanced Configuration](#advanced-configuration)
-7. [Integrating with Other Tools](#integrating-with-other-tools)
-8. [Troubleshooting](#troubleshooting)
+3. [Kaleidoscope Studio (Web UI)](#kaleidoscope-studio-web-ui)
+4. [Understanding the Output](#understanding-the-output)
+5. [Using the Pipeline](#using-the-pipeline)
+6. [Creating Visualizations](#creating-visualizations)
+7. [Advanced Configuration](#advanced-configuration)
+8. [Integrating with Other Tools](#integrating-with-other-tools)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -109,6 +110,68 @@ python -m audio_analysisussy.render_video song.mp3 \
     --mirrors 12 \
     --trail 60
 ```
+
+---
+
+## Kaleidoscope Studio (Web UI)
+
+The easiest way to create visualizations is through Kaleidoscope Studio, a web-based interface designed for musicians.
+
+### Starting the Studio
+
+```bash
+# Make sure you're in the virtual environment
+source .venv/bin/activate
+
+# Start the server
+python frontend/server.py
+
+# Open in your browser
+# http://localhost:8080
+```
+
+### Interface Overview
+
+The Studio is divided into three main areas:
+
+**Left Panel - Audio & Geometry**
+- **Audio Source**: Drag & drop or click to load audio files
+- **Geometry**: Control mirrors (radial symmetry), size, orbit distance, and rotation speed
+- **Dynamics**: Adjust punch intensity, motion trails, and envelope settings
+
+**Center - Preview & Timeline**
+- **Canvas**: Real-time visualization preview synced to audio
+- **Waveform**: Visual representation of your audio with playhead
+- **Transport**: Play/pause, skip, and volume controls
+
+**Right Panel - Shape & Export**
+- **Shape**: Control polygon complexity and stroke thickness
+- **Colors**: Background color, accent color, chroma-based coloring
+- **Export**: Resolution, frame rate, and video export options
+
+### Using Rotary Knobs
+
+The knobs work like real studio hardware:
+- **Click and drag up/down** to adjust values
+- **Mouse wheel** for fine adjustments
+- **Hover** to see the glow effect and current value
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Space` | Play/Pause |
+| Click waveform | Seek to position |
+
+### Export Workflow
+
+1. Load your audio file
+2. Adjust visualization parameters while previewing
+3. Select resolution (720p, 1080p, or 4K)
+4. Select frame rate (30 or 60 FPS)
+5. Click "Export Video"
+
+The export uses the same rendering engine as the command line, ensuring what you preview is what you get.
 
 ---
 
