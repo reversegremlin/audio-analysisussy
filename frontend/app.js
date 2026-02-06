@@ -56,8 +56,21 @@ class KaleidoscopeStudio {
         this.startTime = 0;
         this.pauseTime = 0;
         this.duration = 0;
-        this.manifest = null;
-        this.currentFrame = 0;
+
+        // Real-time audio analysis
+        this.frequencyData = null;
+        this.timeData = null;
+        this.prevEnergy = 0;
+        this.energyHistory = [];
+        this.beatThreshold = 1.3;
+        this.lastBeatTime = 0;
+        this.beatCooldown = 150; // ms between beats
+        this.dominantChroma = 'C';
+        this.chromaSmoothed = new Array(12).fill(0);
+
+        // BPM estimation
+        this.beatTimes = [];
+        this.estimatedBpm = 0;
 
         // Visualization state
         this.accumulatedRotation = 0;
@@ -327,10 +340,24 @@ class KaleidoscopeStudio {
             // Initialize audio context if needed
             if (!this.audioContext) {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                this.gainNode = this.audioContext.createGain();
-                this.gainNode.connect(this.audioContext.destination);
-                this.gainNode.gain.value = 0.8;
             }
+
+            // Create analyser node for real-time frequency analysis
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 2048;
+            this.analyser.smoothingTimeConstant = 0.8;
+
+            // Create gain node
+            this.gainNode = this.audioContext.createGain();
+            this.gainNode.gain.value = 0.8;
+
+            // Connect: source -> analyser -> gain -> destination
+            this.analyser.connect(this.gainNode);
+            this.gainNode.connect(this.audioContext.destination);
+
+            // Create data arrays for analysis
+            this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
+            this.timeData = new Uint8Array(this.analyser.fftSize);
 
             // Decode audio
             const arrayBuffer = await file.arrayBuffer();
@@ -348,9 +375,13 @@ class KaleidoscopeStudio {
             // Draw waveform
             this.drawWaveform();
 
-            // Analyze audio (simulate manifest data for now)
-            statusText.textContent = 'Analyzing...';
-            await this.analyzeAudio(file);
+            // Reset analysis state
+            this.energyHistory = [];
+            this.prevEnergy = 0;
+            this.lastBeatTime = 0;
+            this.beatTimes = [];
+            this.estimatedBpm = 0;
+            document.getElementById('trackBpm').textContent = '-- BPM';
 
             statusIndicator.classList.remove('processing');
             statusText.textContent = 'Ready';
@@ -363,82 +394,227 @@ class KaleidoscopeStudio {
         }
     }
 
-    async analyzeAudio(file) {
-        // For now, generate simulated manifest data
-        // In production, this would call the Python backend
-        const fps = this.config.fps;
-        const totalFrames = Math.ceil(this.duration * fps);
-        const frames = [];
-
-        // Create simulated beat pattern (120 BPM default)
-        const bpm = 120;
-        const beatsPerSecond = bpm / 60;
-        const framesPerBeat = fps / beatsPerSecond;
-
-        // Use deterministic pseudo-random for consistency
-        const seededRandom = (seed) => {
-            const x = Math.sin(seed * 12.9898) * 43758.5453;
-            return x - Math.floor(x);
-        };
-
-        for (let i = 0; i < totalFrames; i++) {
-            const time = i / fps;
-            const beatPhase = (i % framesPerBeat) / framesPerBeat;
-            // Only trigger beat on the first frame of each beat period
-            const isBeat = (i % Math.round(framesPerBeat)) === 0;
-
-            // Smooth energy curves using sine waves (no randomness for smoothness)
-            const slowWave = Math.sin(time * 0.3) * 0.5 + 0.5;
-            const medWave = Math.sin(time * 0.8 + 1) * 0.5 + 0.5;
-            const fastWave = Math.sin(time * 2.1 + 2) * 0.5 + 0.5;
-
-            // Percussive: spike on beats, smooth decay otherwise
-            let percussiveImpact;
-            if (isBeat) {
-                percussiveImpact = 0.85 + seededRandom(i) * 0.15;
-            } else {
-                // Exponential decay after beat
-                const decayPhase = beatPhase;
-                const decay = Math.exp(-decayPhase * 8);
-                percussiveImpact = 0.1 + decay * 0.6;
-            }
-
-            // Harmonic: smooth flowing energy
-            const harmonicEnergy = 0.3 + slowWave * 0.25 + medWave * 0.2 + fastWave * 0.1;
-
-            // Brightness: gentle variation
-            const spectralBrightness = 0.4 + medWave * 0.3 + fastWave * 0.15;
-
-            // Cycle through chroma (change every 2 beats for musical feel)
-            const chromaNames = ['C', 'G', 'Am', 'F', 'C', 'G', 'D', 'Em'].map(c => c.charAt(0));
-            const fullChromaNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-            const beatsElapsed = Math.floor(time * beatsPerSecond);
-            const chromaIndex = Math.floor(beatsElapsed / 2) % fullChromaNames.length;
-
-            frames.push({
-                frame_index: i,
-                time: time,
-                is_beat: isBeat,
-                is_onset: isBeat,
-                percussive_impact: Math.min(1, Math.max(0, percussiveImpact)),
-                harmonic_energy: Math.min(1, Math.max(0, harmonicEnergy)),
-                global_energy: (percussiveImpact + harmonicEnergy) / 2,
-                spectral_brightness: Math.min(1, Math.max(0, spectralBrightness)),
-                dominant_chroma: fullChromaNames[chromaIndex]
-            });
+    /**
+     * Real-time audio analysis using Web Audio API
+     * Called every frame during playback to extract current audio features
+     */
+    analyzeCurrentAudio() {
+        if (!this.analyser || !this.isPlaying) {
+            return this.getIdleFrameData();
         }
 
-        this.manifest = {
-            metadata: {
-                bpm: bpm,
-                duration: this.duration,
-                fps: fps,
-                n_frames: totalFrames
-            },
-            frames: frames
-        };
+        // Get current frequency and time domain data
+        this.analyser.getByteFrequencyData(this.frequencyData);
+        this.analyser.getByteTimeDomainData(this.timeData);
 
-        document.getElementById('trackBpm').textContent = `${this.manifest.metadata.bpm} BPM`;
+        const sampleRate = this.audioContext.sampleRate;
+        const binCount = this.analyser.frequencyBinCount;
+        const nyquist = sampleRate / 2;
+
+        // Calculate frequency band energies
+        // Low: 20-200Hz, Mid: 200-4000Hz, High: 4000-20000Hz
+        const lowEnd = Math.floor(200 / nyquist * binCount);
+        const midEnd = Math.floor(4000 / nyquist * binCount);
+
+        let lowSum = 0, midSum = 0, highSum = 0, totalSum = 0;
+        let lowCount = 0, midCount = 0, highCount = 0;
+
+        for (let i = 0; i < binCount; i++) {
+            const value = this.frequencyData[i] / 255;
+            totalSum += value;
+
+            if (i < lowEnd) {
+                lowSum += value;
+                lowCount++;
+            } else if (i < midEnd) {
+                midSum += value;
+                midCount++;
+            } else {
+                highSum += value;
+                highCount++;
+            }
+        }
+
+        const lowEnergy = lowCount > 0 ? lowSum / lowCount : 0;
+        const midEnergy = midCount > 0 ? midSum / midCount : 0;
+        const highEnergy = highCount > 0 ? highSum / highCount : 0;
+        const globalEnergy = totalSum / binCount;
+
+        // Calculate RMS from time domain for percussive detection
+        let rmsSum = 0;
+        for (let i = 0; i < this.timeData.length; i++) {
+            const sample = (this.timeData[i] - 128) / 128;
+            rmsSum += sample * sample;
+        }
+        const rms = Math.sqrt(rmsSum / this.timeData.length);
+
+        // Spectral centroid (brightness) - weighted average of frequencies
+        let centroidNum = 0, centroidDen = 0;
+        for (let i = 0; i < binCount; i++) {
+            const freq = i * nyquist / binCount;
+            const magnitude = this.frequencyData[i] / 255;
+            centroidNum += freq * magnitude;
+            centroidDen += magnitude;
+        }
+        const centroid = centroidDen > 0 ? centroidNum / centroidDen : 0;
+        // Normalize to 0-1 range (assuming max useful centroid around 8000Hz)
+        const spectralBrightness = Math.min(1, centroid / 8000);
+
+        // Beat detection using energy flux
+        const currentEnergy = lowEnergy * 2 + rms; // Weight bass frequencies
+        this.energyHistory.push(currentEnergy);
+        if (this.energyHistory.length > 30) {
+            this.energyHistory.shift();
+        }
+
+        const avgEnergy = this.energyHistory.reduce((a, b) => a + b, 0) / this.energyHistory.length;
+        const energyFlux = currentEnergy - this.prevEnergy;
+        this.prevEnergy = currentEnergy;
+
+        // Detect beat: energy spike above threshold, with cooldown
+        const now = performance.now();
+        const isBeat = energyFlux > 0.15 &&
+                       currentEnergy > avgEnergy * this.beatThreshold &&
+                       (now - this.lastBeatTime) > this.beatCooldown;
+
+        if (isBeat) {
+            this.lastBeatTime = now;
+            this.updateBpmEstimate(now);
+        }
+
+        // Percussive impact: combination of bass energy and transient detection
+        const percussiveImpact = Math.min(1, (lowEnergy * 0.6 + rms * 0.4) * 1.5);
+
+        // Harmonic energy: mid and high frequencies (melodic content)
+        const harmonicEnergy = Math.min(1, (midEnergy * 0.7 + highEnergy * 0.3) * 1.3);
+
+        // Chroma estimation (simplified - uses spectral peaks)
+        this.updateChroma();
+
+        return {
+            percussive_impact: percussiveImpact,
+            harmonic_energy: harmonicEnergy,
+            global_energy: globalEnergy,
+            low_energy: lowEnergy,
+            mid_energy: midEnergy,
+            high_energy: highEnergy,
+            spectral_brightness: spectralBrightness,
+            is_beat: isBeat,
+            is_onset: isBeat,
+            dominant_chroma: this.dominantChroma
+        };
+    }
+
+    /**
+     * Estimate dominant pitch class from frequency spectrum
+     */
+    updateChroma() {
+        if (!this.frequencyData) return;
+
+        const sampleRate = this.audioContext.sampleRate;
+        const binCount = this.analyser.frequencyBinCount;
+        const nyquist = sampleRate / 2;
+
+        // Note frequencies for octave 4 (middle octave)
+        const noteFreqs = [
+            261.63, 277.18, 293.66, 311.13, 329.63, 349.23,
+            369.99, 392.00, 415.30, 440.00, 466.16, 493.88
+        ]; // C4 to B4
+
+        const chromaEnergy = new Array(12).fill(0);
+
+        // Sum energy at each chroma pitch across octaves
+        for (let octave = 2; octave <= 6; octave++) {
+            const octaveMultiplier = Math.pow(2, octave - 4);
+            for (let note = 0; note < 12; note++) {
+                const freq = noteFreqs[note] * octaveMultiplier;
+                if (freq < 80 || freq > nyquist) continue;
+
+                const bin = Math.round(freq / nyquist * binCount);
+                if (bin >= 0 && bin < binCount) {
+                    // Average nearby bins for stability
+                    let energy = 0;
+                    for (let i = Math.max(0, bin - 1); i <= Math.min(binCount - 1, bin + 1); i++) {
+                        energy += this.frequencyData[i] / 255;
+                    }
+                    chromaEnergy[note] += energy / 3;
+                }
+            }
+        }
+
+        // Smooth chroma values
+        for (let i = 0; i < 12; i++) {
+            this.chromaSmoothed[i] = this.chromaSmoothed[i] * 0.8 + chromaEnergy[i] * 0.2;
+        }
+
+        // Find dominant chroma
+        let maxChroma = 0;
+        let maxIndex = 0;
+        for (let i = 0; i < 12; i++) {
+            if (this.chromaSmoothed[i] > maxChroma) {
+                maxChroma = this.chromaSmoothed[i];
+                maxIndex = i;
+            }
+        }
+
+        const chromaNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        this.dominantChroma = chromaNames[maxIndex];
+    }
+
+    /**
+     * Return idle frame data when not playing
+     */
+    getIdleFrameData() {
+        return {
+            percussive_impact: 0.1,
+            harmonic_energy: 0.3,
+            global_energy: 0.2,
+            spectral_brightness: 0.5,
+            is_beat: false,
+            is_onset: false,
+            dominant_chroma: 'C'
+        };
+    }
+
+    /**
+     * Estimate BPM from detected beats
+     */
+    updateBpmEstimate(beatTime) {
+        this.beatTimes.push(beatTime);
+
+        // Keep last 16 beats for estimation
+        if (this.beatTimes.length > 16) {
+            this.beatTimes.shift();
+        }
+
+        // Need at least 4 beats to estimate
+        if (this.beatTimes.length < 4) {
+            return;
+        }
+
+        // Calculate intervals between beats
+        const intervals = [];
+        for (let i = 1; i < this.beatTimes.length; i++) {
+            intervals.push(this.beatTimes[i] - this.beatTimes[i - 1]);
+        }
+
+        // Filter out outliers (intervals outside reasonable BPM range 60-200)
+        const validIntervals = intervals.filter(i => i > 300 && i < 1000);
+
+        if (validIntervals.length < 3) return;
+
+        // Calculate median interval for stability
+        validIntervals.sort((a, b) => a - b);
+        const medianInterval = validIntervals[Math.floor(validIntervals.length / 2)];
+
+        // Convert to BPM
+        const bpm = Math.round(60000 / medianInterval);
+
+        // Only update if reasonable
+        if (bpm >= 60 && bpm <= 200) {
+            this.estimatedBpm = bpm;
+            document.getElementById('trackBpm').textContent = `~${bpm} BPM`;
+        }
     }
 
     drawWaveform() {
@@ -520,9 +696,12 @@ class KaleidoscopeStudio {
             this.audioSource.stop();
         }
 
+        // Create new buffer source
         this.audioSource = this.audioContext.createBufferSource();
         this.audioSource.buffer = this.audioBuffer;
-        this.audioSource.connect(this.gainNode);
+
+        // Connect source -> analyser (analyser already connected to gain -> destination)
+        this.audioSource.connect(this.analyser);
 
         const offset = this.pauseTime || 0;
         this.startTime = this.audioContext.currentTime - offset;
@@ -530,6 +709,10 @@ class KaleidoscopeStudio {
 
         this.isPlaying = true;
         document.getElementById('playBtn').classList.add('playing');
+
+        // Reset analysis state for fresh playback
+        this.energyHistory = [];
+        this.prevEnergy = 0;
 
         this.audioSource.onended = () => {
             if (this.isPlaying) {
@@ -609,21 +792,17 @@ class KaleidoscopeStudio {
                 document.getElementById('playhead').style.left = `${ratio * 100}%`;
             }
 
-            // Get current frame data
-            let frameData = null;
-            if (this.manifest && this.manifest.frames) {
-                const frameIndex = Math.floor(currentTime * this.config.fps);
-                frameData = this.manifest.frames[Math.min(frameIndex, this.manifest.frames.length - 1)];
+            // Get REAL-TIME audio analysis (not pre-computed manifest)
+            const frameData = this.analyzeCurrentAudio();
 
-                // Beat flash effect (with longer debounce)
-                if (frameData && frameData.is_beat && this.isPlaying) {
-                    if (timestamp - lastBeatTime > 400) { // At least 400ms between flashes
-                        lastBeatTime = timestamp;
-                        document.querySelector('.canvas-container').classList.add('beat');
-                        setTimeout(() => {
-                            document.querySelector('.canvas-container').classList.remove('beat');
-                        }, 80);
-                    }
+            // Beat flash effect on UI
+            if (frameData.is_beat && this.isPlaying) {
+                if (timestamp - lastBeatTime > 200) { // Cooldown for UI flash
+                    lastBeatTime = timestamp;
+                    document.querySelector('.canvas-container').classList.add('beat');
+                    setTimeout(() => {
+                        document.querySelector('.canvas-container').classList.remove('beat');
+                    }, 80);
                 }
             }
 
@@ -1015,7 +1194,7 @@ class KaleidoscopeStudio {
     }
 
     async exportVideo() {
-        if (!this.manifest) {
+        if (!this.audioBuffer) {
             alert('Please load an audio file first');
             return;
         }
