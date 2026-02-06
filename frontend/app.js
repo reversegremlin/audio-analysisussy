@@ -10,6 +10,7 @@ class KaleidoscopeStudio {
             // Style
             style: 'geometric', // geometric, glass, flower, spiral
             shapeSeed: Math.floor(Math.random() * 10000), // Random seed for shape generation
+            glassSlices: 30, // Number of shape slices in Glass style (10-60)
             // Geometry
             mirrors: 8,
             baseRadius: 150,
@@ -158,13 +159,34 @@ class KaleidoscopeStudio {
         });
 
         // Style buttons
+        const glassSlicesControl = document.getElementById('glassSlicesControl');
         document.querySelectorAll('.style-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.config.style = btn.dataset.style;
+                // Show/hide glass-specific controls
+                if (glassSlicesControl) {
+                    if (btn.dataset.style === 'glass') {
+                        glassSlicesControl.classList.add('visible');
+                    } else {
+                        glassSlicesControl.classList.remove('visible');
+                    }
+                }
             });
         });
+
+        // Glass slices slider
+        const glassSlicesSlider = document.getElementById('glassSlicesSlider');
+        const glassSlicesValue = document.getElementById('glassSlicesValue');
+        if (glassSlicesSlider) {
+            glassSlicesSlider.addEventListener('input', (e) => {
+                this.config.glassSlices = parseInt(e.target.value, 10);
+                if (glassSlicesValue) {
+                    glassSlicesValue.textContent = e.target.value;
+                }
+            });
+        }
 
         // Randomize button
         const randomizeBtn = document.getElementById('randomizeBtn');
@@ -1122,53 +1144,100 @@ class KaleidoscopeStudio {
     }
 
     /**
-     * Geometric style - orbiting polygons with radial symmetry
+     * Geometric style - orbiting polygons with radial symmetry (uses shapeSeed for variation)
      */
     renderGeometricStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
-        const orbitDistance = config.orbitRadius * (0.5 + this.smoothedValues.harmonicEnergy * 0.5);
+        const seed = config.shapeSeed;
+        const energy = this.smoothedValues.percussiveImpact;
+        const harmonic = this.smoothedValues.harmonicEnergy;
+        const brightness = this.smoothedValues.spectralBrightness;
+        const orbitDistance = config.orbitRadius * (0.5 + harmonic * 0.5);
+
+        // Seed-based variation parameters
+        const rotationDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
+        const innerRotationSpeed = 1 + this.seededRandom(seed + 1) * 1.5;
+        const hueShift = this.seededRandom(seed + 2) * 60;
+        const sizeVariation = 0.7 + this.seededRandom(seed + 3) * 0.6;
 
         // Draw kaleidoscope pattern
         for (let i = 0; i < config.mirrors; i++) {
-            const mirrorAngle = (Math.PI * 2 * i / config.mirrors) + this.accumulatedRotation * 0.3;
+            const iSeed = seed + i * 17;
+            const mirrorAngle = (Math.PI * 2 * i / config.mirrors) + this.accumulatedRotation * 0.3 * rotationDir;
 
-            const orbitX = centerX + orbitDistance * Math.cos(mirrorAngle);
-            const orbitY = centerY + orbitDistance * Math.sin(mirrorAngle);
+            // Seed-based per-mirror variation
+            const orbitVar = 0.9 + this.seededRandom(iSeed) * 0.2;
+            const sizeVar = 0.8 + this.seededRandom(iSeed + 1) * 0.4;
+            const sidesVar = Math.floor(this.seededRandom(iSeed + 2) * 3);
 
-            // Outer polygon
+            const orbitX = centerX + orbitDistance * orbitVar * Math.cos(mirrorAngle);
+            const orbitY = centerY + orbitDistance * orbitVar * Math.sin(mirrorAngle);
+
+            // Outer polygon with seed variation
+            const outerSides = numSides + sidesVar;
+            const outerHue = (hue + i * (hueShift / config.mirrors)) % 360;
             this.drawPolygon(
                 ctx,
                 orbitX, orbitY,
-                radius * 0.8,
-                numSides,
-                this.accumulatedRotation + mirrorAngle,
-                `hsl(${hue}, ${config.saturation}%, 70%)`,
-                thickness
+                radius * 0.8 * sizeVar * sizeVariation,
+                outerSides,
+                this.accumulatedRotation * rotationDir + mirrorAngle,
+                `hsl(${outerHue}, ${config.saturation}%, ${65 + energy * 15}%)`,
+                thickness * (0.8 + energy * 0.4)
             );
 
-            // Inner polygon (counter-rotating)
-            const innerHue = (hue + 180) % 360;
+            // Inner polygon (counter-rotating) with variation
+            const innerHue = (hue + 180 + hueShift) % 360;
+            const innerSides = Math.max(3, outerSides - 1 - Math.floor(this.seededRandom(iSeed + 3) * 2));
             this.drawPolygon(
                 ctx,
                 orbitX, orbitY,
-                radius * 0.4,
-                Math.max(3, numSides - 2),
-                -this.accumulatedRotation * 1.5 + mirrorAngle,
-                `hsl(${innerHue}, ${config.saturation * 0.8}%, 60%)`,
+                radius * 0.35 * sizeVar,
+                innerSides,
+                -this.accumulatedRotation * innerRotationSpeed * rotationDir + mirrorAngle,
+                `hsl(${innerHue}, ${config.saturation * 0.8}%, ${55 + energy * 20}%)`,
                 Math.max(1, thickness / 2)
             );
+
+            // Extra tiny polygon on some mirrors (seed-based)
+            if (this.seededRandom(iSeed + 4) > 0.5) {
+                const tinyHue = (outerHue + 90) % 360;
+                this.drawPolygon(
+                    ctx,
+                    orbitX, orbitY,
+                    radius * 0.15 * (1 + energy * 0.5),
+                    3 + Math.floor(this.seededRandom(iSeed + 5) * 3),
+                    this.accumulatedRotation * 2 * rotationDir,
+                    `hsl(${tinyHue}, ${config.saturation}%, ${70 + brightness * 20}%)`,
+                    1 + energy
+                );
+            }
         }
 
-        // Central polygon
+        // Central polygon with seed-based sides
+        const centralSides = numSides + Math.floor(this.seededRandom(seed + 10) * 3);
         this.drawPolygon(
             ctx,
             centerX, centerY,
-            radius * 0.6,
-            numSides,
-            this.accumulatedRotation * 0.5,
-            `hsl(${hue}, ${config.saturation}%, 80%)`,
+            radius * 0.6 * (1 + energy * 0.2),
+            centralSides,
+            this.accumulatedRotation * 0.5 * rotationDir,
+            `hsl(${(hue + hueShift) % 360}, ${config.saturation}%, ${75 + energy * 15}%)`,
             thickness + 2
         );
+
+        // Second central layer (seed-based)
+        if (this.seededRandom(seed + 11) > 0.3) {
+            this.drawPolygon(
+                ctx,
+                centerX, centerY,
+                radius * 0.35,
+                Math.max(3, centralSides - 2),
+                -this.accumulatedRotation * 0.8 * rotationDir,
+                `hsl(${(hue + 120) % 360}, ${config.saturation * 0.9}%, ${65 + harmonic * 20}%)`,
+                thickness
+            );
+        }
     }
 
     /**
@@ -1238,7 +1307,7 @@ class KaleidoscopeStudio {
         ctx.closePath();
         ctx.clip();
 
-        const numShapes = 30 + Math.floor(brightness * 25);
+        const numShapes = config.glassSlices + Math.floor(brightness * 25);
 
         // Layer 1: Large pulsing background shapes
         for (let i = 0; i < 6; i++) {
@@ -1411,32 +1480,16 @@ class KaleidoscopeStudio {
         ctx.arc(centerX, centerY, glowSize, 0, Math.PI * 2);
         ctx.fill();
 
-        // Multi-faceted jewel with reactive brightness
-        const facets = 8;
-        for (let i = 0; i < facets; i++) {
-            const angle = (Math.PI * 2 * i) / facets + this.accumulatedRotation * 0.5;
-            const nextAngle = (Math.PI * 2 * (i + 1)) / facets + this.accumulatedRotation * 0.5;
-
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY);
-            ctx.lineTo(
-                centerX + Math.cos(angle) * radius,
-                centerY + Math.sin(angle) * radius
-            );
-            ctx.lineTo(
-                centerX + Math.cos(nextAngle) * radius,
-                centerY + Math.sin(nextAngle) * radius
-            );
-            ctx.closePath();
-
-            const facetHue = (hue + i * 15 + energy * 20) % 360;
-            const lightness = 45 + (i % 2) * 25 + energy * 20;
-            ctx.fillStyle = `hsla(${facetHue}, ${config.saturation}%, ${lightness}%, ${0.6 + energy * 0.3})`;
-            ctx.fill();
-            ctx.strokeStyle = `hsla(${facetHue}, ${config.saturation}%, 90%, ${0.7 + energy * 0.3})`;
-            ctx.lineWidth = 1 + energy;
-            ctx.stroke();
-        }
+        // Smooth jewel gradient (no visible facets)
+        const jewelGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+        jewelGrad.addColorStop(0, `hsla(${hue}, ${config.saturation}%, ${85 + energy * 15}%, ${0.9 + energy * 0.1})`);
+        jewelGrad.addColorStop(0.4, `hsla(${(hue + 20) % 360}, ${config.saturation}%, ${65 + energy * 20}%, ${0.7 + energy * 0.2})`);
+        jewelGrad.addColorStop(0.7, `hsla(${(hue + 40) % 360}, ${config.saturation}%, ${50 + energy * 15}%, ${0.5 + energy * 0.2})`);
+        jewelGrad.addColorStop(1, `hsla(${(hue + 60) % 360}, ${config.saturation}%, 40%, ${0.2 + energy * 0.1})`);
+        ctx.fillStyle = jewelGrad;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.fill();
 
         // Bright pulsing core
         const coreRadius = radius * (0.35 + energy * 0.15);
@@ -1450,63 +1503,92 @@ class KaleidoscopeStudio {
     }
 
     /**
-     * Flower style - petal-like shapes radiating from center
+     * Flower style - petal-like shapes radiating from center (uses shapeSeed for variation)
      */
     renderFlowerStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
         const mirrors = config.mirrors;
+        const seed = config.shapeSeed;
         const energy = this.smoothedValues.percussiveImpact;
         const harmonic = this.smoothedValues.harmonicEnergy;
         const brightness = this.smoothedValues.spectralBrightness;
 
+        // Seed-based variation parameters
+        const rotationDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
+        const petalShape = this.seededRandom(seed + 1); // 0-1 affects curve shape
+        const hueSpread = 20 + this.seededRandom(seed + 2) * 60;
+        const layerCount = 3 + Math.floor(this.seededRandom(seed + 3) * 2);
+
         ctx.save();
         ctx.translate(centerX, centerY);
 
-        // Multiple layers of petals
-        const layers = 3;
-        for (let layer = 0; layer < layers; layer++) {
-            const layerRadius = radius * (0.5 + layer * 0.4) * (1 + energy * 0.3);
-            const layerRotation = this.accumulatedRotation * (1 - layer * 0.3) * (layer % 2 === 0 ? 1 : -1);
-            const petalCount = mirrors + layer * 2;
-            const layerHue = (hue + layer * 40) % 360;
+        // Multiple layers of petals with seed variation
+        for (let layer = 0; layer < layerCount; layer++) {
+            const layerSeed = seed + layer * 31;
+            const layerRadius = radius * (0.4 + layer * 0.35) * (1 + energy * 0.3);
+            const rotSpeed = (1 - layer * 0.25) * (this.seededRandom(layerSeed) > 0.5 ? 1 : -1);
+            const layerRotation = this.accumulatedRotation * rotSpeed * rotationDir;
+            const basePetalCount = mirrors + layer * 2;
+            const petalCount = basePetalCount + Math.floor(this.seededRandom(layerSeed + 1) * 3);
+            const layerHue = (hue + layer * hueSpread) % 360;
 
             ctx.save();
             ctx.rotate(layerRotation);
 
             for (let i = 0; i < petalCount; i++) {
+                const petalSeed = layerSeed + i * 13;
                 const petalAngle = (Math.PI * 2 * i) / petalCount;
-                const petalLength = layerRadius * (0.8 + harmonic * 0.4);
-                const petalWidth = layerRadius * 0.3 * (1 + energy * 0.5);
+
+                // Seed-based petal size variation
+                const sizeVar = 0.8 + this.seededRandom(petalSeed) * 0.4;
+                const petalLength = layerRadius * (0.7 + harmonic * 0.5) * sizeVar;
+                const petalWidth = layerRadius * (0.25 + petalShape * 0.15) * (1 + energy * 0.5);
+
+                // Seed-based curve variation
+                const curveVar1 = 0.2 + this.seededRandom(petalSeed + 1) * 0.2;
+                const curveVar2 = 0.7 + this.seededRandom(petalSeed + 2) * 0.2;
 
                 ctx.save();
                 ctx.rotate(petalAngle);
 
-                // Draw petal shape using bezier curves
+                // Draw petal shape using bezier curves with variation
                 ctx.beginPath();
                 ctx.moveTo(0, 0);
                 ctx.bezierCurveTo(
-                    petalWidth, petalLength * 0.3,
-                    petalWidth * 0.5, petalLength * 0.8,
+                    petalWidth * (1 + this.seededRandom(petalSeed + 3) * 0.3), petalLength * curveVar1,
+                    petalWidth * (0.4 + this.seededRandom(petalSeed + 4) * 0.3), petalLength * curveVar2,
                     0, petalLength
                 );
                 ctx.bezierCurveTo(
-                    -petalWidth * 0.5, petalLength * 0.8,
-                    -petalWidth, petalLength * 0.3,
+                    -petalWidth * (0.4 + this.seededRandom(petalSeed + 5) * 0.3), petalLength * curveVar2,
+                    -petalWidth * (1 + this.seededRandom(petalSeed + 6) * 0.3), petalLength * curveVar1,
                     0, 0
                 );
 
-                const alpha = 0.4 + brightness * 0.3 - layer * 0.1;
-                ctx.strokeStyle = `hsla(${layerHue}, ${config.saturation}%, ${60 + layer * 10}%, ${alpha})`;
-                ctx.lineWidth = thickness * (1 - layer * 0.2);
+                const alpha = 0.35 + brightness * 0.35 + energy * 0.2 - layer * 0.08;
+                const petalHue = (layerHue + this.seededRandom(petalSeed + 7) * 20) % 360;
+                ctx.strokeStyle = `hsla(${petalHue}, ${config.saturation}%, ${55 + layer * 8 + energy * 15}%, ${alpha})`;
+                ctx.lineWidth = thickness * (1 - layer * 0.15) * (0.8 + energy * 0.4);
                 ctx.stroke();
 
-                // Inner vein
-                ctx.beginPath();
-                ctx.moveTo(0, petalLength * 0.1);
-                ctx.lineTo(0, petalLength * 0.8);
-                ctx.strokeStyle = `hsla(${layerHue}, ${config.saturation}%, 70%, ${alpha * 0.5})`;
-                ctx.lineWidth = thickness * 0.3;
-                ctx.stroke();
+                // Optional fill for some petals (seed-based)
+                if (this.seededRandom(petalSeed + 8) > 0.6) {
+                    ctx.fillStyle = `hsla(${petalHue}, ${config.saturation * 0.8}%, ${60 + energy * 20}%, ${alpha * 0.3})`;
+                    ctx.fill();
+                }
+
+                // Inner vein with variation
+                if (this.seededRandom(petalSeed + 9) > 0.3) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, petalLength * 0.15);
+                    ctx.quadraticCurveTo(
+                        this.seededRandom(petalSeed + 10) * 4 - 2, petalLength * 0.5,
+                        0, petalLength * 0.85
+                    );
+                    ctx.strokeStyle = `hsla(${petalHue}, ${config.saturation}%, 75%, ${alpha * 0.4})`;
+                    ctx.lineWidth = thickness * 0.25;
+                    ctx.stroke();
+                }
 
                 ctx.restore();
             }
@@ -1514,15 +1596,35 @@ class KaleidoscopeStudio {
             ctx.restore();
         }
 
-        // Center stamen
-        const stamenRadius = radius * 0.15 * (1 + energy * 0.5);
+        // Center stamen with seed variation
+        const stamenRadius = radius * (0.12 + this.seededRandom(seed + 20) * 0.08) * (1 + energy * 0.5);
+        const stamenHue = (hue + 60 + this.seededRandom(seed + 21) * 40) % 360;
         const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, stamenRadius);
-        gradient.addColorStop(0, `hsla(${(hue + 60) % 360}, ${config.saturation}%, 80%, 0.9)`);
+        gradient.addColorStop(0, `hsla(${stamenHue}, ${config.saturation}%, ${85 + energy * 15}%, 0.95)`);
+        gradient.addColorStop(0.6, `hsla(${(stamenHue + 30) % 360}, ${config.saturation}%, 70%, 0.5)`);
         gradient.addColorStop(1, `hsla(${hue}, ${config.saturation}%, 50%, 0)`);
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(0, 0, stamenRadius, 0, Math.PI * 2);
         ctx.fill();
+
+        // Extra center details (seed-based)
+        if (this.seededRandom(seed + 22) > 0.4) {
+            const dotCount = 5 + Math.floor(this.seededRandom(seed + 23) * 4);
+            for (let d = 0; d < dotCount; d++) {
+                const dotAngle = (Math.PI * 2 * d) / dotCount + this.accumulatedRotation * 0.5;
+                const dotDist = stamenRadius * (0.5 + this.seededRandom(seed + 24 + d) * 0.4);
+                const dotSize = 2 + energy * 3;
+                ctx.beginPath();
+                ctx.arc(
+                    Math.cos(dotAngle) * dotDist,
+                    Math.sin(dotAngle) * dotDist,
+                    dotSize, 0, Math.PI * 2
+                );
+                ctx.fillStyle = `hsla(${(stamenHue + 60) % 360}, ${config.saturation}%, 90%, ${0.7 + energy * 0.3})`;
+                ctx.fill();
+            }
+        }
 
         ctx.restore();
     }
@@ -1822,23 +1924,15 @@ class KaleidoscopeStudio {
         ctx.arc(0, 0, eyeRadius * 2, 0, Math.PI * 2);
         ctx.fill();
 
-        // Bright core with rotating facets
-        const facets = 6;
-        for (let f = 0; f < facets; f++) {
-            const fAngle = (Math.PI * 2 * f) / facets + this.accumulatedRotation * 2;
-            const nextAngle = (Math.PI * 2 * (f + 1)) / facets + this.accumulatedRotation * 2;
-
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(Math.cos(fAngle) * eyeRadius, Math.sin(fAngle) * eyeRadius);
-            ctx.lineTo(Math.cos(nextAngle) * eyeRadius, Math.sin(nextAngle) * eyeRadius);
-            ctx.closePath();
-
-            const fHue = (hue + f * 30 + energy * 30) % 360;
-            const lightness = 60 + (f % 2) * 20 + energy * 15;
-            ctx.fillStyle = `hsla(${fHue}, ${config.saturation}%, ${lightness}%, ${0.7 + energy * 0.3})`;
-            ctx.fill();
-        }
+        // Smooth pulsing core (no facets)
+        const coreGrad1 = ctx.createRadialGradient(0, 0, 0, 0, 0, eyeRadius);
+        coreGrad1.addColorStop(0, `hsla(${hue}, ${config.saturation}%, ${90 + energy * 10}%, ${0.9 + energy * 0.1})`);
+        coreGrad1.addColorStop(0.5, `hsla(${(hue + 30) % 360}, ${config.saturation}%, ${70 + energy * 15}%, ${0.6 + energy * 0.3})`);
+        coreGrad1.addColorStop(1, `hsla(${(hue + 60) % 360}, ${config.saturation}%, 50%, ${0.2 + energy * 0.2})`);
+        ctx.fillStyle = coreGrad1;
+        ctx.beginPath();
+        ctx.arc(0, 0, eyeRadius, 0, Math.PI * 2);
+        ctx.fill();
 
         // White hot center
         const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, eyeRadius * 0.4);
