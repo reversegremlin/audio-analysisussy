@@ -47,13 +47,25 @@ class KaleidoscopeStudio {
 
         // Visualization state
         this.accumulatedRotation = 0;
-        this.lastFrameTime = 0;
+        this.lastFrameTime = performance.now();
+
+        // Smoothed values for fluid animation
+        this.smoothedValues = {
+            percussiveImpact: 0,
+            harmonicEnergy: 0.3,
+            spectralBrightness: 0.5
+        };
+        this.smoothingFactor = 0.15; // Lower = smoother
 
         // Canvas
         this.canvas = document.getElementById('visualizerCanvas');
-        this.ctx = this.canvas.getContext('2d');
+        this.ctx = this.canvas.getContext('2d', { alpha: false }); // Opaque for performance
         this.waveformCanvas = document.getElementById('waveformCanvas');
         this.waveformCtx = this.waveformCanvas.getContext('2d');
+
+        // Set canvas size from config
+        this.canvas.width = this.config.width;
+        this.canvas.height = this.config.height;
 
         // Chroma to hue mapping
         this.chromaToHue = {
@@ -155,6 +167,8 @@ class KaleidoscopeStudio {
                 const [w, h] = e.target.dataset.resolution.split('x').map(Number);
                 this.config.width = w;
                 this.config.height = h;
+                this.canvas.width = w;
+                this.canvas.height = h;
                 document.getElementById('resolutionBadge').textContent = `${w} × ${h}`;
             });
         });
@@ -298,39 +312,65 @@ class KaleidoscopeStudio {
         const frames = [];
 
         // Create simulated beat pattern (120 BPM default)
-        const beatsPerSecond = 2; // 120 BPM
-        const samplesPerBeat = fps / beatsPerSecond;
+        const bpm = 120;
+        const beatsPerSecond = bpm / 60;
+        const framesPerBeat = fps / beatsPerSecond;
+
+        // Use deterministic pseudo-random for consistency
+        const seededRandom = (seed) => {
+            const x = Math.sin(seed * 12.9898) * 43758.5453;
+            return x - Math.floor(x);
+        };
 
         for (let i = 0; i < totalFrames; i++) {
             const time = i / fps;
-            const beatPhase = (i % samplesPerBeat) / samplesPerBeat;
-            const isBeat = beatPhase < 0.05;
+            const beatPhase = (i % framesPerBeat) / framesPerBeat;
+            const isBeat = beatPhase < 0.03; // Tighter beat detection
 
-            // Simulate energy with some variation
-            const baseEnergy = 0.5 + 0.3 * Math.sin(time * 0.5);
-            const percussiveImpact = isBeat ? 0.8 + Math.random() * 0.2 : 0.1 + Math.random() * 0.2;
-            const harmonicEnergy = baseEnergy + 0.2 * Math.sin(time * 2);
+            // Smooth energy curves using sine waves (no randomness for smoothness)
+            const slowWave = Math.sin(time * 0.3) * 0.5 + 0.5;
+            const medWave = Math.sin(time * 0.8 + 1) * 0.5 + 0.5;
+            const fastWave = Math.sin(time * 2.1 + 2) * 0.5 + 0.5;
 
-            // Cycle through chroma
-            const chromaNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-            const chromaIndex = Math.floor(time / 4) % 12;
+            // Percussive: spike on beats, smooth decay otherwise
+            let percussiveImpact;
+            if (isBeat) {
+                percussiveImpact = 0.85 + seededRandom(i) * 0.15;
+            } else {
+                // Exponential decay after beat
+                const decayPhase = beatPhase;
+                const decay = Math.exp(-decayPhase * 8);
+                percussiveImpact = 0.1 + decay * 0.6;
+            }
+
+            // Harmonic: smooth flowing energy
+            const harmonicEnergy = 0.3 + slowWave * 0.25 + medWave * 0.2 + fastWave * 0.1;
+
+            // Brightness: gentle variation
+            const spectralBrightness = 0.4 + medWave * 0.3 + fastWave * 0.15;
+
+            // Cycle through chroma (change every 2 beats for musical feel)
+            const chromaNames = ['C', 'G', 'Am', 'F', 'C', 'G', 'D', 'Em'].map(c => c.charAt(0));
+            const fullChromaNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const beatsElapsed = Math.floor(time * beatsPerSecond);
+            const chromaIndex = Math.floor(beatsElapsed / 2) % fullChromaNames.length;
 
             frames.push({
                 frame_index: i,
                 time: time,
                 is_beat: isBeat,
                 is_onset: isBeat,
-                percussive_impact: Math.min(1, percussiveImpact),
-                harmonic_energy: Math.min(1, harmonicEnergy),
+                percussive_impact: Math.min(1, Math.max(0, percussiveImpact)),
+                harmonic_energy: Math.min(1, Math.max(0, harmonicEnergy)),
                 global_energy: (percussiveImpact + harmonicEnergy) / 2,
-                spectral_brightness: 0.5 + 0.3 * Math.sin(time * 3),
-                dominant_chroma: chromaNames[chromaIndex]
+                spectral_brightness: Math.min(1, Math.max(0, spectralBrightness)),
+                dominant_chroma: fullChromaNames[chromaIndex]
             });
         }
 
         this.manifest = {
             metadata: {
-                bpm: 120,
+                bpm: bpm,
                 duration: this.duration,
                 fps: fps,
                 n_frames: totalFrames
@@ -491,8 +531,14 @@ class KaleidoscopeStudio {
     }
 
     startAnimationLoop() {
+        let lastBeatTime = 0;
+
         const animate = (timestamp) => {
             const currentTime = this.getCurrentTime();
+
+            // Calculate delta time for smooth animation
+            const deltaTime = Math.min(timestamp - this.lastFrameTime, 50); // Cap at 50ms
+            this.lastFrameTime = timestamp;
 
             // Update time display
             document.getElementById('currentTime').textContent = this.formatTime(currentTime);
@@ -509,17 +555,20 @@ class KaleidoscopeStudio {
                 const frameIndex = Math.floor(currentTime * this.config.fps);
                 frameData = this.manifest.frames[Math.min(frameIndex, this.manifest.frames.length - 1)];
 
-                // Beat flash effect
+                // Beat flash effect (with debounce)
                 if (frameData && frameData.is_beat && this.isPlaying) {
-                    document.querySelector('.canvas-container').classList.add('beat');
-                    setTimeout(() => {
-                        document.querySelector('.canvas-container').classList.remove('beat');
-                    }, 100);
+                    if (timestamp - lastBeatTime > 150) {
+                        lastBeatTime = timestamp;
+                        document.querySelector('.canvas-container').classList.add('beat');
+                        setTimeout(() => {
+                            document.querySelector('.canvas-container').classList.remove('beat');
+                        }, 100);
+                    }
                 }
             }
 
-            // Render frame
-            this.renderFrame(frameData, timestamp);
+            // Render frame with delta time for smooth animation
+            this.renderFrame(frameData, deltaTime);
 
             requestAnimationFrame(animate);
         };
@@ -527,7 +576,12 @@ class KaleidoscopeStudio {
         requestAnimationFrame(animate);
     }
 
-    renderFrame(frameData, timestamp) {
+    // Smooth interpolation helper
+    lerp(current, target, factor) {
+        return current + (target - current) * factor;
+    }
+
+    renderFrame(frameData, deltaTime) {
         const ctx = this.ctx;
         const width = this.canvas.width;
         const height = this.canvas.height;
@@ -544,35 +598,55 @@ class KaleidoscopeStudio {
             };
         }
 
+        // Smooth all incoming values for fluid motion
+        const smoothFactor = Math.min(1, deltaTime * 0.008); // Time-based smoothing
+        this.smoothedValues.percussiveImpact = this.lerp(
+            this.smoothedValues.percussiveImpact,
+            frameData.percussive_impact,
+            frameData.is_beat ? 0.5 : smoothFactor // Faster response on beats
+        );
+        this.smoothedValues.harmonicEnergy = this.lerp(
+            this.smoothedValues.harmonicEnergy,
+            frameData.harmonic_energy,
+            smoothFactor * 0.5
+        );
+        this.smoothedValues.spectralBrightness = this.lerp(
+            this.smoothedValues.spectralBrightness,
+            frameData.spectral_brightness,
+            smoothFactor * 0.3
+        );
+
         // Trail effect - fade previous frame
-        const trailAlpha = config.trailAlpha / 255;
+        const fadeAmount = (100 - config.trailAlpha) / 100;
         ctx.fillStyle = config.bgColor;
-        ctx.globalAlpha = 1 - trailAlpha;
+        ctx.globalAlpha = fadeAmount * 0.3 + 0.02; // Minimum fade to prevent full persistence
         ctx.fillRect(0, 0, width, height);
         ctx.globalAlpha = 1;
 
         const centerX = width / 2;
         const centerY = height / 2;
 
-        // Calculate visual parameters from audio
-        const scale = 1 + (frameData.percussive_impact * (config.maxScale - 1));
+        // Calculate visual parameters from smoothed audio values
+        const scale = 1 + (this.smoothedValues.percussiveImpact * (config.maxScale - 1));
         const radius = config.baseRadius * scale;
 
-        // Rotation accumulation
-        const deltaTime = timestamp - this.lastFrameTime;
-        this.lastFrameTime = timestamp;
-        if (this.isPlaying) {
-            this.accumulatedRotation += frameData.harmonic_energy * config.rotationSpeed * (deltaTime / 1000);
+        // Rotation accumulation (time-based, not frame-based)
+        const rotationDelta = this.smoothedValues.harmonicEnergy * config.rotationSpeed * (deltaTime / 1000);
+        if (this.isPlaying || this.smoothedValues.harmonicEnergy > 0.1) {
+            this.accumulatedRotation += rotationDelta;
+        } else {
+            // Gentle idle rotation when not playing
+            this.accumulatedRotation += 0.001 * deltaTime;
         }
 
-        // Polygon sides based on brightness
+        // Polygon sides based on brightness (smoothed)
         const numSides = Math.round(
-            config.minSides + frameData.spectral_brightness * (config.maxSides - config.minSides)
+            config.minSides + this.smoothedValues.spectralBrightness * (config.maxSides - config.minSides)
         );
 
-        // Thickness based on percussive impact
+        // Thickness based on percussive impact (smoothed)
         const thickness = config.baseThickness +
-            frameData.percussive_impact * (config.maxThickness - config.baseThickness);
+            this.smoothedValues.percussiveImpact * (config.maxThickness - config.baseThickness);
 
         // Get color
         let hue;
@@ -582,7 +656,7 @@ class KaleidoscopeStudio {
             hue = this.hexToHsl(config.accentColor).h;
         }
 
-        const orbitDistance = config.orbitRadius * (0.5 + frameData.harmonic_energy * 0.5);
+        const orbitDistance = config.orbitRadius * (0.5 + this.smoothedValues.harmonicEnergy * 0.5);
 
         // Draw kaleidoscope pattern
         for (let i = 0; i < config.mirrors; i++) {
@@ -679,7 +753,8 @@ class KaleidoscopeStudio {
 
     render() {
         // Initial render with idle state
-        this.renderFrame(null, 0);
+        this.lastFrameTime = performance.now();
+        this.renderFrame(null, 16.67); // ~60fps delta
     }
 
     async exportVideo() {
