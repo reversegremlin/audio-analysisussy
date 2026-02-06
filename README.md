@@ -16,8 +16,7 @@ Audio File → Analysis Pipeline → Visual Driver Manifest → Kaleidoscope Vid
 
 ## What It Does
 
-This engine doesn't just react to volume—it *understands* the character of music by separating **percussive transients** (drums, attacks) from **harmonic textures** (melodies, chords). This separation is the difference between a generic "bars" visualizer and a professional music video.
-
+This engine tries to *understand* the character of music by separating **percussive transients** (drums, attacks) from **harmonic textures** (melodies, chords). 
 ### Feature Extraction
 
 | Feature | Description | Visual Application |
