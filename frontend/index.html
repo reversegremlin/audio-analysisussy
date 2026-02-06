@@ -180,6 +180,11 @@
                         <span class="separator">•</span>
                         <span id="fpsBadge">60 FPS</span>
                     </div>
+                    <button class="fullscreen-btn" id="fullscreenBtn" title="Toggle Fullscreen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                        </svg>
+                    </button>
                 </div>
 
                 <!-- Timeline -->
@@ -288,10 +293,6 @@
                     </h3>
                     <div class="color-row">
                         <label class="color-control">
-                            <span>Background</span>
-                            <input type="color" id="bgColor" value="#05050f">
-                        </label>
-                        <label class="color-control">
                             <span>Accent</span>
                             <input type="color" id="accentColor" value="#f59e0b">
                         </label>
@@ -309,6 +310,56 @@
                             <span class="slider-value" id="saturationValue">85%</span>
                         </label>
                         <input type="range" class="slider" id="saturationSlider" min="0" max="100" value="85">
+                    </div>
+                </div>
+
+                <!-- Background Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <path d="M21 15l-5-5L5 21"/>
+                        </svg>
+                        Background
+                    </h3>
+                    <div class="color-row">
+                        <label class="color-control">
+                            <span>Color 1</span>
+                            <input type="color" id="bgColor" value="#05050f">
+                        </label>
+                        <label class="color-control">
+                            <span>Color 2</span>
+                            <input type="color" id="bgColor2" value="#1a0a2e">
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-control">
+                            <span>Dynamic Background</span>
+                            <input type="checkbox" id="dynamicBg" checked>
+                            <span class="toggle-switch"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-control">
+                            <span>Particles</span>
+                            <input type="checkbox" id="bgParticles" checked>
+                            <span class="toggle-switch"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-control">
+                            <span>Beat Pulse</span>
+                            <input type="checkbox" id="bgPulse" checked>
+                            <span class="toggle-switch"></span>
+                        </label>
+                    </div>
+                    <div class="slider-control">
+                        <label class="slider-label">
+                            <span>Reactivity</span>
+                            <span class="slider-value" id="bgReactivityValue">70%</span>
+                        </label>
+                        <input type="range" class="slider" id="bgReactivitySlider" min="0" max="100" value="70">
                     </div>
                 </div>
 

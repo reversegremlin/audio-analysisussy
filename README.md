@@ -31,6 +31,13 @@ Built-in geometric visualizer that maps audio features to transformations:
 - **Spectral Brightness** → Polygon complexity (3 sides → 12 sides)
 - **Dominant Pitch** → Hue colors (musical notes map to spectrum)
 
+**Dynamic Background Effects:**
+- Gradient oscillation between two colors based on harmonic energy
+- Floating particles that react to beats and energy levels
+- Expanding pulse rings on beat hits
+- Smooth vignette for cinematic depth
+- Fully configurable reactivity and color palette
+
 ### Kaleidoscope Studio (Web UI)
 
 A premium web-based interface designed for musicians:

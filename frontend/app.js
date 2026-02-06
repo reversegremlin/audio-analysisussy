@@ -24,13 +24,27 @@ class KaleidoscopeStudio {
             maxThickness: 12,
             // Colors
             bgColor: '#05050f',
+            bgColor2: '#1a0a2e',
             accentColor: '#f59e0b',
             chromaColors: true,
             saturation: 85,
+            // Background effects
+            dynamicBg: true,
+            bgReactivity: 70,
+            bgParticles: true,
+            bgPulse: true,
             // Export
             width: 1920,
             height: 1080,
             fps: 60
+        };
+
+        // Background animation state
+        this.bgState = {
+            gradientAngle: 0,
+            pulseIntensity: 0,
+            particles: [],
+            noiseOffset: 0
         };
 
         // Audio state
@@ -79,8 +93,26 @@ class KaleidoscopeStudio {
     init() {
         this.setupEventListeners();
         this.setupKnobs();
+        this.initParticles();
         this.render();
         this.startAnimationLoop();
+    }
+
+    initParticles() {
+        // Create background particles/stars
+        this.bgState.particles = [];
+        const count = 80;
+        for (let i = 0; i < count; i++) {
+            this.bgState.particles.push({
+                x: Math.random() * this.config.width,
+                y: Math.random() * this.config.height,
+                size: Math.random() * 2 + 0.5,
+                speed: Math.random() * 0.5 + 0.1,
+                angle: Math.random() * Math.PI * 2,
+                brightness: Math.random() * 0.5 + 0.3,
+                pulse: Math.random() * Math.PI * 2
+            });
+        }
     }
 
     setupEventListeners() {
@@ -151,12 +183,39 @@ class KaleidoscopeStudio {
             this.config.bgColor = e.target.value;
         });
 
+        document.getElementById('bgColor2').addEventListener('input', (e) => {
+            this.config.bgColor2 = e.target.value;
+        });
+
         document.getElementById('accentColor').addEventListener('input', (e) => {
             this.config.accentColor = e.target.value;
         });
 
         document.getElementById('chromaColors').addEventListener('change', (e) => {
             this.config.chromaColors = e.target.checked;
+        });
+
+        // Background effects
+        document.getElementById('dynamicBg').addEventListener('change', (e) => {
+            this.config.dynamicBg = e.target.checked;
+        });
+
+        document.getElementById('bgParticles').addEventListener('change', (e) => {
+            this.config.bgParticles = e.target.checked;
+        });
+
+        document.getElementById('bgPulse').addEventListener('change', (e) => {
+            this.config.bgPulse = e.target.checked;
+        });
+
+        document.getElementById('bgReactivitySlider').addEventListener('input', (e) => {
+            this.config.bgReactivity = parseInt(e.target.value);
+            document.getElementById('bgReactivityValue').textContent = `${e.target.value}%`;
+        });
+
+        // Fullscreen toggle
+        document.getElementById('fullscreenBtn')?.addEventListener('click', () => {
+            this.toggleFullscreen();
         });
 
         // Resolution buttons
@@ -581,6 +640,178 @@ class KaleidoscopeStudio {
         return current + (target - current) * factor;
     }
 
+    renderDynamicBackground(frameData, deltaTime) {
+        const ctx = this.ctx;
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+        const config = this.config;
+        const reactivity = config.bgReactivity / 100;
+
+        // Parse colors
+        const color1 = this.hexToRgb(config.bgColor);
+        const color2 = this.hexToRgb(config.bgColor2);
+
+        // Calculate gradient blend based on harmonic energy
+        const blendPhase = Math.sin(this.bgState.gradientAngle * 2) * 0.5 + 0.5;
+        const energyBlend = this.smoothedValues.harmonicEnergy * reactivity;
+        const blend = blendPhase * 0.3 + energyBlend * 0.4;
+
+        // Create radial gradient that shifts with music
+        const centerX = width / 2 + Math.sin(this.bgState.gradientAngle * 3) * width * 0.1 * reactivity;
+        const centerY = height / 2 + Math.cos(this.bgState.gradientAngle * 2) * height * 0.1 * reactivity;
+
+        // Pulse radius on beats
+        const pulseExpand = this.bgState.pulseIntensity * 200 * reactivity;
+        const baseRadius = Math.max(width, height) * 0.8;
+        const outerRadius = baseRadius + pulseExpand;
+
+        // Create gradient
+        const gradient = ctx.createRadialGradient(
+            centerX, centerY, 0,
+            centerX, centerY, outerRadius
+        );
+
+        // Interpolate colors
+        const midColor = {
+            r: Math.round(color1.r + (color2.r - color1.r) * blend),
+            g: Math.round(color1.g + (color2.g - color1.g) * blend),
+            b: Math.round(color1.b + (color2.b - color1.b) * blend)
+        };
+
+        // Add chroma-based hue shift
+        let hueShift = 0;
+        if (config.chromaColors && frameData.dominant_chroma) {
+            hueShift = (this.chromaToHue[frameData.dominant_chroma] || 0) / 360;
+        }
+
+        // Build gradient stops
+        const brightnessBoost = this.bgState.pulseIntensity * 30 * reactivity;
+        gradient.addColorStop(0, `rgb(${Math.min(255, midColor.r + brightnessBoost)}, ${Math.min(255, midColor.g + brightnessBoost)}, ${Math.min(255, midColor.b + brightnessBoost)})`);
+        gradient.addColorStop(0.5, `rgb(${midColor.r}, ${midColor.g}, ${midColor.b})`);
+        gradient.addColorStop(1, `rgb(${color1.r}, ${color1.g}, ${color1.b})`);
+
+        // Apply trail/fade effect
+        const fadeAmount = (100 - config.trailAlpha) / 100;
+        ctx.globalAlpha = fadeAmount * 0.25 + 0.03;
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        // Add vignette
+        const vignetteGradient = ctx.createRadialGradient(
+            width / 2, height / 2, height * 0.3,
+            width / 2, height / 2, Math.max(width, height) * 0.8
+        );
+        vignetteGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vignetteGradient.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = vignetteGradient;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.globalAlpha = 1;
+
+        // Render particles if enabled
+        if (config.bgParticles) {
+            this.renderParticles(deltaTime);
+        }
+
+        // Render pulse rings on beats
+        if (config.bgPulse && this.bgState.pulseIntensity > 0.1) {
+            this.renderPulseRings();
+        }
+    }
+
+    renderParticles(deltaTime) {
+        const ctx = this.ctx;
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+        const config = this.config;
+
+        const reactivity = config.bgReactivity / 100;
+        const energyBoost = 1 + this.smoothedValues.harmonicEnergy * 2 * reactivity;
+
+        ctx.save();
+
+        this.bgState.particles.forEach(particle => {
+            // Update position
+            particle.x += Math.cos(particle.angle) * particle.speed * deltaTime * 0.05 * energyBoost;
+            particle.y += Math.sin(particle.angle) * particle.speed * deltaTime * 0.05 * energyBoost;
+
+            // Wrap around edges
+            if (particle.x < 0) particle.x = width;
+            if (particle.x > width) particle.x = 0;
+            if (particle.y < 0) particle.y = height;
+            if (particle.y > height) particle.y = 0;
+
+            // Pulse brightness
+            particle.pulse += deltaTime * 0.003;
+            const pulseBrightness = Math.sin(particle.pulse) * 0.3 + 0.7;
+            const beatBrightness = 1 + this.bgState.pulseIntensity * 0.5;
+
+            // Draw particle
+            const alpha = particle.brightness * pulseBrightness * beatBrightness * reactivity;
+            const size = particle.size * (1 + this.smoothedValues.percussiveImpact * 0.5);
+
+            ctx.beginPath();
+            ctx.arc(particle.x, particle.y, size, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.fill();
+
+            // Add glow on high energy
+            if (this.smoothedValues.percussiveImpact > 0.5) {
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, size * 3, 0, Math.PI * 2);
+                const glowAlpha = (this.smoothedValues.percussiveImpact - 0.5) * alpha * 0.3;
+                ctx.fillStyle = `rgba(255, 255, 255, ${glowAlpha})`;
+                ctx.fill();
+            }
+        });
+
+        ctx.restore();
+    }
+
+    renderPulseRings() {
+        const ctx = this.ctx;
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+        const config = this.config;
+
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const maxRadius = Math.max(width, height) * 0.6;
+
+        // Multiple expanding rings
+        const numRings = 3;
+        const baseAlpha = this.bgState.pulseIntensity * 0.15;
+
+        ctx.save();
+        ctx.strokeStyle = config.accentColor;
+        ctx.lineWidth = 2;
+
+        for (let i = 0; i < numRings; i++) {
+            const phase = (1 - this.bgState.pulseIntensity + i * 0.2) % 1;
+            const radius = phase * maxRadius;
+            const alpha = baseAlpha * (1 - phase);
+
+            if (alpha > 0.01) {
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                ctx.globalAlpha = alpha;
+                ctx.stroke();
+            }
+        }
+
+        ctx.restore();
+    }
+
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : { r: 0, g: 0, b: 0 };
+    }
+
     renderFrame(frameData, deltaTime) {
         const ctx = this.ctx;
         const width = this.canvas.width;
@@ -616,12 +847,26 @@ class KaleidoscopeStudio {
             smoothFactor * 0.3
         );
 
-        // Trail effect - fade previous frame
-        const fadeAmount = (100 - config.trailAlpha) / 100;
-        ctx.fillStyle = config.bgColor;
-        ctx.globalAlpha = fadeAmount * 0.3 + 0.02; // Minimum fade to prevent full persistence
-        ctx.fillRect(0, 0, width, height);
-        ctx.globalAlpha = 1;
+        // Update background state
+        this.bgState.gradientAngle += deltaTime * 0.0001 * (1 + this.smoothedValues.harmonicEnergy);
+        this.bgState.pulseIntensity = this.lerp(
+            this.bgState.pulseIntensity,
+            frameData.is_beat ? 1 : 0,
+            frameData.is_beat ? 0.8 : 0.05
+        );
+        this.bgState.noiseOffset += deltaTime * 0.01;
+
+        // Render dynamic background
+        if (config.dynamicBg) {
+            this.renderDynamicBackground(frameData, deltaTime);
+        } else {
+            // Simple fade for trail effect
+            const fadeAmount = (100 - config.trailAlpha) / 100;
+            ctx.fillStyle = config.bgColor;
+            ctx.globalAlpha = fadeAmount * 0.3 + 0.02;
+            ctx.fillRect(0, 0, width, height);
+            ctx.globalAlpha = 1;
+        }
 
         const centerX = width / 2;
         const centerY = height / 2;
@@ -755,6 +1000,18 @@ class KaleidoscopeStudio {
         // Initial render with idle state
         this.lastFrameTime = performance.now();
         this.renderFrame(null, 16.67); // ~60fps delta
+    }
+
+    toggleFullscreen() {
+        const container = document.querySelector('.canvas-container');
+
+        if (!document.fullscreenElement) {
+            container.requestFullscreen().catch(err => {
+                console.log('Fullscreen error:', err);
+            });
+        } else {
+            document.exitFullscreen();
+        }
     }
 
     async exportVideo() {

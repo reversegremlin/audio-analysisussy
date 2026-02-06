@@ -144,10 +144,15 @@ The Studio is divided into three main areas:
 - **Waveform**: Visual representation of your audio with playhead
 - **Transport**: Play/pause, skip, and volume controls
 
-**Right Panel - Shape & Export**
+**Right Panel - Shape, Colors & Export**
 - **Shape**: Control polygon complexity and stroke thickness
-- **Colors**: Background color, accent color, chroma-based coloring
+- **Colors**: Accent color, chroma-based coloring, saturation
+- **Background**: Two-color gradients, particles, pulse rings, reactivity
 - **Export**: Resolution, frame rate, and video export options
+
+### Fullscreen Mode
+
+Click the fullscreen button (bottom-right of preview) or double-click the canvas to enter immersive fullscreen mode. Controls fade out automatically - move your mouse to reveal them.
 
 ### Using Rotary Knobs
 

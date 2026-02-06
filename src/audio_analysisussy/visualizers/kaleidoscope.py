@@ -36,6 +36,11 @@ class KaleidoscopeConfig:
     min_sides: int = 3  # Triangle
     max_sides: int = 12  # Dodecagon (approaches circle)
     background_color: tuple[int, int, int] = (5, 5, 15)
+    background_color2: tuple[int, int, int] = (26, 10, 46)  # Secondary gradient color
+    dynamic_background: bool = True  # Enable dynamic background effects
+    bg_reactivity: float = 0.7  # Background reactivity to audio (0-1)
+    bg_particles: bool = True  # Enable particle effects
+    bg_pulse: bool = True  # Enable beat pulse rings
 
 
 class KaleidoscopeRenderer:
@@ -75,6 +80,32 @@ class KaleidoscopeRenderer:
         self.config = config or KaleidoscopeConfig()
         self.accumulated_rotation = 0.0
         self.surface: pygame.Surface | None = None
+
+        # Dynamic background state
+        self.gradient_angle = 0.0
+        self.pulse_intensity = 0.0
+        self.particles = self._init_particles()
+
+        # Smoothed values for fluid animation
+        self.smoothed_percussive = 0.0
+        self.smoothed_harmonic = 0.3
+        self.smoothed_brightness = 0.5
+
+    def _init_particles(self) -> list[dict]:
+        """Initialize background particles."""
+        import random
+        particles = []
+        for _ in range(80):
+            particles.append({
+                'x': random.random() * self.config.width,
+                'y': random.random() * self.config.height,
+                'size': random.random() * 2 + 0.5,
+                'speed': random.random() * 0.5 + 0.1,
+                'angle': random.random() * math.pi * 2,
+                'brightness': random.random() * 0.5 + 0.3,
+                'pulse': random.random() * math.pi * 2
+            })
+        return particles
 
     def _note_to_hue(self, note: str) -> float:
         """Convert note name to hue value."""
@@ -119,6 +150,153 @@ class KaleidoscopeRenderer:
         points = self._compute_polygon_points(center, radius, num_sides, rotation)
         if len(points) >= 3:
             pygame.draw.polygon(surface, color, points, thickness)
+
+    def _lerp(self, current: float, target: float, factor: float) -> float:
+        """Linear interpolation helper."""
+        return current + (target - current) * factor
+
+    def _render_dynamic_background(
+        self,
+        surface: pygame.Surface,
+        frame_data: dict[str, Any],
+    ):
+        """Render dynamic, music-reactive background."""
+        cfg = self.config
+        width, height = cfg.width, cfg.height
+        reactivity = cfg.bg_reactivity
+
+        # Update gradient angle
+        self.gradient_angle += 0.002 * (1 + self.smoothed_harmonic)
+
+        # Update pulse intensity
+        is_beat = frame_data.get("is_beat", False)
+        if is_beat:
+            self.pulse_intensity = self._lerp(self.pulse_intensity, 1.0, 0.8)
+        else:
+            self.pulse_intensity = self._lerp(self.pulse_intensity, 0.0, 0.05)
+
+        # Calculate gradient blend
+        blend_phase = math.sin(self.gradient_angle * 2) * 0.5 + 0.5
+        energy_blend = self.smoothed_harmonic * reactivity
+        blend = blend_phase * 0.3 + energy_blend * 0.4
+
+        # Interpolate background colors
+        c1 = cfg.background_color
+        c2 = cfg.background_color2
+        mid_color = (
+            int(c1[0] + (c2[0] - c1[0]) * blend),
+            int(c1[1] + (c2[1] - c1[1]) * blend),
+            int(c1[2] + (c2[2] - c1[2]) * blend),
+        )
+
+        # Add brightness boost on beats
+        brightness_boost = int(self.pulse_intensity * 30 * reactivity)
+        boosted_color = (
+            min(255, mid_color[0] + brightness_boost),
+            min(255, mid_color[1] + brightness_boost),
+            min(255, mid_color[2] + brightness_boost),
+        )
+
+        # Create gradient effect using concentric circles
+        center_x = width // 2 + int(math.sin(self.gradient_angle * 3) * width * 0.1 * reactivity)
+        center_y = height // 2 + int(math.cos(self.gradient_angle * 2) * height * 0.1 * reactivity)
+
+        # Draw radial gradient approximation
+        max_radius = int(max(width, height) * 0.9 + self.pulse_intensity * 200 * reactivity)
+        steps = 20
+
+        for i in range(steps, 0, -1):
+            ratio = i / steps
+            radius = int(max_radius * ratio)
+            # Interpolate from boosted center to dark edge
+            step_color = (
+                int(boosted_color[0] * ratio + c1[0] * (1 - ratio)),
+                int(boosted_color[1] * ratio + c1[1] * (1 - ratio)),
+                int(boosted_color[2] * ratio + c1[2] * (1 - ratio)),
+            )
+            pygame.draw.circle(surface, step_color, (center_x, center_y), radius)
+
+        # Render particles
+        if cfg.bg_particles:
+            self._render_particles(surface)
+
+        # Render pulse rings
+        if cfg.bg_pulse and self.pulse_intensity > 0.1:
+            self._render_pulse_rings(surface)
+
+    def _render_particles(self, surface: pygame.Surface):
+        """Render floating particle effects."""
+        cfg = self.config
+        reactivity = cfg.bg_reactivity
+        energy_boost = 1 + self.smoothed_harmonic * 2 * reactivity
+
+        for particle in self.particles:
+            # Update position
+            particle['x'] += math.cos(particle['angle']) * particle['speed'] * energy_boost
+            particle['y'] += math.sin(particle['angle']) * particle['speed'] * energy_boost
+
+            # Wrap around edges
+            if particle['x'] < 0:
+                particle['x'] = cfg.width
+            if particle['x'] > cfg.width:
+                particle['x'] = 0
+            if particle['y'] < 0:
+                particle['y'] = cfg.height
+            if particle['y'] > cfg.height:
+                particle['y'] = 0
+
+            # Pulse brightness
+            particle['pulse'] += 0.05
+            pulse_brightness = math.sin(particle['pulse']) * 0.3 + 0.7
+            beat_brightness = 1 + self.pulse_intensity * 0.5
+
+            # Calculate alpha and size
+            alpha = particle['brightness'] * pulse_brightness * beat_brightness * reactivity
+            size = particle['size'] * (1 + self.smoothed_percussive * 0.5)
+
+            # Draw particle
+            color_val = int(255 * min(1, alpha))
+            pygame.draw.circle(
+                surface,
+                (color_val, color_val, color_val),
+                (int(particle['x']), int(particle['y'])),
+                max(1, int(size))
+            )
+
+            # Add glow on high energy
+            if self.smoothed_percussive > 0.5:
+                glow_alpha = (self.smoothed_percussive - 0.5) * alpha * 0.3
+                glow_val = int(255 * min(1, glow_alpha))
+                if glow_val > 10:
+                    pygame.draw.circle(
+                        surface,
+                        (glow_val, glow_val, glow_val),
+                        (int(particle['x']), int(particle['y'])),
+                        max(1, int(size * 3))
+                    )
+
+    def _render_pulse_rings(self, surface: pygame.Surface):
+        """Render expanding pulse rings on beats."""
+        cfg = self.config
+        center = (cfg.width // 2, cfg.height // 2)
+        max_radius = int(max(cfg.width, cfg.height) * 0.6)
+
+        # Get accent color
+        accent = (245, 158, 11)  # Default amber
+
+        for i in range(3):
+            phase = (1 - self.pulse_intensity + i * 0.2) % 1
+            radius = int(phase * max_radius)
+            alpha = self.pulse_intensity * 0.15 * (1 - phase)
+
+            if alpha > 0.01 and radius > 0:
+                color_val = int(255 * min(1, alpha))
+                ring_color = (
+                    int(accent[0] * alpha),
+                    int(accent[1] * alpha),
+                    int(accent[2] * alpha)
+                )
+                pygame.draw.circle(surface, ring_color, center, radius, 2)
 
     def _draw_kaleidoscope(
         self,
@@ -224,6 +402,24 @@ class KaleidoscopeRenderer:
         """
         cfg = self.config
 
+        # Smooth incoming values for fluid animation
+        percussive = frame_data.get("percussive_impact", 0.1)
+        harmonic = frame_data.get("harmonic_energy", 0.3)
+        brightness = frame_data.get("spectral_brightness", 0.5)
+        is_beat = frame_data.get("is_beat", False)
+
+        smooth_factor = 0.15
+        self.smoothed_percussive = self._lerp(
+            self.smoothed_percussive, percussive,
+            0.5 if is_beat else smooth_factor
+        )
+        self.smoothed_harmonic = self._lerp(
+            self.smoothed_harmonic, harmonic, smooth_factor * 0.5
+        )
+        self.smoothed_brightness = self._lerp(
+            self.smoothed_brightness, brightness, smooth_factor * 0.3
+        )
+
         # Create or reuse surface
         surface = pygame.Surface((cfg.width, cfg.height))
 
@@ -232,11 +428,16 @@ class KaleidoscopeRenderer:
             # Darken previous frame
             fade = pygame.Surface((cfg.width, cfg.height))
             fade.fill(cfg.background_color)
-            fade.set_alpha(255 - cfg.trail_alpha)
+            fade_alpha = int((100 - cfg.trail_alpha) / 100 * 80) + 5
+            fade.set_alpha(fade_alpha)
             previous_surface.blit(fade, (0, 0))
             surface.blit(previous_surface, (0, 0))
         else:
             surface.fill(cfg.background_color)
+
+        # Render dynamic background if enabled
+        if cfg.dynamic_background:
+            self._render_dynamic_background(surface, frame_data)
 
         # Draw kaleidoscope
         center = (cfg.width / 2, cfg.height / 2)
