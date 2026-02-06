@@ -962,13 +962,13 @@ body {
     justify-content: center;
 }
 
-/* Beat Flash Effect */
+/* Beat Flash Effect - subtle */
 @keyframes beatFlash {
     0% { box-shadow: 0 0 0 0 var(--accent-glow); }
-    50% { box-shadow: 0 0 30px 10px var(--accent-glow); }
+    50% { box-shadow: 0 0 15px 3px var(--accent-glow); }
     100% { box-shadow: 0 0 0 0 var(--accent-glow); }
 }
 
 .canvas-container.beat {
-    animation: beatFlash 0.15s ease-out;
+    animation: beatFlash 0.12s ease-out;
 }
