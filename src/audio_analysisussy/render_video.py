@@ -30,6 +30,7 @@ def render_video(
     fps: int = 60,
     num_mirrors: int = 8,
     trail_alpha: int = 40,
+    max_duration: float = None,
 ):
     """
     Render kaleidoscope video from audio file.
@@ -44,6 +45,7 @@ def render_video(
         fps: Frames per second.
         num_mirrors: Number of radial symmetry copies.
         trail_alpha: Trail persistence (0-255).
+        max_duration: Maximum duration in seconds (None for full audio).
     """
     from audio_analysisussy.pipeline import AudioPipeline
     from audio_analysisussy.visualizers.kaleidoscope import (
@@ -74,6 +76,14 @@ def render_video(
 
     frames = manifest["frames"]
     total_frames = len(frames)
+
+    # Limit frames if max_duration specified
+    if max_duration is not None:
+        max_frames = int(max_duration * fps)
+        if max_frames < total_frames:
+            frames = frames[:max_frames]
+            total_frames = max_frames
+            print(f"Limiting to {max_duration}s ({total_frames} frames)", flush=True)
 
     # Step 3: Create temp directory for frames
     temp_dir = tempfile.mkdtemp(prefix="kaleidoscope_")
@@ -139,9 +149,15 @@ def render_video(
             "-c:v", "copy",
             "-c:a", "aac",
             "-b:a", "192k",
-            "-shortest",
-            str(output_path),
         ]
+
+        # Add duration limit if specified
+        if max_duration is not None:
+            ffmpeg_mux.extend(["-t", str(max_duration)])
+        else:
+            ffmpeg_mux.append("-shortest")
+
+        ffmpeg_mux.append(str(output_path))
 
         result_mux = subprocess.run(
             ffmpeg_mux,

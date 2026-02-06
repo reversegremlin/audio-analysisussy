@@ -2,6 +2,14 @@
 
 A high-fidelity audio analysis engine that extracts musical features for reactive generative art. Transform any audio into stunning, music-driven visualizations.
 
+<p align="center">
+  <img src="docs/preview.gif" alt="Kaleidoscope Visualization Demo" width="480">
+  <br>
+  <em>Real-time audio-reactive kaleidoscope visualization</em>
+  <br>
+  <a href="docs/teaser.mp4">▶️ Watch full demo with audio</a>
+</p>
+
 ```
 Audio File → Analysis Pipeline → Visual Driver Manifest → Kaleidoscope Video
 ```

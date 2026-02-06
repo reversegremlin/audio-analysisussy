@@ -9,6 +9,9 @@
 *.avi
 *.mov
 
+# But allow docs teaser videos
+!docs/teaser.mp4
+
 # Exclude large exported manifests/data
 # (Only commit small mock_manifest.json for testing)
 output/
