@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from audio_analysisussy.pipeline import AudioPipeline
+from chromascope.pipeline import AudioPipeline
 
 
 def main():
@@ -91,7 +91,7 @@ def main():
         output_path = args.input.with_name(f"{args.input.stem}_manifest{suffix}")
 
     # Create pipeline
-    from audio_analysisussy.core.polisher import EnvelopeParams
+    from chromascope.core.polisher import EnvelopeParams
 
     pipeline = AudioPipeline(
         target_fps=args.fps,

@@ -4,10 +4,10 @@ import json
 
 import pytest
 
-from audio_analysisussy.core.decomposer import DecomposedAudio
-from audio_analysisussy.core.analyzer import ExtractedFeatures
-from audio_analysisussy.core.polisher import PolishedFeatures
-from audio_analysisussy.pipeline import AudioPipeline
+from chromascope.core.decomposer import DecomposedAudio
+from chromascope.core.analyzer import ExtractedFeatures
+from chromascope.core.polisher import PolishedFeatures
+from chromascope.pipeline import AudioPipeline
 
 
 class TestAudioPipeline:

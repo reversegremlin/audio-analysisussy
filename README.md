@@ -1,4 +1,4 @@
-# Audio Analysisussy
+# Chromascope
 
 A high-fidelity audio analysis engine that extracts musical features for reactive generative art. Transform any audio into stunning, music-driven visualizations.
 
@@ -39,6 +39,8 @@ Built-in visualizer with **four distinct styles**, each mapping audio features t
 | **Glass** | Broken glass kaleidoscope with triangular reflections and angular shards |
 | **Flower** | Organic petal shapes radiating in layers with bezier curves |
 | **Spiral** | Hypnotic arms spiraling outward with flowing motion |
+| **Circuit** | Hexagonal grid with glowing circuit traces and pulsing energy nodes |
+| **Fibonacci** | Golden ratio spirals and nested rectangles with mathematical harmony |
 
 **Audio-to-Visual Mapping:**
 - **Percussive Impact** → Shape pulsing (drums cause shapes to "kick")
@@ -53,7 +55,7 @@ Built-in visualizer with **four distinct styles**, each mapping audio features t
 - Smooth vignette for cinematic depth
 - Fully configurable reactivity and color palette
 
-### Kaleidoscope Studio (Web UI)
+### Chromascope Studio (Web UI)
 
 A premium web-based interface designed for musicians:
 
@@ -63,7 +65,7 @@ A premium web-based interface designed for musicians:
 - **Waveform timeline** with visual playhead
 - **One-click export** to HD video
 
-![Kaleidoscope Studio Interface](docs/studio-screenshot.png)
+![Chromascope Studio Interface](docs/studio-screenshot.png)
 
 ## Quick Start
 
@@ -71,8 +73,8 @@ A premium web-based interface designed for musicians:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/audio-analysisussy.git
-cd audio-analysisussy
+git clone https://github.com/yourusername/chromascope.git
+cd chromascope
 
 # Create virtual environment
 python3 -m venv .venv
@@ -117,13 +119,13 @@ render_video(
 
 ```bash
 # Analyze audio to JSON manifest
-audio-analyze song.mp3 -o manifest.json --fps 60 --summary
+chromascope song.mp3 -o manifest.json --fps 60 --summary
 
 # Render kaleidoscope video
 python -m audio_analysisussy.render_video song.mp3 -o output.mp4
 ```
 
-### Web Interface (Kaleidoscope Studio)
+### Web Interface (Chromascope Studio)
 
 ```bash
 # Start the web server

@@ -11,7 +11,7 @@ import librosa
 import numpy as np
 from scipy import signal as scipy_signal
 
-from audio_analysisussy.core.decomposer import DecomposedAudio
+from chromascope.core.decomposer import DecomposedAudio
 
 
 @dataclass

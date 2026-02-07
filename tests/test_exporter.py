@@ -5,10 +5,10 @@ import json
 import numpy as np
 import pytest
 
-from audio_analysisussy.core.analyzer import FeatureAnalyzer
-from audio_analysisussy.core.decomposer import AudioDecomposer
-from audio_analysisussy.core.polisher import SignalPolisher
-from audio_analysisussy.io.exporter import ManifestExporter
+from chromascope.core.analyzer import FeatureAnalyzer
+from chromascope.core.decomposer import AudioDecomposer
+from chromascope.core.polisher import SignalPolisher
+from chromascope.io.exporter import ManifestExporter
 
 
 class TestManifestExporter:

@@ -1,6 +1,6 @@
 # API Reference
 
-Complete API documentation for Audio Analysisussy.
+Complete API documentation for Chromascope.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ Complete API documentation for Audio Analysisussy.
 Main orchestration class that combines all processing stages.
 
 ```python
-from audio_analysisussy import AudioPipeline
+from chromascope import AudioPipeline
 ```
 
 ### Constructor
@@ -121,7 +121,7 @@ path = pipeline.export(polished, bpm, duration, "output.json")
 Performs Harmonic-Percussive Source Separation (HPSS).
 
 ```python
-from audio_analysisussy.core.decomposer import AudioDecomposer
+from chromascope.core.decomposer import AudioDecomposer
 ```
 
 ### Constructor
@@ -173,7 +173,7 @@ decomposed = decomposer.decompose_file("song.mp3")
 Extracts visual driver features from decomposed audio.
 
 ```python
-from audio_analysisussy.core.analyzer import FeatureAnalyzer
+from chromascope.core.analyzer import FeatureAnalyzer
 ```
 
 ### Constructor
@@ -244,7 +244,7 @@ FeatureAnalyzer.chroma_index_to_name(9)  # Returns "A"
 Applies aesthetic smoothing to raw features.
 
 ```python
-from audio_analysisussy.core.polisher import SignalPolisher, EnvelopeParams
+from chromascope.core.polisher import SignalPolisher, EnvelopeParams
 ```
 
 ### Constructor
@@ -296,7 +296,7 @@ smoothed = polisher.apply_envelope(signal, EnvelopeParams(0, 200))
 Exports polished features to various formats.
 
 ```python
-from audio_analysisussy.io.exporter import ManifestExporter
+from chromascope.io.exporter import ManifestExporter
 ```
 
 ### Constructor
@@ -354,7 +354,7 @@ Return manifest as dictionary.
 Renders kaleidoscopic visuals from manifest data.
 
 ```python
-from audio_analysisussy.visualizers.kaleidoscope import (
+from chromascope.visualizers.kaleidoscope import (
     KaleidoscopeRenderer,
     KaleidoscopeConfig,
 )

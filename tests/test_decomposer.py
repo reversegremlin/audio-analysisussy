@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from audio_analysisussy.core.decomposer import AudioDecomposer, DecomposedAudio
+from chromascope.core.decomposer import AudioDecomposer, DecomposedAudio
 
 
 class TestAudioDecomposer:

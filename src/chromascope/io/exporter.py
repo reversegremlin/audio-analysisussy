@@ -12,8 +12,8 @@ from typing import Any, Union
 
 import numpy as np
 
-from audio_analysisussy.core.analyzer import FeatureAnalyzer
-from audio_analysisussy.core.polisher import PolishedFeatures
+from chromascope.core.analyzer import FeatureAnalyzer
+from chromascope.core.polisher import PolishedFeatures
 
 
 @dataclass

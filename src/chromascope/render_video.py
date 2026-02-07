@@ -31,6 +31,8 @@ def render_video(
     num_mirrors: int = 8,
     trail_alpha: int = 40,
     max_duration: float = None,
+    progress_callback: callable = None,
+    style: str = "geometric",
 ):
     """
     Render kaleidoscope video from audio file.
@@ -46,23 +48,29 @@ def render_video(
         num_mirrors: Number of radial symmetry copies.
         trail_alpha: Trail persistence (0-255).
         max_duration: Maximum duration in seconds (None for full audio).
+        progress_callback: Optional callback(progress: int, message: str) for progress updates.
+        style: Visualization style (geometric, glass, flower, spiral, circuit, fibonacci).
     """
-    from audio_analysisussy.pipeline import AudioPipeline
-    from audio_analysisussy.visualizers.kaleidoscope import (
+    from chromascope.pipeline import AudioPipeline
+    from chromascope.visualizers.kaleidoscope import (
         KaleidoscopeConfig,
         KaleidoscopeRenderer,
     )
 
-    print(f"Processing audio: {audio_path}", flush=True)
+    def report_progress(pct: int, msg: str):
+        print(msg, flush=True)
+        if progress_callback:
+            progress_callback(pct, msg)
+
+    report_progress(0, f"Processing audio: {audio_path}")
 
     # Step 1: Analyze audio
+    report_progress(5, "Analyzing audio...")
     pipeline = AudioPipeline(target_fps=fps)
     result = pipeline.process(audio_path)
     manifest = result["manifest"]
 
-    print(f"Detected BPM: {result['bpm']:.1f}", flush=True)
-    print(f"Duration: {result['duration']:.2f}s", flush=True)
-    print(f"Total frames: {result['n_frames']}", flush=True)
+    report_progress(10, f"Detected BPM: {result['bpm']:.1f}, Duration: {result['duration']:.2f}s")
 
     # Step 2: Setup renderer
     config = KaleidoscopeConfig(
@@ -71,6 +79,7 @@ def render_video(
         fps=fps,
         num_mirrors=num_mirrors,
         trail_alpha=trail_alpha,
+        style=style,
     )
     renderer = KaleidoscopeRenderer(config)
 
@@ -87,11 +96,10 @@ def render_video(
 
     # Step 3: Create temp directory for frames
     temp_dir = tempfile.mkdtemp(prefix="kaleidoscope_")
-    print(f"Rendering frames to: {temp_dir}", flush=True)
+    report_progress(12, f"Rendering {total_frames} frames...")
 
     try:
         # Step 4: Render frames to PNG files
-        print("Rendering frames...", flush=True)
         previous_surface = None
         renderer.accumulated_rotation = 0.0
 
@@ -107,12 +115,13 @@ def render_video(
             # Keep reference for trail effect
             previous_surface = surface.copy()
 
-            if (i + 1) % 500 == 0 or i == total_frames - 1:
-                pct = (i + 1) / total_frames * 100
-                print(f"  Rendered {i + 1}/{total_frames} frames ({pct:.1f}%)", flush=True)
+            # Report progress (10-80% range for frame rendering)
+            if (i + 1) % 100 == 0 or i == total_frames - 1:
+                pct = 10 + int((i + 1) / total_frames * 70)
+                report_progress(pct, f"Rendering frame {i + 1}/{total_frames}")
 
         # Step 5: Combine frames into video with ffmpeg
-        print("Encoding video...", flush=True)
+        report_progress(82, "Encoding video...")
 
         temp_video = os.path.join(temp_dir, "video.mp4")
         frame_pattern = os.path.join(temp_dir, "frame_%06d.png")
@@ -139,7 +148,7 @@ def render_video(
             raise RuntimeError(f"ffmpeg encode failed: {result_encode.stderr.decode()}")
 
         # Step 6: Mux with audio
-        print("Adding audio track...", flush=True)
+        report_progress(90, "Adding audio track...")
 
         ffmpeg_mux = [
             "ffmpeg",
@@ -168,12 +177,11 @@ def render_video(
         if result_mux.returncode != 0:
             raise RuntimeError(f"ffmpeg mux failed: {result_mux.stderr.decode()}")
 
-        print(f"Done! Output: {output_path}", flush=True)
-        print(f"File size: {output_path.stat().st_size / 1024 / 1024:.1f} MB", flush=True)
+        file_size_mb = output_path.stat().st_size / 1024 / 1024
+        report_progress(100, f"Complete! {file_size_mb:.1f} MB")
 
     finally:
         # Cleanup temp directory
-        print("Cleaning up temp files...", flush=True)
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 

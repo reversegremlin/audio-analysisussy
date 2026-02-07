@@ -1,0 +1,5 @@
+1. ~~update web interface to have a progress bar, update any backend services or apis to support this, also update documentation, tests, and any markdown documents necessary for a trai~~ ✅ COMPLETE
+2. create a new screenshot of the UI, update the README, create demo videos, 1 of each type, update the demo page to have embedded links to the video demos of each, create a gif of each for a preview on the readme.
+3. ~~rename this project, all documentation, and the github repo name to be: "Chromascope" remove any code or documentation references to old name and replace with new name~~ ✅ COMPLETE
+4. ~~add a new mode with infinitely expainding hexagonal circutry style fractals vividly lit up with all types of mathematical complex patterns to give the rods and cones of human eyes a workout thye will never forget, beautiful geometric harmony~~ ✅ COMPLETE
+5. ~~add a new mode with infinitely expainding fibonacci style fractals vividly lit up with all types of mathematical complex patterns to give the rods and cones of human eyes a workout thye will never forget, beautiful golden ratio harmony~~ ✅ COMPLETE

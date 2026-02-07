@@ -1,4 +1,4 @@
-# Architecture: Project Audio Analysisussy
+# Architecture: Project Chromascope
 
 ## 1. System Vision
 A decoupled pipeline that transforms raw audio into a "Visual Driver Manifest" (JSON). The system prioritizes the separation of percussive transients from harmonic textures to create "musical" visuals rather than just frequency-reactive ones.

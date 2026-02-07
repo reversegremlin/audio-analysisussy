@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from audio_analysisussy.core.analyzer import FeatureAnalyzer
-from audio_analysisussy.core.decomposer import AudioDecomposer
-from audio_analysisussy.core.polisher import EnvelopeParams, PolishedFeatures, SignalPolisher
+from chromascope.core.analyzer import FeatureAnalyzer
+from chromascope.core.decomposer import AudioDecomposer
+from chromascope.core.polisher import EnvelopeParams, PolishedFeatures, SignalPolisher
 
 
 class TestSignalPolisher:

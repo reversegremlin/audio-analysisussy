@@ -1,4 +1,4 @@
-# PRD: Project audio-analysisussy
+# PRD: Project chromascope
 
 **Objective:** To build a robust Python-based audio analysis engine that extracts high-fidelity musical features for the purpose of driving reactive generative art.
 

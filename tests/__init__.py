@@ -1,1 +1,1 @@
-"""Tests for audio-analysisussy."""
+"""Tests for chromascope."""

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import signal as scipy_signal
 
-from audio_analysisussy.core.analyzer import ExtractedFeatures
+from chromascope.core.analyzer import ExtractedFeatures
 
 
 @dataclass

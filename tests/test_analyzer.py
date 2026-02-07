@@ -3,12 +3,12 @@
 import numpy as np
 import pytest
 
-from audio_analysisussy.core.analyzer import (
+from chromascope.core.analyzer import (
     ExtractedFeatures,
     FeatureAnalyzer,
     FrequencyBands,
 )
-from audio_analysisussy.core.decomposer import AudioDecomposer
+from chromascope.core.decomposer import AudioDecomposer
 
 
 class TestFeatureAnalyzer:

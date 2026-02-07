@@ -19,7 +19,7 @@ class TestKaleidoscopeRenderer:
     def renderer(self):
         """Create a renderer instance."""
         pygame.init()
-        from audio_analysisussy.visualizers.kaleidoscope import (
+        from chromascope.visualizers.kaleidoscope import (
             KaleidoscopeConfig,
             KaleidoscopeRenderer,
         )
@@ -171,7 +171,7 @@ class TestKaleidoscopeRenderer:
 
     def test_config_background_colors(self):
         """Config should support two background colors."""
-        from audio_analysisussy.visualizers.kaleidoscope import KaleidoscopeConfig
+        from chromascope.visualizers.kaleidoscope import KaleidoscopeConfig
 
         config = KaleidoscopeConfig(
             background_color=(10, 10, 20),
@@ -182,7 +182,7 @@ class TestKaleidoscopeRenderer:
 
     def test_config_reactivity(self):
         """Config should support reactivity setting."""
-        from audio_analysisussy.visualizers.kaleidoscope import KaleidoscopeConfig
+        from chromascope.visualizers.kaleidoscope import KaleidoscopeConfig
 
         config = KaleidoscopeConfig(bg_reactivity=0.5)
         assert config.bg_reactivity == 0.5

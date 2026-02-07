@@ -1,12 +1,12 @@
 # User Guide
 
-Complete guide to using Audio Analysisussy for audio analysis and visualization.
+Complete guide to using Chromascope for audio analysis and visualization.
 
 ## Table of Contents
 
 1. [Installation](#installation)
 2. [Quick Start](#quick-start)
-3. [Kaleidoscope Studio (Web UI)](#kaleidoscope-studio-web-ui)
+3. [Chromascope Studio (Web UI)](#kaleidoscope-studio-web-ui)
 4. [Understanding the Output](#understanding-the-output)
 5. [Using the Pipeline](#using-the-pipeline)
 6. [Creating Visualizations](#creating-visualizations)
@@ -28,8 +28,8 @@ Complete guide to using Audio Analysisussy for audio analysis and visualization.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/audio-analysisussy.git
-cd audio-analysisussy
+git clone https://github.com/yourusername/chromascope.git
+cd chromascope
 
 # 2. Create a virtual environment
 python3 -m venv .venv
@@ -43,7 +43,7 @@ pip install -e .
 pip install -e ".[dev]"
 
 # 5. Verify installation
-audio-analyze --help
+chromascope --help
 ```
 
 ### Verify FFmpeg
@@ -65,7 +65,7 @@ If FFmpeg is not installed:
 ### Analyze an Audio File
 
 ```python
-from audio_analysisussy import AudioPipeline
+from chromascope import AudioPipeline
 
 # Create pipeline with default settings (60 FPS)
 pipeline = AudioPipeline()
@@ -85,26 +85,26 @@ print(f"Frames: {result['n_frames']}")
 
 ```bash
 # Basic analysis
-audio-analyze song.mp3
+chromascope song.mp3
 
 # Custom output path and FPS
-audio-analyze song.mp3 -o output.json --fps 30
+chromascope song.mp3 -o output.json --fps 30
 
 # Show summary after processing
-audio-analyze song.mp3 --summary
+chromascope song.mp3 --summary
 
 # Export as NumPy for faster loading
-audio-analyze song.mp3 --format numpy
+chromascope song.mp3 --format numpy
 ```
 
 ### Render a Video
 
 ```bash
 # Using the render script
-python -m audio_analysisussy.render_video song.mp3 -o video.mp4
+python -m chromascope.render_video song.mp3 -o video.mp4
 
 # With custom settings
-python -m audio_analysisussy.render_video song.mp3 \
+python -m chromascope.render_video song.mp3 \
     --width 1920 --height 1080 \
     --fps 60 \
     --mirrors 12 \
@@ -113,9 +113,9 @@ python -m audio_analysisussy.render_video song.mp3 \
 
 ---
 
-## Kaleidoscope Studio (Web UI)
+## Chromascope Studio (Web UI)
 
-The easiest way to create visualizations is through Kaleidoscope Studio, a web-based interface designed for musicians.
+The easiest way to create visualizations is through Chromascope Studio, a web-based interface designed for musicians.
 
 ### Starting the Studio
 
@@ -153,7 +153,7 @@ The Studio is divided into three main areas:
 
 ### Visualization Styles
 
-The Studio includes four distinct visualization styles, each with its own character:
+The Studio includes six distinct visualization styles, each with its own character:
 
 | Style | Description | Best For |
 |-------|-------------|----------|
@@ -161,6 +161,8 @@ The Studio includes four distinct visualization styles, each with its own charac
 | **Glass** | Classic broken glass kaleidoscope with triangular reflections | Rock, orchestral, complex audio |
 | **Flower** | Organic petal shapes with smooth bezier curves | Ambient, acoustic, soft music |
 | **Spiral** | Hypnotic spiraling arms with flowing motion | Trance, progressive, buildups |
+| **Circuit** | Hexagonal grid with glowing circuit traces and nodes | Synthwave, cyberpunk, industrial |
+| **Fibonacci** | Golden ratio spirals with mathematical harmony | Classical, jazz, contemplative |
 
 Click any style button to switch instantly - changes apply in real-time during playback.
 
@@ -261,7 +263,7 @@ print(f"Peak at {loudest['time']:.2f}s")
 ### Basic Pipeline
 
 ```python
-from audio_analysisussy import AudioPipeline
+from chromascope import AudioPipeline
 
 pipeline = AudioPipeline(target_fps=60)
 manifest = pipeline.process_to_manifest("song.mp3")
@@ -272,7 +274,7 @@ manifest = pipeline.process_to_manifest("song.mp3")
 For more control, run each phase separately:
 
 ```python
-from audio_analysisussy import (
+from chromascope import (
     AudioDecomposer,
     FeatureAnalyzer,
     SignalPolisher,
@@ -324,7 +326,7 @@ print(f"First 5 beats: {beat_times[:5]}")
 
 ```python
 from pathlib import Path
-from audio_analysisussy.render_video import render_video
+from chromascope.render_video import render_video
 
 render_video(
     audio_path=Path("song.mp3"),
@@ -426,8 +428,8 @@ function draw() {
 Control how features are smoothed:
 
 ```python
-from audio_analysisussy import AudioPipeline
-from audio_analysisussy.core.polisher import EnvelopeParams
+from chromascope import AudioPipeline
+from chromascope.core.polisher import EnvelopeParams
 
 # Punchy, responsive settings
 punchy = AudioPipeline(
@@ -542,7 +544,7 @@ var manifest = JsonUtility.FromJson<Manifest>(json);
 
 ### Common Issues
 
-**"No module named 'audio_analysisussy'"**
+**"No module named 'chromascope'"**
 ```bash
 # Make sure you're in the virtual environment
 source .venv/bin/activate

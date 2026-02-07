@@ -7,14 +7,14 @@ Orchestrates the complete flow from audio file to visual driver manifest.
 from pathlib import Path
 from typing import Any, Union
 
-from audio_analysisussy.core.analyzer import ExtractedFeatures, FeatureAnalyzer
-from audio_analysisussy.core.decomposer import AudioDecomposer, DecomposedAudio
-from audio_analysisussy.core.polisher import (
+from chromascope.core.analyzer import ExtractedFeatures, FeatureAnalyzer
+from chromascope.core.decomposer import AudioDecomposer, DecomposedAudio
+from chromascope.core.polisher import (
     EnvelopeParams,
     PolishedFeatures,
     SignalPolisher,
 )
-from audio_analysisussy.io.exporter import ManifestExporter
+from chromascope.io.exporter import ManifestExporter
 
 
 class AudioPipeline:
