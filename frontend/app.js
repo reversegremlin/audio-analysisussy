@@ -1946,7 +1946,7 @@ class KaleidoscopeStudio {
 
     /**
      * Circuit style - hexagonal grid with glowing circuit traces
-     * Infinitely expanding hexagonal circuitry patterns
+     * Uses config.mirrors, radius, orbitRadius, rotationSpeed for dynamic control
      */
     renderCircuitStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
@@ -1954,130 +1954,148 @@ class KaleidoscopeStudio {
         const energy = this.smoothedValues.percussiveImpact;
         const harmonic = this.smoothedValues.harmonicEnergy;
         const brightness = this.smoothedValues.spectralBrightness;
-        const maxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.5;
+        const mirrors = config.mirrors;
+        const orbitDist = config.orbitRadius * (0.6 + harmonic * 0.4);
+        const rotSpeed = config.rotationSpeed;
 
         ctx.save();
         ctx.translate(centerX, centerY);
-        ctx.rotate(this.accumulatedRotation * 0.1);
 
-        // Hexagon grid parameters
-        const hexSize = 30 + energy * 20;
-        const rings = Math.ceil(maxRadius / hexSize) + 2;
+        // Global rotation affected by rotationSpeed
+        ctx.rotate(this.accumulatedRotation * 0.15 * rotSpeed);
 
-        // Draw expanding hexagonal grid layers
-        for (let ring = 0; ring < rings; ring++) {
-            const ringRadius = ring * hexSize * 1.732;
-            const hexCount = ring === 0 ? 1 : ring * 6;
-            const ringHue = (hue + ring * 15 + harmonic * 30) % 360;
-            const ringAlpha = Math.max(0.1, 1 - ring * 0.08);
+        // Hexagon size based on radius parameter
+        const hexSize = radius * 0.25 * (0.8 + energy * 0.4);
+        const maxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.48;
+        const rings = Math.max(3, Math.ceil(orbitDist / hexSize) + 1);
 
-            for (let h = 0; h < hexCount; h++) {
-                const angle = (Math.PI * 2 * h) / hexCount + (ring % 2) * (Math.PI / hexCount);
-                const hx = ring === 0 ? 0 : ringRadius * Math.cos(angle);
-                const hy = ring === 0 ? 0 : ringRadius * Math.sin(angle);
+        // Draw in radial mirror segments for kaleidoscope effect
+        for (let m = 0; m < mirrors; m++) {
+            const mirrorAngle = (Math.PI * 2 * m) / mirrors;
 
-                // Draw hexagon
-                const hexPoints = [];
-                for (let i = 0; i < 6; i++) {
-                    const a = (Math.PI / 3) * i + Math.PI / 6;
-                    hexPoints.push({
-                        x: hx + hexSize * 0.9 * Math.cos(a),
-                        y: hy + hexSize * 0.9 * Math.sin(a)
-                    });
-                }
+            ctx.save();
+            ctx.rotate(mirrorAngle);
 
-                // Hexagon outline
-                ctx.beginPath();
-                ctx.moveTo(hexPoints[0].x, hexPoints[0].y);
-                for (let i = 1; i < 6; i++) {
-                    ctx.lineTo(hexPoints[i].x, hexPoints[i].y);
-                }
-                ctx.closePath();
-                ctx.strokeStyle = `hsla(${ringHue}, ${config.saturation}%, ${50 + energy * 30}%, ${ringAlpha * (0.3 + energy * 0.4)})`;
-                ctx.lineWidth = 1 + energy * 2;
-                ctx.stroke();
+            // Draw hexagonal circuit pattern in this segment
+            for (let ring = 0; ring < rings; ring++) {
+                const ringRadius = ring * hexSize * 1.5 + radius * 0.3;
+                const hexPerRing = Math.max(1, Math.floor(ring * 1.5));
+                const ringHue = (hue + ring * 20 + m * (360 / mirrors) + harmonic * 30) % 360;
+                const ringAlpha = Math.max(0.15, 1 - ring * 0.12);
 
-                // Circuit traces from center
-                const nodeSeed = seed + ring * 100 + h * 7;
-                if (this.seededRandom(nodeSeed) > 0.4) {
-                    const traceCount = 1 + Math.floor(this.seededRandom(nodeSeed + 1) * 3);
-                    for (let t = 0; t < traceCount; t++) {
-                        const startPoint = hexPoints[Math.floor(this.seededRandom(nodeSeed + t * 10) * 6)];
-                        const endPoint = hexPoints[(Math.floor(this.seededRandom(nodeSeed + t * 10 + 1) * 6) + 3) % 6];
+                for (let h = 0; h < hexPerRing; h++) {
+                    const hexAngle = (h / hexPerRing) * (Math.PI * 2 / mirrors) - Math.PI / mirrors / 2;
+                    const hx = ringRadius * Math.cos(hexAngle);
+                    const hy = ringRadius * Math.sin(hexAngle);
 
-                        // Circuit trace with glow
+                    // Only draw if in our wedge
+                    if (Math.abs(hexAngle) > Math.PI / mirrors + 0.1) continue;
+
+                    // Dynamic hex size
+                    const dynamicHexSize = hexSize * (0.8 + brightness * 0.4);
+
+                    // Draw hexagon
+                    const hexPoints = [];
+                    for (let i = 0; i < 6; i++) {
+                        const a = (Math.PI / 3) * i + Math.PI / 6 + this.accumulatedRotation * 0.5 * rotSpeed;
+                        hexPoints.push({
+                            x: hx + dynamicHexSize * 0.8 * Math.cos(a),
+                            y: hy + dynamicHexSize * 0.8 * Math.sin(a)
+                        });
+                    }
+
+                    // Hexagon outline
+                    ctx.beginPath();
+                    ctx.moveTo(hexPoints[0].x, hexPoints[0].y);
+                    for (let i = 1; i < 6; i++) {
+                        ctx.lineTo(hexPoints[i].x, hexPoints[i].y);
+                    }
+                    ctx.closePath();
+                    ctx.strokeStyle = `hsla(${ringHue}, ${config.saturation}%, ${50 + energy * 30}%, ${ringAlpha * (0.4 + energy * 0.5)})`;
+                    ctx.lineWidth = thickness * (0.5 + energy * 0.5);
+                    ctx.stroke();
+
+                    // Circuit traces
+                    const nodeSeed = seed + ring * 100 + h * 7 + m;
+                    if (this.seededRandom(nodeSeed) > 0.35) {
+                        const traceCount = 1 + Math.floor(this.seededRandom(nodeSeed + 1) * 2);
+                        for (let t = 0; t < traceCount; t++) {
+                            const startIdx = Math.floor(this.seededRandom(nodeSeed + t * 10) * 6);
+                            const endIdx = (startIdx + 3) % 6;
+
+                            ctx.beginPath();
+                            ctx.moveTo(hexPoints[startIdx].x, hexPoints[startIdx].y);
+                            ctx.lineTo(hx, hy);
+                            ctx.lineTo(hexPoints[endIdx].x, hexPoints[endIdx].y);
+
+                            const traceHue = (ringHue + t * 50) % 360;
+                            ctx.strokeStyle = `hsla(${traceHue}, ${config.saturation}%, ${60 + brightness * 30}%, ${ringAlpha * (0.6 + energy * 0.4)})`;
+                            ctx.lineWidth = thickness * (0.6 + energy * 0.6);
+                            ctx.stroke();
+                        }
+                    }
+
+                    // Glowing node
+                    if (this.seededRandom(nodeSeed + 5) > 0.25) {
+                        const nodeSize = (radius * 0.03 + energy * radius * 0.05) * (1 - ring * 0.08);
+                        const pulsePhase = Math.sin(this.accumulatedRotation * 5 * rotSpeed + ring * 0.5 + h * 0.3);
+                        const nodePulse = 1 + pulsePhase * 0.4 * energy;
+
+                        const glowGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, nodeSize * 3 * nodePulse);
+                        glowGrad.addColorStop(0, `hsla(${ringHue}, ${config.saturation}%, 85%, ${0.7 + energy * 0.3})`);
+                        glowGrad.addColorStop(0.5, `hsla(${ringHue}, ${config.saturation}%, 60%, ${0.25 + energy * 0.2})`);
+                        glowGrad.addColorStop(1, `hsla(${ringHue}, ${config.saturation}%, 40%, 0)`);
+                        ctx.fillStyle = glowGrad;
                         ctx.beginPath();
-                        ctx.moveTo(startPoint.x, startPoint.y);
-                        ctx.lineTo(hx, hy);
-                        ctx.lineTo(endPoint.x, endPoint.y);
+                        ctx.arc(hx, hy, nodeSize * 3 * nodePulse, 0, Math.PI * 2);
+                        ctx.fill();
 
-                        const traceHue = (ringHue + t * 40) % 360;
-                        ctx.strokeStyle = `hsla(${traceHue}, ${config.saturation}%, ${60 + brightness * 30}%, ${ringAlpha * (0.5 + energy * 0.5)})`;
-                        ctx.lineWidth = 2 + energy * 3;
-                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.arc(hx, hy, nodeSize * nodePulse, 0, Math.PI * 2);
+                        ctx.fillStyle = `hsla(${ringHue}, ${config.saturation * 0.4}%, 95%, 0.95)`;
+                        ctx.fill();
                     }
                 }
-
-                // Glowing node at center
-                if (this.seededRandom(nodeSeed + 5) > 0.3) {
-                    const nodeSize = (3 + energy * 8) * (1 - ring * 0.05);
-                    const pulsePhase = Math.sin(this.accumulatedRotation * 5 + ring * 0.5 + h * 0.3);
-                    const nodePulse = 1 + pulsePhase * 0.3 * energy;
-
-                    // Outer glow
-                    const glowGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, nodeSize * 3 * nodePulse);
-                    glowGrad.addColorStop(0, `hsla(${ringHue}, ${config.saturation}%, 80%, ${0.6 + energy * 0.4})`);
-                    glowGrad.addColorStop(0.5, `hsla(${ringHue}, ${config.saturation}%, 60%, ${0.2 + energy * 0.2})`);
-                    glowGrad.addColorStop(1, `hsla(${ringHue}, ${config.saturation}%, 40%, 0)`);
-                    ctx.fillStyle = glowGrad;
-                    ctx.beginPath();
-                    ctx.arc(hx, hy, nodeSize * 3 * nodePulse, 0, Math.PI * 2);
-                    ctx.fill();
-
-                    // Core node
-                    ctx.beginPath();
-                    ctx.arc(hx, hy, nodeSize * nodePulse, 0, Math.PI * 2);
-                    ctx.fillStyle = `hsla(${ringHue}, ${config.saturation * 0.5}%, ${90 + energy * 10}%, ${0.9})`;
-                    ctx.fill();
-                }
             }
+
+            ctx.restore();
         }
 
-        // Pulsing energy waves radiating outward
-        const waveCount = 3;
+        // Pulsing energy waves
+        const waveCount = Math.max(2, Math.floor(mirrors / 3));
         for (let w = 0; w < waveCount; w++) {
-            const wavePhase = (this.accumulatedRotation * 2 + w * (Math.PI * 2 / waveCount)) % (Math.PI * 2);
-            const waveRadius = (wavePhase / (Math.PI * 2)) * maxRadius;
+            const wavePhase = (this.accumulatedRotation * 2 * rotSpeed + w * (Math.PI * 2 / waveCount)) % (Math.PI * 2);
+            const waveRadius = (wavePhase / (Math.PI * 2)) * orbitDist;
             const waveAlpha = 1 - wavePhase / (Math.PI * 2);
 
             ctx.beginPath();
             ctx.arc(0, 0, waveRadius, 0, Math.PI * 2);
-            ctx.strokeStyle = `hsla(${hue}, ${config.saturation}%, 70%, ${waveAlpha * energy * 0.5})`;
-            ctx.lineWidth = 2 + energy * 4;
+            ctx.strokeStyle = `hsla(${hue}, ${config.saturation}%, 70%, ${waveAlpha * energy * 0.6})`;
+            ctx.lineWidth = thickness * (0.8 + energy * 1.2);
             ctx.stroke();
         }
 
-        // Central core with rotating elements
-        const coreSize = 40 + energy * 30;
+        // Central core - size based on radius
+        const coreSize = radius * 0.4 * (0.8 + energy * 0.4);
 
-        // Core hexagon
+        // Core hexagon with mirrors sides
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            const a = (Math.PI / 3) * i + this.accumulatedRotation * 2;
+            const a = (Math.PI / 3) * i + this.accumulatedRotation * 2 * rotSpeed;
             const x = coreSize * Math.cos(a);
             const y = coreSize * Math.sin(a);
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         }
         ctx.closePath();
-        ctx.strokeStyle = `hsla(${hue}, ${config.saturation}%, ${80 + energy * 20}%, ${0.8 + energy * 0.2})`;
-        ctx.lineWidth = 3 + energy * 4;
+        ctx.strokeStyle = `hsla(${hue}, ${config.saturation}%, ${80 + energy * 20}%, ${0.85 + energy * 0.15})`;
+        ctx.lineWidth = thickness * (1 + energy * 0.8);
         ctx.stroke();
 
         // Inner rotating hexagon
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            const a = (Math.PI / 3) * i - this.accumulatedRotation * 3;
+            const a = (Math.PI / 3) * i - this.accumulatedRotation * 3 * rotSpeed;
             const x = coreSize * 0.5 * Math.cos(a);
             const y = coreSize * 0.5 * Math.sin(a);
             if (i === 0) ctx.moveTo(x, y);
@@ -2085,12 +2103,12 @@ class KaleidoscopeStudio {
         }
         ctx.closePath();
         ctx.strokeStyle = `hsla(${(hue + 60) % 360}, ${config.saturation}%, 75%, ${0.7 + energy * 0.3})`;
-        ctx.lineWidth = 2 + energy * 3;
+        ctx.lineWidth = thickness * (0.7 + energy * 0.5);
         ctx.stroke();
 
         // Bright core
         const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreSize * 0.4);
-        coreGrad.addColorStop(0, `hsla(${hue}, ${config.saturation * 0.5}%, 95%, 1)`);
+        coreGrad.addColorStop(0, `hsla(${hue}, ${config.saturation * 0.4}%, 95%, 1)`);
         coreGrad.addColorStop(0.5, `hsla(${hue}, ${config.saturation}%, 70%, 0.6)`);
         coreGrad.addColorStop(1, `hsla(${hue}, ${config.saturation}%, 50%, 0)`);
         ctx.fillStyle = coreGrad;
@@ -2103,7 +2121,7 @@ class KaleidoscopeStudio {
 
     /**
      * Fibonacci style - golden ratio spirals and fractal patterns
-     * Infinitely expanding golden spiral patterns
+     * Uses config.mirrors, radius, orbitRadius, rotationSpeed for dynamic control
      */
     renderFibonacciStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
@@ -2111,6 +2129,9 @@ class KaleidoscopeStudio {
         const energy = this.smoothedValues.percussiveImpact;
         const harmonic = this.smoothedValues.harmonicEnergy;
         const brightness = this.smoothedValues.spectralBrightness;
+        const mirrors = config.mirrors;
+        const orbitDist = config.orbitRadius * (0.7 + harmonic * 0.4);
+        const rotSpeed = config.rotationSpeed;
         const maxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.48;
 
         const PHI = 1.618033988749895; // Golden ratio
@@ -2118,44 +2139,44 @@ class KaleidoscopeStudio {
         ctx.save();
         ctx.translate(centerX, centerY);
 
-        // Draw multiple golden spirals
-        const spiralCount = config.mirrors;
-        for (let s = 0; s < spiralCount; s++) {
-            const spiralAngle = (Math.PI * 2 * s) / spiralCount;
-            const spiralHue = (hue + s * (360 / spiralCount)) % 360;
+        // Draw multiple golden spirals - one per mirror
+        for (let s = 0; s < mirrors; s++) {
+            const spiralAngle = (Math.PI * 2 * s) / mirrors;
+            const spiralHue = (hue + s * (360 / mirrors)) % 360;
 
             ctx.save();
-            ctx.rotate(spiralAngle + this.accumulatedRotation * 0.5);
+            ctx.rotate(spiralAngle + this.accumulatedRotation * 0.5 * rotSpeed);
 
-            // Draw golden spiral
-            this.drawGoldenSpiral(ctx, maxRadius * (0.8 + harmonic * 0.3), spiralHue, energy, brightness, seed + s * 100);
+            // Draw golden spiral with radius-based sizing
+            this.drawGoldenSpiral(ctx, orbitDist * (0.8 + harmonic * 0.4), spiralHue, energy, brightness, seed + s * 100, radius, thickness, rotSpeed);
 
             ctx.restore();
         }
 
-        // Fibonacci sequence circles
+        // Fibonacci sequence circles - scaled by radius
         const fibSequence = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55];
-        const baseSize = 5 + energy * 10;
+        const baseSize = radius * 0.04 * (0.7 + energy * 0.6);
 
         for (let f = 0; f < fibSequence.length; f++) {
-            const fibRadius = fibSequence[f] * baseSize;
-            if (fibRadius > maxRadius) break;
+            const fibRadius = fibSequence[f] * baseSize * 1.5;
+            if (fibRadius > orbitDist) break;
 
-            const fibAngle = f * PHI * Math.PI * 2 + this.accumulatedRotation * (0.3 + f * 0.05);
-            const x = fibRadius * 0.3 * Math.cos(fibAngle);
-            const y = fibRadius * 0.3 * Math.sin(fibAngle);
+            const fibAngle = f * PHI * Math.PI * 2 + this.accumulatedRotation * (0.3 + f * 0.05) * rotSpeed;
+            const x = fibRadius * 0.4 * Math.cos(fibAngle);
+            const y = fibRadius * 0.4 * Math.sin(fibAngle);
 
-            // Fibonacci circle
+            // Fibonacci circle - size based on radius
+            const circleSize = fibSequence[f] * (radius * 0.015 + energy * radius * 0.02);
             ctx.beginPath();
-            ctx.arc(x, y, fibSequence[f] * (2 + energy * 3), 0, Math.PI * 2);
+            ctx.arc(x, y, circleSize, 0, Math.PI * 2);
             const fibHue = (hue + f * 25 + harmonic * 40) % 360;
-            ctx.strokeStyle = `hsla(${fibHue}, ${config.saturation}%, ${60 + brightness * 25}%, ${0.4 + energy * 0.4})`;
-            ctx.lineWidth = 1 + energy * 2;
+            ctx.strokeStyle = `hsla(${fibHue}, ${config.saturation}%, ${60 + brightness * 25}%, ${0.45 + energy * 0.45})`;
+            ctx.lineWidth = thickness * (0.5 + energy * 0.5);
             ctx.stroke();
 
             // Golden nodes
             if (f > 2) {
-                const nodeSize = 3 + energy * 5;
+                const nodeSize = radius * 0.02 * (0.8 + energy * 0.8);
                 const glowGrad = ctx.createRadialGradient(x, y, 0, x, y, nodeSize * 3);
                 glowGrad.addColorStop(0, `hsla(${fibHue}, ${config.saturation}%, 85%, ${0.8 + energy * 0.2})`);
                 glowGrad.addColorStop(0.5, `hsla(${fibHue}, ${config.saturation}%, 65%, 0.3)`);
@@ -2167,15 +2188,16 @@ class KaleidoscopeStudio {
             }
         }
 
-        // Golden rectangles (nested)
+        // Golden rectangles (nested) - sized by radius and orbitDist
         ctx.save();
-        ctx.rotate(this.accumulatedRotation * 0.2);
-        let rectSize = maxRadius * 0.6 * (0.8 + energy * 0.3);
+        ctx.rotate(this.accumulatedRotation * 0.2 * rotSpeed);
+        let rectSize = orbitDist * 0.7 * (0.7 + energy * 0.4);
         let rectRotation = 0;
 
-        for (let r = 0; r < 8; r++) {
-            const rectHue = (hue + r * 20 + brightness * 30) % 360;
-            const alpha = 0.5 - r * 0.05 + energy * 0.3;
+        const rectCount = Math.min(10, Math.max(4, mirrors));
+        for (let r = 0; r < rectCount; r++) {
+            const rectHue = (hue + r * (180 / rectCount) + brightness * 30) % 360;
+            const alpha = 0.55 - r * 0.04 + energy * 0.35;
 
             ctx.save();
             ctx.rotate(rectRotation);
@@ -2184,7 +2206,7 @@ class KaleidoscopeStudio {
             ctx.beginPath();
             ctx.rect(-rectSize / 2, -rectSize / (2 * PHI), rectSize, rectSize / PHI);
             ctx.strokeStyle = `hsla(${rectHue}, ${config.saturation}%, ${55 + energy * 25}%, ${alpha})`;
-            ctx.lineWidth = 2 + energy * 2;
+            ctx.lineWidth = thickness * (0.6 + energy * 0.6);
             ctx.stroke();
 
             ctx.restore();
@@ -2195,12 +2217,12 @@ class KaleidoscopeStudio {
         }
         ctx.restore();
 
-        // Central golden flower
-        const petalCount = 8;
-        const petalLength = 50 + energy * 40;
+        // Central golden flower - petals based on mirrors
+        const petalCount = mirrors;
+        const petalLength = radius * 0.4 * (0.7 + energy * 0.5);
 
         for (let p = 0; p < petalCount; p++) {
-            const petalAngle = (Math.PI * 2 * p) / petalCount + this.accumulatedRotation * 0.8;
+            const petalAngle = (Math.PI * 2 * p) / petalCount + this.accumulatedRotation * 0.8 * rotSpeed;
             const petalHue = (hue + p * (360 / petalCount) * PHI) % 360;
 
             ctx.save();
@@ -2223,41 +2245,44 @@ class KaleidoscopeStudio {
             ctx.fillStyle = `hsla(${petalHue}, ${config.saturation}%, ${60 + energy * 25}%, ${0.3 + energy * 0.3})`;
             ctx.fill();
             ctx.strokeStyle = `hsla(${petalHue}, ${config.saturation}%, ${75 + energy * 20}%, ${0.6 + energy * 0.4})`;
-            ctx.lineWidth = 1 + energy * 2;
+            ctx.lineWidth = thickness * (0.5 + energy * 0.8);
             ctx.stroke();
 
             ctx.restore();
         }
 
-        // Core with golden glow
-        const coreRadius = 20 + energy * 15;
-        const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreRadius * 2);
+        // Core with golden glow - sized by radius
+        const coreSize = radius * 0.15 * (0.8 + energy * 0.5);
+        const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreSize * 2);
         coreGrad.addColorStop(0, `hsla(${(hue + 30) % 360}, ${config.saturation * 0.6}%, 95%, 1)`);
         coreGrad.addColorStop(0.4, `hsla(${hue}, ${config.saturation}%, 75%, 0.7)`);
         coreGrad.addColorStop(1, `hsla(${hue}, ${config.saturation}%, 50%, 0)`);
         ctx.fillStyle = coreGrad;
         ctx.beginPath();
-        ctx.arc(0, 0, coreRadius * 2, 0, Math.PI * 2);
+        ctx.arc(0, 0, coreSize * 2, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();
     }
 
-    drawGoldenSpiral(ctx, maxRadius, hue, energy, brightness, seed) {
+    drawGoldenSpiral(ctx, maxRadius, hue, energy, brightness, seed, baseRadius, thickness, rotSpeed) {
         const config = this.config;
         const PHI = 1.618033988749895;
         const points = 100;
 
+        // Scale spiral based on baseRadius parameter
+        const radiusScale = baseRadius * 0.035;
+
         ctx.beginPath();
         for (let i = 0; i < points; i++) {
             const t = i / points;
-            const angle = t * Math.PI * 4; // 2 full rotations
-            const radius = Math.pow(PHI, angle / (Math.PI / 2)) * 5 * (0.8 + energy * 0.4);
+            const angle = t * Math.PI * 4 * rotSpeed; // Rotation speed affects spiral turns
+            const spiralRadius = Math.pow(PHI, angle / (Math.PI / 2)) * radiusScale * (0.8 + energy * 0.4);
 
-            if (radius > maxRadius) break;
+            if (spiralRadius > maxRadius) break;
 
-            const x = radius * Math.cos(angle);
-            const y = radius * Math.sin(angle);
+            const x = spiralRadius * Math.cos(angle);
+            const y = spiralRadius * Math.sin(angle);
 
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
@@ -2265,22 +2290,22 @@ class KaleidoscopeStudio {
 
         const spiralHue = (hue + brightness * 40) % 360;
         ctx.strokeStyle = `hsla(${spiralHue}, ${config.saturation}%, ${60 + energy * 25}%, ${0.5 + energy * 0.4})`;
-        ctx.lineWidth = 2 + energy * 4;
+        ctx.lineWidth = thickness * (0.8 + energy * 1.5);
         ctx.lineCap = 'round';
         ctx.stroke();
 
-        // Nodes along spiral
+        // Nodes along spiral - sized by baseRadius and thickness
         for (let i = 0; i < points; i += 10) {
             const t = i / points;
-            const angle = t * Math.PI * 4;
-            const radius = Math.pow(PHI, angle / (Math.PI / 2)) * 5 * (0.8 + energy * 0.4);
+            const angle = t * Math.PI * 4 * rotSpeed;
+            const spiralRadius = Math.pow(PHI, angle / (Math.PI / 2)) * radiusScale * (0.8 + energy * 0.4);
 
-            if (radius > maxRadius) break;
+            if (spiralRadius > maxRadius) break;
 
-            const x = radius * Math.cos(angle);
-            const y = radius * Math.sin(angle);
+            const x = spiralRadius * Math.cos(angle);
+            const y = spiralRadius * Math.sin(angle);
 
-            const nodeSize = 2 + energy * 4;
+            const nodeSize = (baseRadius * 0.015 + thickness * 0.3) * (0.8 + energy * 0.6);
             ctx.beginPath();
             ctx.arc(x, y, nodeSize, 0, Math.PI * 2);
             ctx.fillStyle = `hsla(${(spiralHue + i * 3) % 360}, ${config.saturation}%, ${80 + energy * 15}%, ${0.7 + energy * 0.3})`;
