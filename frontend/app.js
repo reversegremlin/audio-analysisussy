@@ -908,6 +908,9 @@ class KaleidoscopeStudio {
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
+        // Reset alpha before drawing fractal background
+        ctx.globalAlpha = 1;
+
         // --- Full-screen fractal kaleidoscope background pattern ---
         this.renderFractalBackground(ctx, width, height, centerX, centerY, reactivity, deltaTime);
 
@@ -961,8 +964,8 @@ class KaleidoscopeStudio {
         ctx.translate(centerX, centerY);
         ctx.rotate(this._bgFractalRotation);
 
-        // Outer alpha keeps background subtle
-        const baseAlpha = 0.02 + reactivity * 0.03 + energy * reactivity * 0.02;
+        // Background pattern opacity - visible but not overpowering
+        const baseAlpha = 0.08 + reactivity * 0.12 + energy * reactivity * 0.1;
 
         // --- Ring 1: Outer expanding radial lines ---
         const outerSegments = mirrors * 2;
@@ -980,8 +983,8 @@ class KaleidoscopeStudio {
                 Math.sin(angle) * maxDim * 1.2
             );
 
-            ctx.strokeStyle = `hsla(${lineHue}, ${config.saturation * 0.4}%, 50%, ${baseAlpha * 0.6})`;
-            ctx.lineWidth = 1 + energy * reactivity * 2;
+            ctx.strokeStyle = `hsla(${lineHue}, ${config.saturation * 0.5}%, 55%, ${baseAlpha})`;
+            ctx.lineWidth = 1.5 + energy * reactivity * 3;
             ctx.stroke();
         }
 
@@ -1006,8 +1009,8 @@ class KaleidoscopeStudio {
                 i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
             }
 
-            ctx.strokeStyle = `hsla(${ringHue}, ${config.saturation * 0.35}%, 45%, ${baseAlpha * (1 - r * 0.15)})`;
-            ctx.lineWidth = 0.8 + energy * reactivity;
+            ctx.strokeStyle = `hsla(${ringHue}, ${config.saturation * 0.5}%, 55%, ${baseAlpha * (1 - r * 0.1)})`;
+            ctx.lineWidth = 1.2 + energy * reactivity * 2;
             ctx.stroke();
 
             ctx.restore();
@@ -1040,8 +1043,8 @@ class KaleidoscopeStudio {
                 ctx.lineTo(-triSize * 0.866, triSize * 0.5);
                 ctx.closePath();
 
-                ctx.strokeStyle = `hsla(${triHue}, ${config.saturation * 0.3}%, 50%, ${baseAlpha * (0.7 - layer * 0.15)})`;
-                ctx.lineWidth = 0.6 + energy * reactivity * 0.5;
+                ctx.strokeStyle = `hsla(${triHue}, ${config.saturation * 0.4}%, 55%, ${baseAlpha * (0.9 - layer * 0.1)})`;
+                ctx.lineWidth = 1 + energy * reactivity * 1.5;
                 ctx.stroke();
 
                 ctx.restore();
@@ -1063,16 +1066,16 @@ class KaleidoscopeStudio {
 
             ctx.beginPath();
             ctx.arc(0, 0, arcRadius, startAngle, endAngle);
-            ctx.strokeStyle = `hsla(${arcHue}, ${config.saturation * 0.3}%, 55%, ${baseAlpha * 0.5})`;
-            ctx.lineWidth = 1 + energy * reactivity;
+            ctx.strokeStyle = `hsla(${arcHue}, ${config.saturation * 0.4}%, 55%, ${baseAlpha * 0.8})`;
+            ctx.lineWidth = 1.2 + energy * reactivity * 1.5;
             ctx.stroke();
 
             // Mirror arc at inner radius
             const innerArcRadius = arcRadius * 0.6;
             ctx.beginPath();
             ctx.arc(0, 0, innerArcRadius, startAngle + Math.PI / arcCount / 2, endAngle + Math.PI / arcCount / 2);
-            ctx.strokeStyle = `hsla(${(arcHue + 30) % 360}, ${config.saturation * 0.25}%, 50%, ${baseAlpha * 0.35})`;
-            ctx.lineWidth = 0.6 + energy * reactivity * 0.5;
+            ctx.strokeStyle = `hsla(${(arcHue + 30) % 360}, ${config.saturation * 0.35}%, 55%, ${baseAlpha * 0.6})`;
+            ctx.lineWidth = 1 + energy * reactivity;
             ctx.stroke();
         }
 
