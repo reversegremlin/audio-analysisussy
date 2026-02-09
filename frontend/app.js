@@ -2334,8 +2334,10 @@ class KaleidoscopeStudio {
         const centerY = height / 2;
 
         // Calculate visual parameters from smoothed audio values
+        const canvasRadius = Math.min(this.canvas.width, this.canvas.height) * 0.48;
+        const sizeNorm = config.baseRadius / 150;
         const scale = 1 + (this.smoothedValues.percussiveImpact * (config.maxScale - 1));
-        const radius = config.baseRadius * scale;
+        const radius = canvasRadius * sizeNorm * scale;
 
         // Rotation accumulation (time-based, not frame-based)
         const rotationDelta = this.smoothedValues.harmonicEnergy * config.rotationSpeed * (deltaTime / 1000);
@@ -2409,7 +2411,8 @@ class KaleidoscopeStudio {
         const energy = this.smoothedValues.percussiveImpact;
         const harmonic = this.smoothedValues.harmonicEnergy;
         const brightness = this.smoothedValues.spectralBrightness;
-        const orbitDistance = config.orbitRadius * (0.5 + harmonic * 0.5);
+        const orbitFactor = config.orbitRadius / 200;
+        const orbitDistance = radius * orbitFactor * (0.5 + harmonic * 0.5);
 
         // Seed-based variation parameters (GLOBAL - same for all mirrors)
         const rotationDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
@@ -2510,7 +2513,6 @@ class KaleidoscopeStudio {
     renderGlassStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
         const mirrors = config.mirrors * 2;
-        const maxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.48;
         const energy = this.smoothedValues.percussiveImpact;
         const harmonic = this.smoothedValues.harmonicEnergy;
         const brightness = this.smoothedValues.spectralBrightness;
@@ -2529,7 +2531,7 @@ class KaleidoscopeStudio {
             if (m % 2 === 1) {
                 ctx.scale(-1, 1);
             }
-            this.drawGlassWedge(ctx, maxRadius, hue, thickness, seed, m);
+            this.drawGlassWedge(ctx, radius, hue, thickness, seed, m);
             ctx.restore();
         }
 
@@ -2866,12 +2868,13 @@ class KaleidoscopeStudio {
         const energy = this.smoothedValues.percussiveImpact;
         const harmonic = this.smoothedValues.harmonicEnergy;
         const brightness = this.smoothedValues.spectralBrightness;
+        const orbitFactor = config.orbitRadius / 200;
 
         // Seed-based variation parameters (GLOBAL - same for all petals)
         const rotationDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
         const petalShape = this.seededRandom(seed + 1); // 0-1 affects curve shape
         const hueSpread = 20 + this.seededRandom(seed + 2) * 60;
-        const layerCount = 3 + Math.floor(this.seededRandom(seed + 3) * 2);
+        const layerCount = Math.max(2, numSides - 1) + Math.floor(this.seededRandom(seed + 3) * 2);
         const hasFill = this.seededRandom(seed + 4) > 0.5;
         const hasVein = this.seededRandom(seed + 5) > 0.4;
         const curveStyle1 = 0.2 + this.seededRandom(seed + 6) * 0.2;
@@ -2885,7 +2888,7 @@ class KaleidoscopeStudio {
         // Multiple layers of petals - ALL petals in a layer are identical
         for (let layer = 0; layer < layerCount; layer++) {
             const layerSeed = seed + layer * 31;
-            const layerRadius = radius * (0.4 + layer * 0.35) * (1 + energy * 0.3);
+            const layerRadius = radius * orbitFactor * (0.4 + layer * 0.35) * (1 + energy * 0.3);
             const rotSpeed = (1 - layer * 0.25) * (this.seededRandom(layerSeed) > 0.5 ? 1 : -1);
             const layerRotation = this.accumulatedRotation * rotSpeed * rotationDir;
             const petalCount = mirrors + layer * 2;
@@ -2992,48 +2995,48 @@ class KaleidoscopeStudio {
         ctx.translate(centerX, centerY);
 
         const arms = config.mirrors;
-        const maxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.48;
+        const orbitFactor = config.orbitRadius / 200;
 
         // LAYER 0: Deep background spirals - slow, ghostly
         ctx.save();
-        ctx.rotate(-this.accumulatedRotation * 0.3);
-        this.drawFractalLayer(ctx, arms, maxRadius, hue, seed, 0, energy, harmonic, brightness);
+        ctx.rotate(-this.accumulatedRotation * 0.15);
+        this.drawFractalLayer(ctx, arms, radius * orbitFactor, hue, seed, 0, energy, harmonic, brightness, thickness);
         ctx.restore();
 
         // LAYER 1: Main spiral arms - medium speed, full reactivity
         ctx.save();
-        ctx.rotate(this.accumulatedRotation * (0.8 + harmonic * 0.4));
-        this.drawFractalLayer(ctx, arms, maxRadius * (0.8 + energy * 0.3), (hue + 30) % 360, seed + 100, 1, energy, harmonic, brightness);
+        ctx.rotate(this.accumulatedRotation * (0.4 + harmonic * 0.2));
+        this.drawFractalLayer(ctx, arms, radius * orbitFactor * (0.8 + energy * 0.3), (hue + 30) % 360, seed + 100, 1, energy, harmonic, brightness, thickness);
         ctx.restore();
 
         // LAYER 2: Counter-rotating spirals - creates depth
         ctx.save();
-        ctx.rotate(-this.accumulatedRotation * (1.2 + energy * 0.5));
-        this.drawFractalLayer(ctx, arms + 2, maxRadius * (0.6 + harmonic * 0.2), (hue + 60) % 360, seed + 200, 2, energy, harmonic, brightness);
+        ctx.rotate(-this.accumulatedRotation * (0.6 + energy * 0.25));
+        this.drawFractalLayer(ctx, arms + 2, radius * orbitFactor * (0.6 + harmonic * 0.2), (hue + 60) % 360, seed + 200, 2, energy, harmonic, brightness, thickness);
         ctx.restore();
 
         // LAYER 3: Fast inner spirals - very reactive
         ctx.save();
-        ctx.rotate(this.accumulatedRotation * (2 + energy * 1));
-        this.drawFractalLayer(ctx, arms * 2, maxRadius * (0.35 + energy * 0.15), (hue + 120) % 360, seed + 300, 3, energy, harmonic, brightness);
+        ctx.rotate(this.accumulatedRotation * (1.0 + energy * 0.5));
+        this.drawFractalLayer(ctx, arms * 2, radius * orbitFactor * (0.35 + energy * 0.15), (hue + 120) % 360, seed + 300, 3, energy, harmonic, brightness, thickness);
         ctx.restore();
 
         // Fractal sub-spirals at branch points
-        this.drawFractalBranches(ctx, arms, maxRadius, hue, seed, energy, harmonic, brightness);
+        this.drawFractalBranches(ctx, arms, radius * orbitFactor, hue, seed, energy, harmonic, brightness, thickness);
 
         // Reactive central vortex
-        this.drawSpiralVortex(ctx, maxRadius * 0.25, hue, energy, harmonic, brightness);
+        this.drawSpiralVortex(ctx, radius * orbitFactor * 0.25, hue, energy, harmonic, brightness);
 
         ctx.restore();
     }
 
-    drawFractalLayer(ctx, arms, maxRadius, hue, seed, layer, energy, harmonic, brightness) {
+    drawFractalLayer(ctx, arms, maxRadius, hue, seed, layer, energy, harmonic, brightness, thickness) {
         const config = this.config;
 
         // Spiral parameters that react to audio
         const spiralTurns = 2 + harmonic * 2 + brightness; // More turns with harmonic content
         const pointsPerArm = 60 + Math.floor(brightness * 40);
-        const armWidth = (3 + energy * 8) * (1 - layer * 0.15); // PULSES with energy
+        const armWidth = thickness * (0.5 + energy * 1.5) * (1 - layer * 0.15); // PULSES with energy
 
         for (let arm = 0; arm < arms; arm++) {
             const armSeed = seed + arm * 37.7;
@@ -3106,7 +3109,7 @@ class KaleidoscopeStudio {
         }
     }
 
-    drawFractalBranches(ctx, arms, maxRadius, hue, seed, energy, harmonic, brightness) {
+    drawFractalBranches(ctx, arms, maxRadius, hue, seed, energy, harmonic, brightness, thickness) {
         const config = this.config;
 
         // Branch spirals at multiple depths - FRACTAL recursion feel
@@ -3154,7 +3157,7 @@ class KaleidoscopeStudio {
 
                     const alpha = 0.3 + energy * 0.4;
                     ctx.strokeStyle = `hsla(${bHue}, ${config.saturation * 0.9}%, ${60 + energy * 20}%, ${alpha})`;
-                    ctx.lineWidth = 1.5 + energy * 3;
+                    ctx.lineWidth = thickness * (0.3 + energy * 0.6);
                     ctx.stroke();
 
                     // Tiny nodes on branches
@@ -3305,17 +3308,15 @@ class KaleidoscopeStudio {
         const brightness = this.smoothedValues.spectralBrightness;
         const mirrors = config.mirrors;
         const orbitDist = config.orbitRadius * (0.6 + harmonic * 0.4);
-        const rotSpeed = config.rotationSpeed;
 
         ctx.save();
         ctx.translate(centerX, centerY);
 
-        // Global rotation affected by rotationSpeed
-        ctx.rotate(this.accumulatedRotation * 0.15 * rotSpeed);
+        // Global rotation
+        ctx.rotate(this.accumulatedRotation * 0.15);
 
         // Hexagon size based on radius parameter
         const hexSize = radius * 0.25 * (0.8 + energy * 0.4);
-        const maxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.48;
         const rings = Math.max(3, Math.ceil(orbitDist / hexSize) + 1);
 
         // Draw in radial mirror segments for kaleidoscope effect
@@ -3346,7 +3347,7 @@ class KaleidoscopeStudio {
                     // Draw hexagon
                     const hexPoints = [];
                     for (let i = 0; i < 6; i++) {
-                        const a = (Math.PI / 3) * i + Math.PI / 6 + this.accumulatedRotation * 0.5 * rotSpeed;
+                        const a = (Math.PI / 3) * i + Math.PI / 6 + this.accumulatedRotation * 0.5;
                         hexPoints.push({
                             x: hx + dynamicHexSize * 0.8 * Math.cos(a),
                             y: hy + dynamicHexSize * 0.8 * Math.sin(a)
@@ -3387,7 +3388,7 @@ class KaleidoscopeStudio {
                     // Glowing node
                     if (this.seededRandom(nodeSeed + 5) > 0.25) {
                         const nodeSize = (radius * 0.03 + energy * radius * 0.05) * (1 - ring * 0.08);
-                        const pulsePhase = Math.sin(this.accumulatedRotation * 5 * rotSpeed + ring * 0.5 + h * 0.3);
+                        const pulsePhase = Math.sin(this.accumulatedRotation * 5 + ring * 0.5 + h * 0.3);
                         const nodePulse = 1 + pulsePhase * 0.4 * energy;
 
                         const glowGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, nodeSize * 3 * nodePulse);
@@ -3413,7 +3414,7 @@ class KaleidoscopeStudio {
         // Pulsing energy waves
         const waveCount = Math.max(2, Math.floor(mirrors / 3));
         for (let w = 0; w < waveCount; w++) {
-            const wavePhase = (this.accumulatedRotation * 2 * rotSpeed + w * (Math.PI * 2 / waveCount)) % (Math.PI * 2);
+            const wavePhase = (this.accumulatedRotation * 2 + w * (Math.PI * 2 / waveCount)) % (Math.PI * 2);
             const waveRadius = (wavePhase / (Math.PI * 2)) * orbitDist;
             const waveAlpha = 1 - wavePhase / (Math.PI * 2);
 
@@ -3430,7 +3431,7 @@ class KaleidoscopeStudio {
         // Core hexagon with mirrors sides
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            const a = (Math.PI / 3) * i + this.accumulatedRotation * 2 * rotSpeed;
+            const a = (Math.PI / 3) * i + this.accumulatedRotation * 2;
             const x = coreSize * Math.cos(a);
             const y = coreSize * Math.sin(a);
             if (i === 0) ctx.moveTo(x, y);
@@ -3444,7 +3445,7 @@ class KaleidoscopeStudio {
         // Inner rotating hexagon
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
-            const a = (Math.PI / 3) * i - this.accumulatedRotation * 3 * rotSpeed;
+            const a = (Math.PI / 3) * i - this.accumulatedRotation * 3;
             const x = coreSize * 0.5 * Math.cos(a);
             const y = coreSize * 0.5 * Math.sin(a);
             if (i === 0) ctx.moveTo(x, y);
@@ -3482,7 +3483,6 @@ class KaleidoscopeStudio {
         const mirrors = config.mirrors;
         const orbitDist = config.orbitRadius * (0.7 + harmonic * 0.4);
         const rotSpeed = config.rotationSpeed;
-        const maxRadius = Math.min(this.canvas.width, this.canvas.height) * 0.48;
 
         const PHI = 1.618033988749895;
         const GOLDEN_ANGLE = Math.PI * 2 / (PHI * PHI); // ~137.5 degrees
@@ -3496,17 +3496,17 @@ class KaleidoscopeStudio {
             const mirrorAngle = (Math.PI * 2 * m) / mirrors;
 
             ctx.save();
-            ctx.rotate(mirrorAngle + this.accumulatedRotation * 0.3 * rotSpeed);
+            ctx.rotate(mirrorAngle + this.accumulatedRotation * 0.3);
 
             // Primary golden spiral arm
-            this.drawGoldenSpiral(ctx, maxRadius * (0.85 + energy * 0.15),
+            this.drawGoldenSpiral(ctx, radius * (0.85 + energy * 0.15),
                 (hue + m * (360 / mirrors)) % 360, energy, brightness, harmonic,
                 seed + m * 100, radius, thickness, rotSpeed);
 
             // Counter-spiral (reflected) for kaleidoscope effect
             ctx.save();
             ctx.scale(-1, 1);
-            this.drawGoldenSpiral(ctx, maxRadius * (0.65 + harmonic * 0.2),
+            this.drawGoldenSpiral(ctx, radius * (0.65 + harmonic * 0.2),
                 (hue + m * (360 / mirrors) + 40) % 360, energy * 0.7, brightness, harmonic,
                 seed + m * 100 + 50, radius * 0.8, thickness * 0.7, rotSpeed * 0.8);
             ctx.restore();
@@ -3517,10 +3517,10 @@ class KaleidoscopeStudio {
         // --- Layer 1: Phyllotaxis sunflower pattern (the heart of Fibonacci) ---
         // Elements placed at golden angle intervals, distance = sqrt(n)
         const phyllotaxisCount = 80 + Math.floor(brightness * 40 + energy * 30);
-        const phyllotaxisScale = maxRadius * 0.7 * (0.8 + energy * 0.25);
+        const phyllotaxisScale = radius * 0.7 * (0.8 + energy * 0.25);
 
         for (let n = 1; n < phyllotaxisCount; n++) {
-            const angle = n * GOLDEN_ANGLE + this.accumulatedRotation * 0.4 * rotSpeed;
+            const angle = n * GOLDEN_ANGLE + this.accumulatedRotation * 0.4;
             const dist = Math.sqrt(n) / Math.sqrt(phyllotaxisCount) * phyllotaxisScale;
 
             const x = dist * Math.cos(angle);
@@ -3570,7 +3570,7 @@ class KaleidoscopeStudio {
 
         // --- Layer 2: Nested golden rectangles with arc connections ---
         ctx.save();
-        ctx.rotate(this.accumulatedRotation * 0.15 * rotSpeed);
+        ctx.rotate(this.accumulatedRotation * 0.15);
         let rectSize = orbitDist * 0.8 * (0.75 + energy * 0.35);
         let rectRotation = 0;
 
@@ -3615,7 +3615,7 @@ class KaleidoscopeStudio {
             const ringRadius = radius * (0.25 + fi * 0.22) * (0.8 + energy * 0.3);
             const petalLength = radius * (0.15 + fi * 0.04) * (0.7 + energy * 0.5);
             const petalWidth = petalLength * (0.2 + brightness * 0.1) / PHI;
-            const ringRotation = this.accumulatedRotation * (0.6 - fi * 0.1) * rotSpeed * (fi % 2 === 0 ? 1 : -1);
+            const ringRotation = this.accumulatedRotation * (0.6 - fi * 0.1) * (fi % 2 === 0 ? 1 : -1);
 
             for (let p = 0; p < petalCount; p++) {
                 const petalAngle = (Math.PI * 2 * p) / petalCount + ringRotation;
@@ -3656,7 +3656,7 @@ class KaleidoscopeStudio {
         const coreSize = radius * 0.18 * (0.85 + energy * 0.4);
         const coreCircles = 6;
         for (let c = 0; c < coreCircles; c++) {
-            const cAngle = (Math.PI * 2 * c) / coreCircles + this.accumulatedRotation * 0.5 * rotSpeed;
+            const cAngle = (Math.PI * 2 * c) / coreCircles + this.accumulatedRotation * 0.5;
             const cx = Math.cos(cAngle) * coreSize * 0.5;
             const cy = Math.sin(cAngle) * coreSize * 0.5;
             const cHue = (hue + c * 60 + harmonic * 30) % 360;
@@ -3786,7 +3786,7 @@ class KaleidoscopeStudio {
             ctx.rotate(segAngle);
 
             // Radial grid lines curving inward
-            const gridLines = 4 + Math.floor(energy * 3);
+            const gridLines = Math.max(3, Math.floor(numSides / 2)) + Math.floor(energy * 3);
             for (let g = 0; g < gridLines; g++) {
                 const gRatio = (g + 1) / gridLines;
                 const startR = radius * 0.15 * gRatio;
@@ -3964,11 +3964,12 @@ class KaleidoscopeStudio {
         const brightness = this.smoothedValues.spectralBrightness;
         const mirrors = config.mirrors;
         const rot = this.accumulatedRotation;
+        const orbitFactor = config.orbitRadius / 200;
 
         // Seed-based variation
         const rotDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
         const hueShift = this.seededRandom(seed + 2) * 40;
-        const density = 4 + Math.floor(this.seededRandom(seed + 1) * 4);
+        const density = numSides + Math.floor(this.seededRandom(seed + 1) * 4);
 
         // Archaic palette: user hue as base, offsets for secondary/tertiary
         const amberHue = hue;
@@ -3990,7 +3991,7 @@ class KaleidoscopeStudio {
             for (let i = 0; i < innerCount; i++) {
                 const iSeed = seed + 100 + m * 30 + i * 7;
                 const iAngle = (this.seededRandom(iSeed) - 0.5) * (Math.PI / mirrors) * 0.8;
-                const iDist = radius * (0.1 + this.seededRandom(iSeed + 1) * 0.2);
+                const iDist = radius * orbitFactor * (0.1 + this.seededRandom(iSeed + 1) * 0.2);
                 const iSize = radius * (0.06 + this.seededRandom(iSeed + 2) * 0.05) * (0.8 + energy * 0.4);
                 const iType = Math.floor(this.seededRandom(iSeed + 3) * 16);
                 const iHue = (amberHue + this.seededRandom(iSeed + 4) * 30 + hueShift) % 360;
@@ -4023,7 +4024,7 @@ class KaleidoscopeStudio {
             for (let i = 0; i < midCount; i++) {
                 const mSeed = seed + 300 + m * 30 + i * 11;
                 const mAngle = (this.seededRandom(mSeed) - 0.5) * (Math.PI / mirrors);
-                const mDist = radius * (0.25 + this.seededRandom(mSeed + 1) * 0.3);
+                const mDist = radius * orbitFactor * (0.25 + this.seededRandom(mSeed + 1) * 0.3);
                 const mSize = radius * (0.03 + this.seededRandom(mSeed + 2) * 0.04) * (0.7 + harmonic * 0.5);
                 const mType = Math.floor(this.seededRandom(mSeed + 3) * 16);
                 const mHue = (crimsonHue + this.seededRandom(mSeed + 4) * 50 - 25 + hueShift) % 360;
@@ -4045,7 +4046,7 @@ class KaleidoscopeStudio {
             for (let i = 0; i < outerCount; i++) {
                 const oSeed = seed + 600 + m * 30 + i * 13;
                 const oAngle = (this.seededRandom(oSeed) - 0.5) * (Math.PI / mirrors);
-                const oDist = radius * (0.5 + this.seededRandom(oSeed + 1) * 0.4);
+                const oDist = radius * orbitFactor * (0.5 + this.seededRandom(oSeed + 1) * 0.4);
                 const oSize = radius * (0.015 + this.seededRandom(oSeed + 2) * 0.025) * (0.6 + brightness * 0.6);
                 const oType = Math.floor(this.seededRandom(oSeed + 3) * 16);
                 const oHue = (boneHue + this.seededRandom(oSeed + 4) * 40 + hueShift) % 360;
@@ -4338,11 +4339,12 @@ class KaleidoscopeStudio {
         const brightness = this.smoothedValues.spectralBrightness;
         const mirrors = config.mirrors;
         const rot = this.accumulatedRotation;
+        const orbitFactor = config.orbitRadius / 200;
 
         // Seed-based variation
         const rotDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
         const hueShift = this.seededRandom(seed + 2) * 40;
-        const clusterDensity = 2 + Math.floor(this.seededRandom(seed + 1) * 2);
+        const clusterDensity = Math.max(2, Math.floor(numSides / 3)) + Math.floor(this.seededRandom(seed + 1) * 2);
 
         // Bioluminescent palette: user hue as base, offsets for secondary/tertiary
         const cyanHue = hue;
@@ -4382,7 +4384,7 @@ class KaleidoscopeStudio {
                 ctx.moveTo(x1, y1);
                 ctx.quadraticCurveTo(cpx, cpy, x2, y2);
                 ctx.strokeStyle = `hsla(${threadHue}, ${config.saturation * 0.5}%, ${40 + energy * 15}%, ${0.12 + harmonic * 0.15})`;
-                ctx.lineWidth = (0.5 + harmonic * 0.8) * pulseFactor;
+                ctx.lineWidth = thickness * (0.2 + harmonic * 0.3) * pulseFactor;
                 ctx.lineCap = 'round';
                 ctx.stroke();
             }
@@ -4392,7 +4394,7 @@ class KaleidoscopeStudio {
             for (let c = 0; c < clusterCount; c++) {
                 const cSeed = seed + 200 + m * 40 + c * 17;
                 const cAngle = (this.seededRandom(cSeed) - 0.5) * (Math.PI / mirrors) * 0.85;
-                const cDist = radius * (0.12 + c * 0.2 + this.seededRandom(cSeed + 1) * 0.12);
+                const cDist = radius * orbitFactor * (0.12 + c * 0.2 + this.seededRandom(cSeed + 1) * 0.12);
                 const cx = Math.cos(cAngle) * cDist;
                 const cy = Math.sin(cAngle) * cDist;
 
@@ -4694,6 +4696,7 @@ class KaleidoscopeStudio {
         const brightness = this.smoothedValues.spectralBrightness;
         const mirrors = config.mirrors;
         const rot = this.accumulatedRotation;
+        const orbitFactor = config.orbitRadius / 200;
 
         // --- Phase system (continuous blend) ---
         const totalEnergy = energy * 0.5 + harmonic * 0.3 + brightness * 0.2;
@@ -4707,7 +4710,7 @@ class KaleidoscopeStudio {
 
         // Seed-based variation
         const rotDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
-        const blobCountBase = 3 + Math.floor(this.seededRandom(seed + 1) * 3);
+        const blobCountBase = Math.max(3, numSides - 2) + Math.floor(this.seededRandom(seed + 1) * 3);
         const wobbleFreq = 1.5 + this.seededRandom(seed + 2) * 1.5;
 
         // Light source angle for specular highlights
@@ -4753,7 +4756,7 @@ class KaleidoscopeStudio {
 
             for (let b = 0; b < blobCount; b++) {
                 const bSeed = seed + 100 + m * 50 + b * 13;
-                const orbitBase = radius * (0.12 + this.seededRandom(bSeed) * 0.25);
+                const orbitBase = radius * orbitFactor * (0.12 + this.seededRandom(bSeed) * 0.25);
                 const orbitDist = orbitBase * (1 + phaseLiquid * 0.6 + harmonic * 0.3);
                 const blobAngle = this.seededRandom(bSeed + 1) * (Math.PI / mirrors)
                     + Math.sin(rot * (0.5 + this.seededRandom(bSeed + 2) * 0.5)) * 0.2;
