@@ -4501,7 +4501,7 @@ class KaleidoscopeStudio {
     }
 
     /**
-     * Fluid background — 3-layer metallic parallax (surface tension rings, mercury tendrils, chrome droplets)
+     * Fluid background — 3-layer dark ferrofluid parallax (magnetic field rings, iron filings, threat pulses)
      */
     renderFluidBackground(ctx, width, height, centerX, centerY, reactivity) {
         const config = this.config;
@@ -4512,25 +4512,24 @@ class KaleidoscopeStudio {
         const rot = this._bgFractalRotation;
         const accentHsl = this.hexToHsl(config.accentColor);
         const bgHue = accentHsl.h;
-        const baseAlpha = 0.06 + reactivity * 0.10 + energy * reactivity * 0.08;
-        const chromeSat = config.saturation * 0.15;
+        const sat = config.saturation;
 
-        // --- FAR LAYER (0.15x): Surface Tension Rings ---
+        // --- FAR LAYER (0.15x): Dark Magnetic Field Rings ---
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.rotate(rot * 0.15);
 
-        for (let i = 0; i < 6; i++) {
-            const ringRadius = maxDim * (0.15 + i * 0.12);
-            const ringHue = (bgHue + i * 15) % 360;
-            const wobbleAmp = maxDim * 0.008 * (1 + harmonic * 2 + i * 0.3);
-            const segments = 64;
+        for (let i = 0; i < 8; i++) {
+            const ringRadius = maxDim * (0.1 + i * 0.11);
+            const wobbleAmp = maxDim * 0.012 * (1 + energy * reactivity * 2 + i * 0.2);
+            const segments = 48;
+            const ringAlpha = 0.03 + reactivity * 0.03 + energy * reactivity * 0.02;
 
             ctx.beginPath();
             for (let s = 0; s <= segments; s++) {
                 const angle = (Math.PI * 2 * s) / segments;
-                const wobble = Math.sin(angle * 3 + rot * 0.8 + i) * wobbleAmp
-                    + Math.sin(angle * 7 + rot * 1.2 - i * 0.5) * wobbleAmp * 0.5;
+                const wobble = Math.sin(angle * 4 + rot * 0.6 + i * 0.7) * wobbleAmp
+                    + Math.sin(angle * 9 + rot * 1.1 - i * 0.3) * wobbleAmp * 0.4;
                 const r = ringRadius + wobble;
                 const x = Math.cos(angle) * r;
                 const y = Math.sin(angle) * r;
@@ -4538,81 +4537,67 @@ class KaleidoscopeStudio {
                 else ctx.lineTo(x, y);
             }
             ctx.closePath();
-            ctx.strokeStyle = `hsla(${ringHue}, ${chromeSat}%, ${55 + i * 4}%, ${baseAlpha * (0.8 - i * 0.08)})`;
-            ctx.lineWidth = 1.2 + energy * reactivity * 0.8 - i * 0.1;
+            ctx.strokeStyle = `hsla(${bgHue}, ${sat * 0.2}%, ${20 + i * 1.5}%, ${ringAlpha * (1 - i * 0.08)})`;
+            ctx.lineWidth = 0.5 + energy * reactivity * 0.5;
             ctx.stroke();
         }
         ctx.restore();
 
-        // --- MID LAYER (-0.5x, counter-rotate): Mercury Tendrils ---
+        // --- MID LAYER (-0.5x): Iron Filings ---
         ctx.save();
         ctx.translate(centerX, centerY);
         ctx.rotate(-rot * 0.5);
 
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 20; i++) {
             const seed = i * 37 + 89;
-            const startAngle = this.seededRandom(seed) * Math.PI * 2;
-            const flowPhase = rot * (0.3 + this.seededRandom(seed + 1) * 0.4);
-            const tendrilLen = maxDim * (0.3 + this.seededRandom(seed + 2) * 0.5);
-            const tendrilHue = (bgHue + 180 + this.seededRandom(seed + 3) * 30 - 15) % 360;
-
-            const startR = maxDim * (0.05 + this.seededRandom(seed + 4) * 0.2);
-            const sx = Math.cos(startAngle + flowPhase) * startR;
-            const sy = Math.sin(startAngle + flowPhase) * startR;
-            const endAngle = startAngle + (this.seededRandom(seed + 5) - 0.5) * 1.5;
-            const ex = Math.cos(endAngle + flowPhase * 0.7) * (startR + tendrilLen);
-            const ey = Math.sin(endAngle + flowPhase * 0.7) * (startR + tendrilLen);
-            const cpx = (sx + ex) / 2 + (this.seededRandom(seed + 6) - 0.5) * tendrilLen * 0.6;
-            const cpy = (sy + ey) / 2 + (this.seededRandom(seed + 7) - 0.5) * tendrilLen * 0.6;
-
-            ctx.beginPath();
-            ctx.moveTo(sx, sy);
-            ctx.quadraticCurveTo(cpx, cpy, ex, ey);
-            ctx.strokeStyle = `hsla(${tendrilHue}, ${chromeSat}%, ${50 + brightness * 15}%, ${baseAlpha * 0.7})`;
-            ctx.lineWidth = 1 + harmonic * 1.5;
-            ctx.lineCap = 'round';
-            ctx.stroke();
-        }
-        ctx.restore();
-
-        // --- NEAR LAYER (1.0x): Chrome Droplet Spray ---
-        ctx.save();
-        ctx.translate(centerX, centerY);
-        ctx.rotate(rot * 1.0);
-
-        for (let i = 0; i < 22; i++) {
-            const seed = i * 23 + 197;
-            const dist = maxDim * (0.1 + this.seededRandom(seed) * 0.9);
-            const angle = this.seededRandom(seed + 1) * Math.PI * 2;
-            const phase = this.seededRandom(seed + 2) * Math.PI * 2;
-            const baseSize = maxDim * (0.005 + this.seededRandom(seed + 3) * 0.008);
-            const pulse = 0.7 + Math.sin(rot * 4 + phase) * 0.3;
-            const dropSize = baseSize * pulse * (0.8 + energy * reactivity * 0.5);
-            const dropHue = (bgHue + this.seededRandom(seed + 4) * 40) % 360;
+            const dist = maxDim * (0.08 + this.seededRandom(seed) * 0.85);
+            const baseAngle = this.seededRandom(seed + 1) * Math.PI * 2;
+            const orbitSpeed = 0.1 + this.seededRandom(seed + 2) * 0.2;
+            const angle = baseAngle + rot * orbitSpeed;
+            const size = 1 + this.seededRandom(seed + 3) * 2;
+            const alpha = 0.03 + reactivity * 0.05;
 
             const dx = Math.cos(angle) * dist;
             const dy = Math.sin(angle) * dist;
 
-            // Halo
-            const haloGrad = ctx.createRadialGradient(dx, dy, 0, dx, dy, dropSize * 3);
-            haloGrad.addColorStop(0, `hsla(${dropHue}, ${chromeSat}%, 60%, ${baseAlpha * 0.5 * pulse})`);
-            haloGrad.addColorStop(1, `hsla(${dropHue}, ${chromeSat}%, 45%, 0)`);
             ctx.beginPath();
-            ctx.arc(dx, dy, dropSize * 3, 0, Math.PI * 2);
-            ctx.fillStyle = haloGrad;
+            ctx.arc(dx, dy, size, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${bgHue}, ${sat * 0.15}%, 15%, ${alpha})`;
             ctx.fill();
+        }
+        ctx.restore();
 
-            // Bright specular core
+        // --- NEAR LAYER (1.0x): Threat Pulses ---
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(rot * 1.0);
+
+        for (let i = 0; i < 6; i++) {
+            const seed = i * 23 + 197;
+            const dist = maxDim * (0.15 + this.seededRandom(seed) * 0.6);
+            const angle = this.seededRandom(seed + 1) * Math.PI * 2;
+            const phase = this.seededRandom(seed + 2) * Math.PI * 2;
+            const pulse = 0.5 + Math.sin(rot * 3 + phase) * 0.5;
+            const glowSize = maxDim * (0.02 + this.seededRandom(seed + 3) * 0.03) * (0.8 + energy * reactivity * 0.6);
+            const alpha = (0.04 + reactivity * 0.08) * pulse;
+
+            const dx = Math.cos(angle) * dist;
+            const dy = Math.sin(angle) * dist;
+
+            const glowGrad = ctx.createRadialGradient(dx, dy, 0, dx, dy, glowSize);
+            glowGrad.addColorStop(0, `hsla(${bgHue}, ${sat * 0.8}%, 50%, ${alpha})`);
+            glowGrad.addColorStop(0.5, `hsla(${bgHue}, ${sat * 0.6}%, 35%, ${alpha * 0.4})`);
+            glowGrad.addColorStop(1, `hsla(${bgHue}, ${sat * 0.3}%, 20%, 0)`);
             ctx.beginPath();
-            ctx.arc(dx, dy, dropSize * 0.5, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(${dropHue}, ${chromeSat * 0.5}%, 90%, ${baseAlpha * 1.2 * pulse})`;
+            ctx.arc(dx, dy, glowSize, 0, Math.PI * 2);
+            ctx.fillStyle = glowGrad;
             ctx.fill();
         }
         ctx.restore();
     }
 
     /**
-     * Fluid style — Liquid mercury / ferrofluid with metaball fusion, chrome shading, phase transitions
+     * Fluid style — Dark ferrofluid / Rezz-inspired. Sharp magnetic spikes, dark mass, menacing energy.
      */
     renderFluidStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
@@ -4623,24 +4608,11 @@ class KaleidoscopeStudio {
         const mirrors = config.mirrors;
         const rot = this.accumulatedRotation;
         const orbitFactor = config.orbitRadius / 200;
-
-        // --- Phase system (continuous blend) ---
-        const totalEnergy = energy * 0.5 + harmonic * 0.3 + brightness * 0.2;
-        const phaseLiquid = Math.min(1, totalEnergy * 1.5);
-        const phaseGas = Math.max(0, Math.min(1, (totalEnergy - 0.5) * 2));
-
-        // --- Chrome palette ---
-        const chromeSat = config.saturation * 0.15;
-        const highlightHue = (hue + 40) % 360;
-        const shadowHue = (hue + 200) % 360;
+        const sat = config.saturation;
 
         // Seed-based variation
         const rotDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
-        const blobCountBase = Math.max(3, numSides - 2) + Math.floor(this.seededRandom(seed + 1) * 3);
         const wobbleFreq = 1.5 + this.seededRandom(seed + 2) * 1.5;
-
-        // Light source angle for specular highlights
-        const lightAngle = rot * 0.3;
 
         // --- Mirror segments ---
         for (let m = 0; m < mirrors; m++) {
@@ -4650,191 +4622,170 @@ class KaleidoscopeStudio {
             ctx.translate(centerX, centerY);
             ctx.rotate(mirrorAngle);
 
-            // 1. Central mass blob — large, sluggish, shrinks with energy
-            const massRadius = radius * (0.18 - totalEnergy * 0.08) * (1 - phaseGas * 0.6);
-            if (massRadius > 2) {
-                const wobbleX = Math.sin(rot * wobbleFreq) * radius * 0.02 * phaseLiquid;
-                const wobbleY = Math.cos(rot * wobbleFreq * 0.7) * radius * 0.015 * phaseLiquid;
-                const mx = wobbleX;
-                const my = wobbleY;
-
-                const massGrad = ctx.createRadialGradient(
-                    mx - massRadius * 0.3, my - massRadius * 0.3, 0,
-                    mx, my, massRadius
-                );
-                const massLight = 30 + phaseLiquid * 30;
-                const massAlpha = 0.25 + phaseLiquid * 0.35 - phaseGas * 0.2;
-                massGrad.addColorStop(0, `hsla(${highlightHue}, ${chromeSat}%, ${massLight + 25}%, ${massAlpha})`);
-                massGrad.addColorStop(0.5, `hsla(${hue}, ${chromeSat}%, ${massLight}%, ${massAlpha})`);
-                massGrad.addColorStop(0.85, `hsla(${shadowHue}, ${chromeSat}%, ${massLight + 15}%, ${massAlpha * 1.1})`);
-                massGrad.addColorStop(1, `hsla(${shadowHue}, ${chromeSat}%, ${massLight + 5}%, ${massAlpha * 0.3})`);
+            // 1. Magnetic field lines — concentric distorted rings
+            const fieldRingCount = 3 + Math.floor(energy);
+            for (let i = 0; i < fieldRingCount; i++) {
+                const ringRadius = radius * (0.15 + i * 0.15) * orbitFactor;
+                const segments = 48;
+                const distortAmp = ringRadius * 0.06 * (1 + energy * 2);
+                const ringAlpha = 0.15 + energy * 0.2;
 
                 ctx.beginPath();
-                ctx.arc(mx, my, massRadius, 0, Math.PI * 2);
-                ctx.fillStyle = massGrad;
-                ctx.fill();
-            }
-
-            // 2. Orbital metaballs — 'lighter' composite for visual fusion
-            const blobCount = blobCountBase + Math.floor(energy * 4);
-            const prevComposite = ctx.globalCompositeOperation;
-            ctx.globalCompositeOperation = 'lighter';
-
-            for (let b = 0; b < blobCount; b++) {
-                const bSeed = seed + 100 + m * 50 + b * 13;
-                const orbitBase = radius * orbitFactor * (0.12 + this.seededRandom(bSeed) * 0.25);
-                const orbitDist = orbitBase * (1 + phaseLiquid * 0.6 + harmonic * 0.3);
-                const blobAngle = this.seededRandom(bSeed + 1) * (Math.PI / mirrors)
-                    + Math.sin(rot * (0.5 + this.seededRandom(bSeed + 2) * 0.5)) * 0.2;
-                const blobSize = radius * (0.03 + this.seededRandom(bSeed + 3) * 0.04)
-                    * (0.7 + harmonic * 0.5 + Math.sin(rot * 2 + this.seededRandom(bSeed + 4) * Math.PI * 2) * 0.15);
-
-                const bx = Math.cos(blobAngle) * orbitDist;
-                const by = Math.sin(blobAngle) * orbitDist;
-
-                // Fresnel rim gradient (brighter at edges)
-                const blobGrad = ctx.createRadialGradient(
-                    bx + Math.cos(lightAngle) * blobSize * 0.3,
-                    by + Math.sin(lightAngle) * blobSize * 0.3,
-                    blobSize * 0.1,
-                    bx, by, blobSize
-                );
-                const blobHue = (hue + this.seededRandom(bSeed + 5) * 20 - 10) % 360;
-                const blobAlpha = 0.12 + phaseLiquid * 0.15;
-                blobGrad.addColorStop(0, `hsla(${highlightHue}, ${chromeSat * 0.5}%, 85%, ${blobAlpha * 0.6})`);
-                blobGrad.addColorStop(0.4, `hsla(${blobHue}, ${chromeSat}%, 50%, ${blobAlpha * 0.4})`);
-                blobGrad.addColorStop(0.85, `hsla(${blobHue}, ${chromeSat}%, 60%, ${blobAlpha * 0.9})`);
-                blobGrad.addColorStop(1, `hsla(${shadowHue}, ${chromeSat}%, 40%, 0)`);
-
-                ctx.beginPath();
-                ctx.arc(bx, by, blobSize, 0, Math.PI * 2);
-                ctx.fillStyle = blobGrad;
-                ctx.fill();
-
-                // Specular highlight dot
-                const specX = bx + Math.cos(lightAngle) * blobSize * 0.35;
-                const specY = by + Math.sin(lightAngle) * blobSize * 0.35;
-                const specSize = blobSize * 0.2;
-                ctx.beginPath();
-                ctx.arc(specX, specY, specSize, 0, Math.PI * 2);
-                ctx.fillStyle = `hsla(0, 0%, 95%, ${(0.15 + brightness * 0.25) * phaseLiquid})`;
-                ctx.fill();
-            }
-
-            ctx.globalCompositeOperation = prevComposite;
-
-            // 3. Shatter beads — tiny chrome droplets when energy > 0.5
-            if (energy > 0.5) {
-                const shatterCount = Math.floor((energy - 0.5) * 12) + 2;
-                for (let s = 0; s < shatterCount; s++) {
-                    const sSeed = seed + 300 + m * 30 + s * 7;
-                    const sDist = radius * (0.3 + this.seededRandom(sSeed) * 0.4 + energy * 0.15);
-                    const sAngle = this.seededRandom(sSeed + 1) * (Math.PI / mirrors);
-                    const sSize = radius * 0.008 * (0.5 + this.seededRandom(sSeed + 2) * 0.5 + energy * 0.5);
-                    const sx = Math.cos(sAngle) * sDist;
-                    const sy = Math.sin(sAngle) * sDist;
-                    const sHue = (hue + this.seededRandom(sSeed + 3) * 30) % 360;
-
-                    const beadGrad = ctx.createRadialGradient(
-                        sx - sSize * 0.3, sy - sSize * 0.3, 0,
-                        sx, sy, sSize
-                    );
-                    beadGrad.addColorStop(0, `hsla(${highlightHue}, ${chromeSat * 0.5}%, 90%, ${0.3 + energy * 0.3})`);
-                    beadGrad.addColorStop(0.6, `hsla(${sHue}, ${chromeSat}%, 55%, ${0.2 + energy * 0.2})`);
-                    beadGrad.addColorStop(1, `hsla(${shadowHue}, ${chromeSat}%, 35%, 0)`);
-
-                    ctx.beginPath();
-                    ctx.arc(sx, sy, sSize, 0, Math.PI * 2);
-                    ctx.fillStyle = beadGrad;
-                    ctx.fill();
+                for (let s = 0; s <= segments; s++) {
+                    const angle = (Math.PI * 2 * s) / segments;
+                    const distort = Math.sin(angle * 5 + rot * 0.8 + i * 1.2) * distortAmp
+                        + Math.sin(angle * 11 + rot * 1.5 - i) * distortAmp * 0.3;
+                    const r = ringRadius + distort;
+                    const x = Math.cos(angle) * r;
+                    const y = Math.sin(angle) * r;
+                    if (s === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
                 }
+                ctx.closePath();
+                ctx.strokeStyle = `hsla(${hue}, ${sat * 0.3}%, ${20 + i * 2}%, ${ringAlpha * (1 - i * 0.15)})`;
+                ctx.lineWidth = thickness * 0.3;
+                ctx.stroke();
             }
 
-            // 4. Needle spikes — sharp triangles from blob surfaces when brightness > 0.4
-            if (brightness > 0.4) {
-                const spikeCount = 2 + Math.floor(brightness * 6);
-                for (let n = 0; n < spikeCount; n++) {
-                    const nSeed = seed + 500 + m * 20 + n * 11;
-                    const spikeBaseAngle = this.seededRandom(nSeed) * (Math.PI / mirrors);
-                    const spikeBaseDist = radius * (0.08 + this.seededRandom(nSeed + 1) * 0.2);
-                    const spikeLen = radius * (0.06 + brightness * 0.12) * (0.5 + this.seededRandom(nSeed + 2) * 0.5);
-                    const spikeWidth = radius * 0.008 * (0.5 + energy * 0.5);
-                    const spikeDir = spikeBaseAngle + (this.seededRandom(nSeed + 3) - 0.5) * 0.4;
+            // 2. Ferrofluid spike crown — the core visual
+            const spikeCount = 6 + numSides + Math.floor(energy * 4);
+            const segAngle = Math.PI / mirrors;
 
-                    const nbx = Math.cos(spikeBaseAngle) * spikeBaseDist;
-                    const nby = Math.sin(spikeBaseAngle) * spikeBaseDist;
-                    const tipX = nbx + Math.cos(spikeDir) * spikeLen;
-                    const tipY = nby + Math.sin(spikeDir) * spikeLen;
-                    const perpAngle = spikeDir + Math.PI / 2;
+            for (let s = 0; s < spikeCount; s++) {
+                const sSeed = seed + 100 + m * 50 + s * 13;
+                const baseAngle = (s / spikeCount) * segAngle;
+                const sway = Math.sin(rot * 1.5 + this.seededRandom(sSeed) * Math.PI * 2) * 0.08;
+                const spikeAngle = baseAngle + sway;
+                const seeded = this.seededRandom(sSeed + 1);
+                const spikeLen = radius * (0.08 + energy * 0.25 + seeded * 0.12) * orbitFactor;
+                const spikeBaseWidth = radius * 0.018 * (0.6 + energy * 0.4);
+                const baseDist = radius * 0.14 * orbitFactor;
 
-                    ctx.beginPath();
-                    ctx.moveTo(nbx + Math.cos(perpAngle) * spikeWidth, nby + Math.sin(perpAngle) * spikeWidth);
-                    ctx.lineTo(tipX, tipY);
-                    ctx.lineTo(nbx - Math.cos(perpAngle) * spikeWidth, nby - Math.sin(perpAngle) * spikeWidth);
-                    ctx.closePath();
+                // Base and tip positions
+                const bx = Math.cos(spikeAngle) * baseDist;
+                const by = Math.sin(spikeAngle) * baseDist;
+                const tipX = Math.cos(spikeAngle) * (baseDist + spikeLen);
+                const tipY = Math.sin(spikeAngle) * (baseDist + spikeLen);
+                const perpAngle = spikeAngle + Math.PI / 2;
 
-                    const spikeGrad = ctx.createLinearGradient(nbx, nby, tipX, tipY);
-                    spikeGrad.addColorStop(0, `hsla(${highlightHue}, ${chromeSat}%, 70%, ${0.2 + brightness * 0.3})`);
-                    spikeGrad.addColorStop(1, `hsla(${hue}, ${chromeSat}%, 50%, 0)`);
-                    ctx.fillStyle = spikeGrad;
-                    ctx.fill();
-                }
+                // Tapered spike with quadratic curve for organic shape
+                const leftBX = bx + Math.cos(perpAngle) * spikeBaseWidth;
+                const leftBY = by + Math.sin(perpAngle) * spikeBaseWidth;
+                const rightBX = bx - Math.cos(perpAngle) * spikeBaseWidth;
+                const rightBY = by - Math.sin(perpAngle) * spikeBaseWidth;
+                const midX = (bx + tipX) / 2 + Math.cos(perpAngle) * spikeBaseWidth * 0.3;
+                const midY = (by + tipY) / 2 + Math.sin(perpAngle) * spikeBaseWidth * 0.3;
+                const midX2 = (bx + tipX) / 2 - Math.cos(perpAngle) * spikeBaseWidth * 0.3;
+                const midY2 = (by + tipY) / 2 - Math.sin(perpAngle) * spikeBaseWidth * 0.3;
+
+                ctx.beginPath();
+                ctx.moveTo(leftBX, leftBY);
+                ctx.quadraticCurveTo(midX, midY, tipX, tipY);
+                ctx.quadraticCurveTo(midX2, midY2, rightBX, rightBY);
+                ctx.closePath();
+
+                // Gradient: near-black body → accent-colored glowing tip
+                const spikeGrad = ctx.createLinearGradient(bx, by, tipX, tipY);
+                const bodyAlpha = 0.5 + energy * 0.3;
+                const tipGlow = 55 + energy * 20;
+                spikeGrad.addColorStop(0, `hsla(${hue}, ${sat * 0.2}%, 12%, ${bodyAlpha})`);
+                spikeGrad.addColorStop(0.7, `hsla(${hue}, ${sat * 0.3}%, 15%, ${bodyAlpha * 0.8})`);
+                spikeGrad.addColorStop(0.85, `hsla(${hue}, ${sat * 0.7}%, ${tipGlow * 0.6}%, ${bodyAlpha * 0.6})`);
+                spikeGrad.addColorStop(1, `hsla(${hue}, ${sat * 0.9}%, ${tipGlow}%, ${bodyAlpha * 0.9})`);
+                ctx.fillStyle = spikeGrad;
+                ctx.fill();
             }
 
-            // 5. Edge pooling — chrome arc at segment boundary
-            const poolRadius = radius * 0.85;
-            const segmentAngle = Math.PI / mirrors;
-            const poolAlpha = 0.08 + energy * 0.15 + phaseLiquid * 0.1;
-            const poolWidth = thickness * (0.8 + energy * 0.6);
+            // 3. Menacing core mass — dark undulating blob
+            const massRadius = radius * (0.14 + harmonic * 0.04) * orbitFactor;
+            const wobX = Math.sin(rot * wobbleFreq) * radius * 0.01;
+            const wobY = Math.cos(rot * wobbleFreq * 0.7) * radius * 0.008;
+            const massAlpha = 0.5 + energy * 0.3;
+
+            const massGrad = ctx.createRadialGradient(
+                wobX, wobY, 0,
+                wobX, wobY, massRadius
+            );
+            massGrad.addColorStop(0, `hsla(${hue}, ${sat * 0.15}%, 8%, ${massAlpha})`);
+            massGrad.addColorStop(0.6, `hsla(${hue}, ${sat * 0.2}%, 12%, ${massAlpha * 0.9})`);
+            massGrad.addColorStop(1, `hsla(${hue}, ${sat * 0.15}%, 10%, ${massAlpha * 0.3})`);
 
             ctx.beginPath();
-            ctx.arc(0, 0, poolRadius, -0.02, segmentAngle * 0.15);
-            ctx.strokeStyle = `hsla(${hue}, ${chromeSat}%, ${55 + brightness * 15}%, ${poolAlpha})`;
-            ctx.lineWidth = poolWidth;
-            ctx.lineCap = 'round';
-            ctx.stroke();
+            ctx.arc(wobX, wobY, massRadius, 0, Math.PI * 2);
+            ctx.fillStyle = massGrad;
+            ctx.fill();
 
-            ctx.beginPath();
-            ctx.arc(0, 0, poolRadius, segmentAngle * 0.85, segmentAngle + 0.02);
-            ctx.strokeStyle = `hsla(${hue}, ${chromeSat}%, ${55 + brightness * 15}%, ${poolAlpha})`;
-            ctx.lineWidth = poolWidth;
-            ctx.lineCap = 'round';
-            ctx.stroke();
+            // 4. Drip tendrils — thin dark bezier curves from mass edge
+            const dripCount = 3 + Math.floor(harmonic * 2);
+            for (let d = 0; d < dripCount; d++) {
+                const dSeed = seed + 400 + m * 30 + d * 11;
+                const dripAngle = this.seededRandom(dSeed) * segAngle;
+                const dripLen = radius * (0.08 + harmonic * 0.12) * orbitFactor * (0.5 + this.seededRandom(dSeed + 1) * 0.5);
+                const startR = massRadius * 0.9;
+                const sx = Math.cos(dripAngle) * startR + wobX;
+                const sy = Math.sin(dripAngle) * startR + wobY;
+                const ex = Math.cos(dripAngle + (this.seededRandom(dSeed + 2) - 0.5) * 0.5) * (startR + dripLen);
+                const ey = Math.sin(dripAngle + (this.seededRandom(dSeed + 2) - 0.5) * 0.5) * (startR + dripLen);
+                const cpx = (sx + ex) / 2 + (this.seededRandom(dSeed + 3) - 0.5) * dripLen * 0.6;
+                const cpy = (sy + ey) / 2 + (this.seededRandom(dSeed + 4) - 0.5) * dripLen * 0.6;
+
+                ctx.beginPath();
+                ctx.moveTo(sx, sy);
+                ctx.quadraticCurveTo(cpx, cpy, ex, ey);
+                ctx.strokeStyle = `hsla(${hue}, ${sat * 0.2}%, 15%, ${0.2 + harmonic * 0.2})`;
+                ctx.lineWidth = thickness * 0.4;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // Bright droplet at terminus
+                ctx.beginPath();
+                ctx.arc(ex, ey, 1.5, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${hue}, ${sat * 0.8}%, ${50 + brightness * 20}%, ${0.3 + brightness * 0.4})`;
+                ctx.fill();
+            }
+
+            // 5. Magnetic dust — tiny oriented particles near spikes
+            const dustCount = 10 + Math.floor(brightness * 5);
+            for (let p = 0; p < dustCount; p++) {
+                const pSeed = seed + 600 + m * 40 + p * 7;
+                const pAngle = this.seededRandom(pSeed) * segAngle;
+                const pDist = radius * (0.1 + this.seededRandom(pSeed + 1) * 0.35) * orbitFactor;
+                const px = Math.cos(pAngle) * pDist;
+                const py = Math.sin(pAngle) * pDist;
+                const pSize = 1 + this.seededRandom(pSeed + 2);
+                const pAlpha = 0.2 + brightness * 0.3;
+
+                ctx.beginPath();
+                ctx.arc(px, py, pSize, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${hue}, ${sat * 0.3}%, 20%, ${pAlpha})`;
+                ctx.fill();
+            }
 
             ctx.restore();
         }
 
-        // --- Central wobbling mercury sphere (after mirror loop) ---
-        const coreRadius = radius * (0.12 + harmonic * 0.06 - energy * 0.04);
-        const coreWobX = Math.sin(rot * wobbleFreq * 1.3) * radius * 0.01;
-        const coreWobY = Math.cos(rot * wobbleFreq * 0.9) * radius * 0.008;
-
-        // Reverse-Fresnel: bright rim, dark center
-        const coreGrad = ctx.createRadialGradient(
-            centerX + coreWobX, centerY + coreWobY, 0,
-            centerX + coreWobX, centerY + coreWobY, coreRadius
+        // --- Central vortex (after mirror loop) — dark core with bright rim ---
+        const vortexRadius = radius * 0.08 * (1 + energy * 0.4);
+        const vortexGrad = ctx.createRadialGradient(
+            centerX, centerY, 0,
+            centerX, centerY, vortexRadius
         );
-        const coreAlpha = 0.3 + phaseLiquid * 0.3 - phaseGas * 0.15;
-        coreGrad.addColorStop(0, `hsla(${shadowHue}, ${chromeSat}%, 25%, ${coreAlpha * 0.6})`);
-        coreGrad.addColorStop(0.6, `hsla(${hue}, ${chromeSat}%, 45%, ${coreAlpha})`);
-        coreGrad.addColorStop(0.9, `hsla(${highlightHue}, ${chromeSat * 0.5}%, 75%, ${coreAlpha * 1.1})`);
-        coreGrad.addColorStop(1, `hsla(${highlightHue}, ${chromeSat * 0.3}%, 85%, ${coreAlpha * 0.4})`);
+        vortexGrad.addColorStop(0, `hsla(0, 0%, 5%, 0.7)`);
+        vortexGrad.addColorStop(0.7, `hsla(0, 0%, 3%, 0.5)`);
+        vortexGrad.addColorStop(0.88, `hsla(${hue}, ${sat * 0.8}%, ${45 + energy * 15}%, ${0.4 + energy * 0.3})`);
+        vortexGrad.addColorStop(1, `hsla(${hue}, ${sat * 0.6}%, 30%, 0)`);
 
         ctx.beginPath();
-        ctx.arc(centerX + coreWobX, centerY + coreWobY, coreRadius, 0, Math.PI * 2);
-        ctx.fillStyle = coreGrad;
+        ctx.arc(centerX, centerY, vortexRadius, 0, Math.PI * 2);
+        ctx.fillStyle = vortexGrad;
         ctx.fill();
 
-        // Specular glint on core
-        const glintX = centerX + coreWobX + Math.cos(lightAngle) * coreRadius * 0.4;
-        const glintY = centerY + coreWobY + Math.sin(lightAngle) * coreRadius * 0.4;
-        const glintGrad = ctx.createRadialGradient(glintX, glintY, 0, glintX, glintY, coreRadius * 0.3);
-        glintGrad.addColorStop(0, `hsla(0, 0%, 100%, ${0.2 + brightness * 0.3})`);
-        glintGrad.addColorStop(1, `hsla(0, 0%, 100%, 0)`);
+        // Bright rim stroke — "the eye"
         ctx.beginPath();
-        ctx.arc(glintX, glintY, coreRadius * 0.3, 0, Math.PI * 2);
-        ctx.fillStyle = glintGrad;
-        ctx.fill();
+        ctx.arc(centerX, centerY, vortexRadius * 0.9, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${hue}, ${sat * 0.8}%, 50%, ${0.2 + energy * 0.3})`;
+        ctx.lineWidth = thickness * 0.4;
+        ctx.stroke();
     }
 
     drawPolygon(ctx, x, y, radius, sides, rotation, color, thickness) {
