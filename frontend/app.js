@@ -5502,9 +5502,10 @@ class KaleidoscopeStudio {
     }
 
     /**
-     * Quark style — Deep quantum chromodynamics: quark triplet, probability clouds, electron shells,
-     * cloud chamber particle tracks, tunneling ghosts, superposition echoes, spooky entanglement,
-     * and wave function collapse. Heavy atmospheric depth.
+     * Quark style — Quantum field theory visualizer. Shows quarks and electrons as disturbances
+     * in living, breathing quantum fields. The strong field (gluon flux tubes), electromagnetic
+     * field (virtual photon exchange), weak force (boson flares), and the Higgs condensate
+     * are all visible as interconnected, pulsing substrates of reality.
      */
     renderQuarkStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
@@ -5519,388 +5520,547 @@ class KaleidoscopeStudio {
 
         const cherenkovHue = 210;
         const colorChargePhase = rot * 0.5;
-        const qHues = [0, 120, 240]; // R, G, B
+        const qHues = [0, 120, 240]; // R, G, B color charges
+        const fieldExtent = radius * 0.7 * orbitFactor;
 
         ctx.save();
         ctx.translate(centerX, centerY);
 
-        // === DEEP VOID: dark gravitational well at center ===
-        const voidR = radius * 0.25 * orbitFactor;
-        const voidGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, voidR);
-        voidGrad.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.2}%, 2%, ${0.4 + harmonic * 0.2})`);
-        voidGrad.addColorStop(0.5, `hsla(${cherenkovHue}, ${sat * 0.3}%, 5%, ${0.15 + harmonic * 0.1})`);
-        voidGrad.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.2}%, 8%, 0)`);
-        ctx.beginPath();
-        ctx.arc(0, 0, voidR, 0, Math.PI * 2);
-        ctx.fillStyle = voidGrad;
-        ctx.fill();
+        // =====================================================
+        // LAYER 0: HIGGS CONDENSATE — the fabric everything swims in
+        // A living mesh that undulates, giving mass to all particles.
+        // Slow, pervasive, always present. The "floor" of reality.
+        // =====================================================
+        ctx.save();
+        ctx.rotate(rot * 0.03); // barely drifts
+        const higgsNodes = 10 + Math.floor(harmonic * 4);
+        const higgsCellSize = fieldExtent * 2 / higgsNodes;
+        const higgsAlpha = 0.025 + harmonic * 0.025;
 
-        // === QUARK TRIPLET bound by gluon strings ===
-        const quarkOrbit = radius * 0.08 * orbitFactor * (0.7 + energy * 0.5);
+        for (let i = 0; i < higgsNodes; i++) {
+            for (let j = 0; j < higgsNodes; j++) {
+                const hSeed = seed + i * 97 + j * 53;
+                if (this.seededRandom(hSeed) > 0.4) continue; // sparse
+
+                const bx = (i - higgsNodes / 2) * higgsCellSize;
+                const by = (j - higgsNodes / 2) * higgsCellSize;
+                const dist = Math.sqrt(bx * bx + by * by);
+                if (dist > fieldExtent) continue;
+
+                // Field displacement — the condensate breathes
+                const disp = Math.sin(dist * 0.02 + rot * 0.5) * higgsCellSize * 0.15
+                    + Math.sin(rot * 0.3 + i * 0.4 + j * 0.3) * higgsCellSize * 0.08 * harmonic;
+                const nx = bx + disp;
+                const ny = by + Math.cos(dist * 0.02 + rot * 0.4) * higgsCellSize * 0.12;
+
+                // Nearby nodes — draw a faint connection
+                if (i < higgsNodes - 1) {
+                    const ni = i + 1;
+                    const nbx = (ni - higgsNodes / 2) * higgsCellSize;
+                    const nby = by;
+                    const nDisp = Math.sin(Math.sqrt(nbx * nbx + nby * nby) * 0.02 + rot * 0.5) * higgsCellSize * 0.15;
+                    ctx.beginPath();
+                    ctx.moveTo(nx, ny);
+                    ctx.lineTo(nbx + nDisp, nby + Math.cos(Math.sqrt(nbx * nbx + nby * nby) * 0.02 + rot * 0.4) * higgsCellSize * 0.12);
+                    ctx.strokeStyle = `hsla(45, ${sat * 0.2}%, 40%, ${higgsAlpha * (1 - dist / fieldExtent)})`;
+                    ctx.lineWidth = 0.4;
+                    ctx.stroke();
+                }
+                if (j < higgsNodes - 1) {
+                    const nj = j + 1;
+                    const nbx = bx;
+                    const nby = (nj - higgsNodes / 2) * higgsCellSize;
+                    const nDisp = Math.sin(Math.sqrt(nbx * nbx + nby * nby) * 0.02 + rot * 0.5) * higgsCellSize * 0.15;
+                    ctx.beginPath();
+                    ctx.moveTo(nx, ny);
+                    ctx.lineTo(nbx + nDisp, nby + Math.cos(Math.sqrt(nbx * nbx + nby * nby) * 0.02 + rot * 0.4) * higgsCellSize * 0.12);
+                    ctx.strokeStyle = `hsla(45, ${sat * 0.2}%, 40%, ${higgsAlpha * (1 - dist / fieldExtent)})`;
+                    ctx.lineWidth = 0.4;
+                    ctx.stroke();
+                }
+            }
+        }
+        ctx.restore();
+
+        // =====================================================
+        // LAYER 1: STRONG FORCE FIELD — Color flux tubes radiating from quarks
+        // Confined color field lines that don't spread out like EM —
+        // they form "tubes" that get brighter as they stretch. Confinement.
+        // =====================================================
+        const quarkOrbit = radius * 0.09 * orbitFactor * (0.7 + energy * 0.5);
         const quarkPositions = [];
         for (let q = 0; q < 3; q++) {
             const phase = (Math.PI * 2 * q) / 3;
             const vibrate = Math.sin(rot * 3 + phase * 2) * quarkOrbit * 0.25 * harmonic;
-            const jitter = Math.sin(rot * 11 + q * 5) * quarkOrbit * 0.05; // quantum jitter
+            const jitter = Math.sin(rot * 11 + q * 5) * quarkOrbit * 0.05;
             const qx = Math.cos(phase + rot * 0.4) * (quarkOrbit + vibrate + jitter);
             const qy = Math.sin(phase + rot * 0.4) * (quarkOrbit + vibrate + jitter);
             quarkPositions.push({ x: qx, y: qy });
-            const qSize = radius * 0.025 * orbitFactor * (0.8 + energy * 0.3);
-            const chargeIdx = (q + Math.floor(colorChargePhase)) % 3;
-            const qHue = qHues[chargeIdx];
-
-            // Superposition ghost echoes — previous positions shown faintly
-            for (let echo = 3; echo >= 1; echo--) {
-                const echoPhase = phase;
-                const echoRot = rot * 0.4 - echo * 0.15;
-                const echoVib = Math.sin((rot - echo * 0.3) * 3 + echoPhase * 2) * quarkOrbit * 0.25 * harmonic;
-                const ex = Math.cos(echoPhase + echoRot) * (quarkOrbit + echoVib);
-                const ey = Math.sin(echoPhase + echoRot) * (quarkOrbit + echoVib);
-                const echoAlpha = 0.06 / echo;
-                ctx.beginPath();
-                ctx.arc(ex, ey, qSize * (1.5 + echo * 0.5), 0, Math.PI * 2);
-                ctx.fillStyle = `hsla(${qHue}, ${sat * 0.5}%, 50%, ${echoAlpha})`;
-                ctx.fill();
-            }
-
-            // Quark glow — deeper, wider
-            const qGlow = ctx.createRadialGradient(qx, qy, 0, qx, qy, qSize * 4);
-            qGlow.addColorStop(0, `hsla(${qHue}, ${sat * 0.9}%, 75%, ${0.7 + energy * 0.3})`);
-            qGlow.addColorStop(0.3, `hsla(${qHue}, ${sat * 0.7}%, 50%, ${0.25 + energy * 0.15})`);
-            qGlow.addColorStop(0.7, `hsla(${qHue}, ${sat * 0.4}%, 30%, 0.05)`);
-            qGlow.addColorStop(1, `hsla(${qHue}, ${sat * 0.3}%, 15%, 0)`);
-            ctx.beginPath();
-            ctx.arc(qx, qy, qSize * 4, 0, Math.PI * 2);
-            ctx.fillStyle = qGlow;
-            ctx.fill();
-
-            // Quark core
-            ctx.beginPath();
-            ctx.arc(qx, qy, qSize, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(${qHue}, ${sat * 0.6}%, 90%, 0.95)`;
-            ctx.fill();
         }
 
-        // Gluon strings — double helix with color blending
+        // Strong field flux tubes — thick, glowing confined tubes between quarks
         for (let q = 0; q < 3; q++) {
             const p0 = quarkPositions[q];
             const p1 = quarkPositions[(q + 1) % 3];
             const chargeIdx = (q + Math.floor(colorChargePhase)) % 3;
-            const gluonHue = (qHues[chargeIdx] + qHues[(chargeIdx + 1) % 3]) / 2;
+            const tubeHue = qHues[chargeIdx];
             const dx = p1.x - p0.x;
             const dy = p1.y - p0.y;
             const len = Math.sqrt(dx * dx + dy * dy) || 1;
+            const perpX = -dy / len;
+            const perpY = dx / len;
 
-            // Two helical strands
+            // Flux tube: filled region with pulsing width
+            const tubeWidth = quarkOrbit * 0.15 * (1 + energy * 0.6);
+            const segs = 20;
+
+            // Draw flux tube as filled shape
+            ctx.beginPath();
+            for (let s = 0; s <= segs; s++) {
+                const t = s / segs;
+                const mx = p0.x + dx * t;
+                const my = p0.y + dy * t;
+                const wave = Math.sin(t * Math.PI * 6 + rot * 4) * tubeWidth * 0.3;
+                ctx.lineTo(mx + perpX * (tubeWidth + wave), my + perpY * (tubeWidth + wave));
+            }
+            for (let s = segs; s >= 0; s--) {
+                const t = s / segs;
+                const mx = p0.x + dx * t;
+                const my = p0.y + dy * t;
+                const wave = Math.sin(t * Math.PI * 6 + rot * 4) * tubeWidth * 0.3;
+                ctx.lineTo(mx - perpX * (tubeWidth + wave), my - perpY * (tubeWidth + wave));
+            }
+            ctx.closePath();
+            ctx.fillStyle = `hsla(${tubeHue}, ${sat * 0.6}%, 25%, ${0.08 + energy * 0.1})`;
+            ctx.fill();
+
+            // Bright core string — double helix inside the tube
             for (let strand = 0; strand < 2; strand++) {
                 ctx.beginPath();
                 ctx.moveTo(p0.x, p0.y);
                 const dir = strand === 0 ? 1 : -1;
-                const segs = 16;
                 for (let g = 1; g <= segs; g++) {
                     const t = g / segs;
                     const mx = p0.x + dx * t;
                     const my = p0.y + dy * t;
-                    const perpX = -dy / len;
-                    const perpY = dx / len;
-                    const wave = Math.sin(t * Math.PI * 5 + rot * 3 + strand * Math.PI) * quarkOrbit * 0.1 * dir * (1 + energy * 0.5);
+                    const wave = Math.sin(t * Math.PI * 5 + rot * 3.5 + strand * Math.PI) * tubeWidth * 0.5 * dir;
                     ctx.lineTo(mx + perpX * wave, my + perpY * wave);
                 }
-                ctx.strokeStyle = `hsla(${gluonHue}, ${sat * 0.7}%, 55%, ${0.15 + energy * 0.25})`;
-                ctx.lineWidth = thickness * 0.25;
+                const nextChargeIdx = ((q + 1) + Math.floor(colorChargePhase)) % 3;
+                const strandHue = strand === 0 ? tubeHue : qHues[nextChargeIdx];
+                ctx.strokeStyle = `hsla(${strandHue}, ${sat * 0.8}%, 60%, ${0.2 + energy * 0.3})`;
+                ctx.lineWidth = thickness * 0.3;
                 ctx.stroke();
             }
+
+            // Running "gluon pulse" along the tube
+            const pulseT = ((rot * 2 + q * 2) % (Math.PI * 2)) / (Math.PI * 2);
+            const pulseX = p0.x + dx * pulseT;
+            const pulseY = p0.y + dy * pulseT;
+            const pulseR = tubeWidth * (1.5 + energy * 0.5);
+            const pulseGrad = ctx.createRadialGradient(pulseX, pulseY, 0, pulseX, pulseY, pulseR);
+            pulseGrad.addColorStop(0, `hsla(${tubeHue}, ${sat * 0.9}%, 75%, ${0.3 + energy * 0.3})`);
+            pulseGrad.addColorStop(0.5, `hsla(${tubeHue}, ${sat * 0.6}%, 45%, ${0.08 + energy * 0.08})`);
+            pulseGrad.addColorStop(1, `hsla(${tubeHue}, ${sat * 0.3}%, 25%, 0)`);
+            ctx.beginPath();
+            ctx.arc(pulseX, pulseY, pulseR, 0, Math.PI * 2);
+            ctx.fillStyle = pulseGrad;
+            ctx.fill();
         }
 
-        // White-light core when balanced
+        // === QUARK CORES — with superposition echoes ===
+        for (let q = 0; q < 3; q++) {
+            const { x: qx, y: qy } = quarkPositions[q];
+            const qSize = radius * 0.025 * orbitFactor * (0.8 + energy * 0.3);
+            const chargeIdx = (q + Math.floor(colorChargePhase)) % 3;
+            const qHue = qHues[chargeIdx];
+
+            // Superposition echoes
+            for (let echo = 3; echo >= 1; echo--) {
+                const phase = (Math.PI * 2 * q) / 3;
+                const echoRot = rot * 0.4 - echo * 0.18;
+                const echoVib = Math.sin((rot - echo * 0.35) * 3 + phase * 2) * quarkOrbit * 0.25 * harmonic;
+                const ex = Math.cos(phase + echoRot) * (quarkOrbit + echoVib);
+                const ey = Math.sin(phase + echoRot) * (quarkOrbit + echoVib);
+                ctx.beginPath();
+                ctx.arc(ex, ey, qSize * (1.8 + echo * 0.6), 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${qHue}, ${sat * 0.4}%, 45%, ${0.04 / echo})`;
+                ctx.fill();
+            }
+
+            // Deep glow
+            const qGlow = ctx.createRadialGradient(qx, qy, 0, qx, qy, qSize * 5);
+            qGlow.addColorStop(0, `hsla(${qHue}, ${sat * 0.9}%, 80%, ${0.7 + energy * 0.3})`);
+            qGlow.addColorStop(0.2, `hsla(${qHue}, ${sat * 0.7}%, 55%, ${0.3 + energy * 0.15})`);
+            qGlow.addColorStop(0.6, `hsla(${qHue}, ${sat * 0.4}%, 30%, 0.04)`);
+            qGlow.addColorStop(1, `hsla(${qHue}, ${sat * 0.2}%, 15%, 0)`);
+            ctx.beginPath();
+            ctx.arc(qx, qy, qSize * 5, 0, Math.PI * 2);
+            ctx.fillStyle = qGlow;
+            ctx.fill();
+
+            // Core
+            ctx.beginPath();
+            ctx.arc(qx, qy, qSize, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${qHue}, ${sat * 0.6}%, 92%, 0.95)`;
+            ctx.fill();
+        }
+
+        // White-light core when color charges balance
         const coreBalance = Math.abs(Math.sin(colorChargePhase * Math.PI / 1.5));
         if (coreBalance > 0.8) {
-            const whiteGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, quarkOrbit * 0.6);
-            whiteGrad.addColorStop(0, `hsla(0, 0%, 100%, ${(coreBalance - 0.8) * 2.5})`);
-            whiteGrad.addColorStop(0.5, `hsla(${cherenkovHue}, 30%, 80%, ${(coreBalance - 0.8) * 0.5})`);
+            const whiteGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, quarkOrbit * 0.7);
+            whiteGrad.addColorStop(0, `hsla(0, 0%, 100%, ${(coreBalance - 0.8) * 3})`);
+            whiteGrad.addColorStop(0.4, `hsla(${cherenkovHue}, 20%, 85%, ${(coreBalance - 0.8) * 0.5})`);
             whiteGrad.addColorStop(1, `hsla(0, 0%, 100%, 0)`);
             ctx.beginPath();
-            ctx.arc(0, 0, quarkOrbit * 0.6, 0, Math.PI * 2);
+            ctx.arc(0, 0, quarkOrbit * 0.7, 0, Math.PI * 2);
             ctx.fillStyle = whiteGrad;
             ctx.fill();
         }
 
-        // === PER-SEGMENT: clouds, shells, tracks, tunneling, entanglement ===
+        // =====================================================
+        // LAYER 2: PER-SEGMENT — EM field, electrons, weak force, vacuum
+        // =====================================================
         for (let m = 0; m < mirrors; m++) {
             const mirrorAngle = (Math.PI * 2 * m) / mirrors;
 
             ctx.save();
             ctx.rotate(mirrorAngle);
-
             const segAngle = Math.PI / mirrors;
-            // Slow segment drift for eeriness
-            const segDrift = Math.sin(rot * 0.3 + m * 1.7) * 0.02;
-            ctx.rotate(segDrift);
 
-            // --- Probability clouds: Gaussian particle clusters ---
-            const cloudCount = 2 + Math.floor(brightness * 2);
-            for (let c = 0; c < cloudCount; c++) {
-                const cSeed = seed + m * 40 + c * 17;
-                const cAngle = segAngle * (0.15 + this.seededRandom(cSeed) * 0.7);
-                const cDist = radius * (0.15 + c * 0.13 + harmonic * 0.06) * orbitFactor;
-                const cloudCX = Math.cos(cAngle) * cDist;
-                const cloudCY = Math.sin(cAngle) * cDist;
+            // Eerie drift
+            ctx.rotate(Math.sin(rot * 0.25 + m * 1.7) * 0.015);
 
-                // Cloud sharpness: collapse on energy (quiet=blurry, loud=sharp)
-                const cloudSpread = radius * 0.06 * (1.6 - energy * 0.9) * orbitFactor;
-                const particlesInCloud = 10 + Math.floor(energy * 8);
-                const cloudHue = (cherenkovHue + c * 25 + this.seededRandom(cSeed + 5) * 20) % 360;
+            // --- ELECTROMAGNETIC FIELD LINES ---
+            // Radial field lines emanating from center outward through segment,
+            // distorted by the particles they pass near. These are the "force"
+            // that connects quarks to electrons — visible communication.
+            const fieldLineCount = 3 + Math.floor(this.seededRandom(seed + m * 7 + 400) * 2);
+            for (let fl = 0; fl < fieldLineCount; fl++) {
+                const flSeed = seed + 400 + m * 20 + fl * 13;
+                const flAngle = segAngle * (0.1 + fl * 0.8 / fieldLineCount);
+                const flSteps = 25;
+                const flHue = (cherenkovHue + this.seededRandom(flSeed) * 30) % 360;
 
-                // Cloud rotation
-                ctx.save();
-                ctx.translate(cloudCX, cloudCY);
-                ctx.rotate(rot * (0.2 + this.seededRandom(cSeed + 6) * 0.3) * (this.seededRandom(cSeed + 7) > 0.5 ? 1 : -1));
-
-                // Soft ambient glow behind cloud
-                const ambGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, cloudSpread * 2);
-                ambGlow.addColorStop(0, `hsla(${cloudHue}, ${sat * 0.4}%, 40%, ${0.04 + harmonic * 0.04})`);
-                ambGlow.addColorStop(1, `hsla(${cloudHue}, ${sat * 0.3}%, 20%, 0)`);
                 ctx.beginPath();
-                ctx.arc(0, 0, cloudSpread * 2, 0, Math.PI * 2);
-                ctx.fillStyle = ambGlow;
-                ctx.fill();
-
-                for (let p = 0; p < particlesInCloud; p++) {
-                    const pSeed = cSeed + 100 + p * 7;
-                    const r1 = this.seededRandom(pSeed);
-                    const r2 = this.seededRandom(pSeed + 1);
-                    const gaussR = Math.sqrt(-2 * Math.log(Math.max(0.001, r1))) * cloudSpread;
-                    const gaussAngle = r2 * Math.PI * 2;
-                    const ppx = Math.cos(gaussAngle) * gaussR;
-                    const ppy = Math.sin(gaussAngle) * gaussR;
-
-                    const distFromCenter = Math.sqrt(ppx * ppx + ppy * ppy);
-                    const prob = Math.exp(-distFromCenter * distFromCenter / (cloudSpread * cloudSpread * 2));
-                    const pSize = 0.8 + prob * 2.5 + energy * 1.5;
-                    const pAlpha = prob * (0.25 + energy * 0.55);
-
-                    ctx.beginPath();
-                    ctx.arc(ppx, ppy, pSize, 0, Math.PI * 2);
-                    ctx.fillStyle = `hsla(${cloudHue}, ${sat * 0.7}%, ${50 + prob * 30}%, ${pAlpha})`;
-                    ctx.fill();
+                for (let s = 0; s <= flSteps; s++) {
+                    const t = s / flSteps;
+                    const baseR = radius * (0.05 + t * 0.55) * orbitFactor;
+                    // Field lines curve and warp near particles
+                    const distortion = Math.sin(t * Math.PI * 3 + rot * 1.5 + fl * 1.1) * radius * 0.012 * harmonic
+                        + Math.sin(t * Math.PI * 7 + rot * 3) * radius * 0.005 * energy;
+                    const angle = flAngle + distortion / baseR;
+                    const x = Math.cos(angle) * baseR;
+                    const y = Math.sin(angle) * baseR;
+                    s === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
                 }
-                ctx.restore();
-            }
-
-            // --- Cloud chamber particle tracks: curved trails like real detectors ---
-            const trackCount = 2 + Math.floor(this.seededRandom(seed + m * 13 + 300) * 3);
-            for (let tr = 0; tr < trackCount; tr++) {
-                const trSeed = seed + 300 + m * 30 + tr * 23;
-                const trAngle = segAngle * (0.1 + this.seededRandom(trSeed) * 0.8);
-                const trDist = radius * (0.1 + this.seededRandom(trSeed + 1) * 0.4) * orbitFactor;
-                const trLen = radius * (0.06 + this.seededRandom(trSeed + 2) * 0.12) * orbitFactor;
-                const trCurve = (this.seededRandom(trSeed + 3) - 0.5) * 0.8; // magnetic deflection
-                const trHue = (cherenkovHue + this.seededRandom(trSeed + 4) * 40 - 20) % 360;
-                // Track fades in over time and out
-                const trLife = Math.sin(rot * (1 + this.seededRandom(trSeed + 5)) + this.seededRandom(trSeed + 6) * Math.PI * 2);
-                if (trLife < 0) continue;
-
-                const startX = Math.cos(trAngle) * trDist;
-                const startY = Math.sin(trAngle) * trDist;
-                const endX = Math.cos(trAngle + trCurve) * (trDist + trLen);
-                const endY = Math.sin(trAngle + trCurve) * (trDist + trLen);
-                const cpX = (startX + endX) / 2 + (this.seededRandom(trSeed + 7) - 0.5) * trLen * 0.6;
-                const cpY = (startY + endY) / 2 + (this.seededRandom(trSeed + 8) - 0.5) * trLen * 0.6;
-
-                ctx.beginPath();
-                ctx.moveTo(startX, startY);
-                ctx.quadraticCurveTo(cpX, cpY, endX, endY);
-                ctx.strokeStyle = `hsla(${trHue}, ${sat * 0.5}%, 55%, ${trLife * (0.1 + brightness * 0.15)})`;
-                ctx.lineWidth = 0.6 + trLife * 0.8;
+                // Fade out toward edges
+                ctx.strokeStyle = `hsla(${flHue}, ${sat * 0.35}%, 45%, ${0.04 + harmonic * 0.05 + energy * 0.03})`;
+                ctx.lineWidth = 0.5 + energy * 0.5;
                 ctx.stroke();
+            }
 
-                // Tiny ionization dots along track
-                const dotCount = 3 + Math.floor(this.seededRandom(trSeed + 9) * 4);
-                for (let d = 0; d < dotCount; d++) {
-                    const t = (d + 0.5) / dotCount;
-                    const ix = startX * (1 - t) * (1 - t) + cpX * 2 * t * (1 - t) + endX * t * t;
-                    const iy = startY * (1 - t) * (1 - t) + cpY * 2 * t * (1 - t) + endY * t * t;
+            // --- VIRTUAL PHOTON EXCHANGE: streaking bolts from quarks to electrons ---
+            // These are the "communication" — force carriers zipping between particles
+            const photonCount = 1 + Math.floor(energy * 2 + brightness * 1);
+            for (let ph = 0; ph < photonCount; ph++) {
+                const phSeed = seed + 500 + m * 30 + ph * 17;
+                // Photon travels from center outward at varying speed
+                const speed = 1.5 + this.seededRandom(phSeed) * 2;
+                const phLife = ((rot * speed + this.seededRandom(phSeed + 1) * Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2);
+                const phAngle = segAngle * (0.15 + this.seededRandom(phSeed + 2) * 0.7);
+                const startR = quarkOrbit * 1.5;
+                const endR = radius * (0.35 + this.seededRandom(phSeed + 3) * 0.2) * orbitFactor;
+                const phR = startR + (endR - startR) * phLife;
+                const phX = Math.cos(phAngle) * phR;
+                const phY = Math.sin(phAngle) * phR;
+
+                // Photon is a tiny wavy streak
+                const phLen = radius * 0.03 * orbitFactor;
+                const phHue = cherenkovHue;
+                const phAlpha = Math.sin(phLife * Math.PI) * (0.3 + energy * 0.4); // fade in/out
+
+                if (phAlpha > 0.02) {
+                    // Wavy body
                     ctx.beginPath();
-                    ctx.arc(ix, iy, 0.8, 0, Math.PI * 2);
-                    ctx.fillStyle = `hsla(${trHue}, ${sat * 0.6}%, 65%, ${trLife * 0.3})`;
+                    const waveSteps = 6;
+                    for (let w = 0; w <= waveSteps; w++) {
+                        const wt = w / waveSteps;
+                        const wr = phR - phLen * wt;
+                        const wAngle = phAngle + Math.sin(wt * Math.PI * 3 + rot * 8) * 0.02;
+                        const wx = Math.cos(wAngle) * wr;
+                        const wy = Math.sin(wAngle) * wr;
+                        w === 0 ? ctx.moveTo(wx, wy) : ctx.lineTo(wx, wy);
+                    }
+                    ctx.strokeStyle = `hsla(${phHue}, ${sat * 0.8}%, 75%, ${phAlpha})`;
+                    ctx.lineWidth = 1 + energy;
+                    ctx.stroke();
+
+                    // Head glow
+                    const headGrad = ctx.createRadialGradient(phX, phY, 0, phX, phY, 3 + energy * 2);
+                    headGrad.addColorStop(0, `hsla(${phHue}, ${sat * 0.9}%, 90%, ${phAlpha * 0.8})`);
+                    headGrad.addColorStop(1, `hsla(${phHue}, ${sat * 0.5}%, 50%, 0)`);
+                    ctx.beginPath();
+                    ctx.arc(phX, phY, 3 + energy * 2, 0, Math.PI * 2);
+                    ctx.fillStyle = headGrad;
                     ctx.fill();
                 }
             }
 
-            // --- Electron shells with quantum leaps ---
+            // --- ELECTRON SHELLS with Cherenkov wake ---
             const shellCount = 2 + Math.floor(this.seededRandom(seed + m * 3 + 500) * 2);
             for (let sh = 0; sh < shellCount; sh++) {
                 const shSeed = seed + 200 + m * 30 + sh * 19;
                 const baseShellR = radius * (0.22 + sh * 0.14) * orbitFactor;
                 const leapTrigger = Math.sin(rot * 1.5 + this.seededRandom(shSeed) * Math.PI * 2);
-                // Snap between discrete energy levels
                 const shellR = leapTrigger > 0.7
                     ? baseShellR * 1.35
                     : leapTrigger < -0.7
                         ? baseShellR * 0.75
                         : baseShellR;
-                const shellHue = (cherenkovHue + sh * 35) % 360;
-                const shellAlpha = 0.1 + harmonic * 0.18;
+                const shellHue = (cherenkovHue + sh * 30) % 360;
 
-                // Shell arc — with wavy uncertainty
+                // Shell arc — probability amplitude wave
                 ctx.beginPath();
-                const arcSteps = 30;
+                const arcSteps = 35;
                 for (let a = 0; a <= arcSteps; a++) {
                     const angle = (segAngle * a) / arcSteps;
-                    const wobble = Math.sin(angle * 8 + rot * 2 + sh * 2) * shellR * 0.02 * (1 - energy * 0.5);
+                    const psi = Math.sin(angle * (6 + sh * 2) + rot * 2 + sh * 2);
+                    const wobble = psi * shellR * 0.025 * (1.2 - energy * 0.5);
                     const r = shellR + wobble;
                     const x = Math.cos(angle) * r;
                     const y = Math.sin(angle) * r;
                     a === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
                 }
-                ctx.strokeStyle = `hsla(${shellHue}, ${sat * 0.5}%, ${45 + brightness * 20}%, ${shellAlpha})`;
+                ctx.strokeStyle = `hsla(${shellHue}, ${sat * 0.5}%, ${40 + brightness * 20}%, ${0.08 + harmonic * 0.15})`;
                 ctx.lineWidth = thickness * 0.25;
                 ctx.stroke();
 
-                // Electron with Cherenkov trail
-                const eAngle = segAngle * (0.2 + 0.6 * ((Math.sin(rot * (1.8 + sh * 0.4)) + 1) / 2));
+                // Electron with deep Cherenkov cone
+                const eAngle = segAngle * (0.15 + 0.7 * ((Math.sin(rot * (1.8 + sh * 0.4)) + 1) / 2));
                 const ex = Math.cos(eAngle) * shellR;
                 const ey = Math.sin(eAngle) * shellR;
 
-                // Trail (ghostly wake behind electron)
-                for (let trail = 4; trail >= 1; trail--) {
-                    const tAngle = eAngle - trail * 0.08;
-                    if (tAngle < 0) continue;
-                    const tx = Math.cos(tAngle) * shellR;
-                    const ty = Math.sin(tAngle) * shellR;
+                // Cherenkov cone — v-shaped wake behind electron
+                const coneLen = radius * 0.05 * orbitFactor * (1 + energy * 0.5);
+                const coneSpread = 0.15;
+                for (let c = 0; c < 2; c++) {
+                    const cDir = c === 0 ? 1 : -1;
+                    const trailAngle = eAngle - 0.12; // behind direction of motion
+                    const tipR = shellR;
+                    const baseAngle = trailAngle + coneSpread * cDir;
                     ctx.beginPath();
-                    ctx.arc(tx, ty, 1.5 + (4 - trail) * 0.3, 0, Math.PI * 2);
-                    ctx.fillStyle = `hsla(${cherenkovHue}, ${sat * 0.7}%, 60%, ${0.03 * (5 - trail)})`;
-                    ctx.fill();
+                    ctx.moveTo(ex, ey);
+                    ctx.lineTo(
+                        Math.cos(baseAngle) * (tipR - coneLen),
+                        Math.sin(baseAngle) * (tipR - coneLen)
+                    );
+                    ctx.strokeStyle = `hsla(${cherenkovHue}, ${sat * 0.7}%, 60%, ${0.06 + energy * 0.08})`;
+                    ctx.lineWidth = 0.8;
+                    ctx.stroke();
                 }
 
-                // Electron glow
-                const eGlow = ctx.createRadialGradient(ex, ey, 0, ex, ey, 6 + energy * 4);
-                eGlow.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.9}%, 80%, ${0.6 + energy * 0.4})`);
-                eGlow.addColorStop(0.5, `hsla(${cherenkovHue}, ${sat * 0.7}%, 55%, ${0.15 + energy * 0.1})`);
-                eGlow.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.5}%, 30%, 0)`);
+                // Cherenkov glow
+                const eGlow = ctx.createRadialGradient(ex, ey, 0, ex, ey, 8 + energy * 5);
+                eGlow.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.95}%, 85%, ${0.7 + energy * 0.3})`);
+                eGlow.addColorStop(0.3, `hsla(${cherenkovHue}, ${sat * 0.8}%, 60%, ${0.2 + energy * 0.1})`);
+                eGlow.addColorStop(0.7, `hsla(${cherenkovHue}, ${sat * 0.5}%, 35%, 0.03)`);
+                eGlow.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.3}%, 20%, 0)`);
                 ctx.beginPath();
-                ctx.arc(ex, ey, 6 + energy * 4, 0, Math.PI * 2);
+                ctx.arc(ex, ey, 8 + energy * 5, 0, Math.PI * 2);
                 ctx.fillStyle = eGlow;
                 ctx.fill();
 
+                // Electron core
                 ctx.beginPath();
-                ctx.arc(ex, ey, 1.5 + energy * 1, 0, Math.PI * 2);
-                ctx.fillStyle = `hsla(${cherenkovHue}, ${sat * 0.6}%, 90%, 0.9)`;
+                ctx.arc(ex, ey, 1.8 + energy * 0.8, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${cherenkovHue}, ${sat * 0.6}%, 93%, 0.95)`;
+                ctx.fill();
+
+                // --- PHOTON ABSORPTION/EMISSION at electron ---
+                // When a virtual photon reaches the electron, show a brief radial burst
+                const burstPhase = Math.sin(rot * 3 + sh * 2 + m * 1.3);
+                if (burstPhase > 0.7 && energy > 0.2) {
+                    const burstAlpha = (burstPhase - 0.7) * 2 * energy;
+                    const burstR = 4 + (burstPhase - 0.7) * radius * 0.04;
+                    const burstCount = 5;
+                    for (let b = 0; b < burstCount; b++) {
+                        const bAngle = (Math.PI * 2 * b) / burstCount + rot * 2;
+                        const bLen = burstR * (1 + this.seededRandom(seed + m * 5 + sh * 3 + b) * 0.5);
+                        ctx.beginPath();
+                        ctx.moveTo(ex, ey);
+                        ctx.lineTo(
+                            ex + Math.cos(bAngle) * bLen,
+                            ey + Math.sin(bAngle) * bLen
+                        );
+                        ctx.strokeStyle = `hsla(${cherenkovHue}, ${sat * 0.8}%, 80%, ${burstAlpha * 0.4})`;
+                        ctx.lineWidth = 0.6;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // --- WEAK FORCE BOSON FLARES ---
+            // Rare, heavy, slow-moving W/Z bosons that appear as expanding rings
+            // between quarks and leptons. They mediate transformation.
+            const weakSeed = seed + 700 + m * 13;
+            const weakPhase = Math.sin(rot * 0.4 + this.seededRandom(weakSeed) * Math.PI * 2);
+            if (weakPhase > 0.6) {
+                const wAlpha = (weakPhase - 0.6) * 0.7;
+                const wAngle = segAngle * (0.3 + this.seededRandom(weakSeed + 1) * 0.4);
+                const wDist = radius * (0.15 + this.seededRandom(weakSeed + 2) * 0.15) * orbitFactor;
+                const wx = Math.cos(wAngle) * wDist;
+                const wy = Math.sin(wAngle) * wDist;
+                const wExpand = (weakPhase - 0.6) * radius * 0.08 * orbitFactor;
+
+                // Expanding ring — heavy boson propagating
+                ctx.beginPath();
+                ctx.arc(wx, wy, wExpand, 0, Math.PI * 2);
+                ctx.strokeStyle = `hsla(50, ${sat * 0.7}%, 65%, ${wAlpha * 0.6})`;
+                ctx.lineWidth = 2 + energy * 2;
+                ctx.stroke();
+
+                // Inner transformation flash
+                const wFlash = ctx.createRadialGradient(wx, wy, 0, wx, wy, wExpand * 0.6);
+                wFlash.addColorStop(0, `hsla(50, ${sat * 0.8}%, 80%, ${wAlpha * 0.4})`);
+                wFlash.addColorStop(1, `hsla(50, ${sat * 0.5}%, 40%, 0)`);
+                ctx.beginPath();
+                ctx.arc(wx, wy, wExpand * 0.6, 0, Math.PI * 2);
+                ctx.fillStyle = wFlash;
                 ctx.fill();
             }
 
-            // --- Tunneling ghosts: particles that phase through barriers ---
-            const tunnelSeed = seed + 600 + m * 17;
-            const tunnelPhase = Math.sin(rot * 0.7 + this.seededRandom(tunnelSeed) * Math.PI * 2);
-            if (tunnelPhase > 0.3) {
-                const tAlpha = (tunnelPhase - 0.3) * 0.3;
-                const tAngle = segAngle * (0.3 + this.seededRandom(tunnelSeed + 1) * 0.4);
-                const tDist = radius * 0.4 * orbitFactor;
-                const tx = Math.cos(tAngle) * tDist;
-                const ty = Math.sin(tAngle) * tDist;
-                const tSize = radius * 0.02 * orbitFactor;
+            // --- VACUUM POLARIZATION near quarks ---
+            // Close to the quark center, virtual pairs appear and vanish,
+            // showing the vacuum is alive and screening the color charge
+            const vpCount = 3 + Math.floor(energy * 3);
+            for (let vp = 0; vp < vpCount; vp++) {
+                const vpSeed = seed + 800 + m * 20 + vp * 11;
+                const vpLife = Math.sin(rot * (3 + this.seededRandom(vpSeed) * 3) + this.seededRandom(vpSeed + 1) * Math.PI * 2);
+                if (vpLife < 0.2) continue;
 
-                // Ghost particle — partially transparent, smeared
-                for (let g = 0; g < 3; g++) {
-                    const gOffset = (g - 1) * tSize * 0.8;
-                    ctx.beginPath();
-                    ctx.arc(tx + gOffset, ty, tSize * (1.2 - g * 0.15), 0, Math.PI * 2);
-                    ctx.fillStyle = `hsla(${cherenkovHue}, ${sat * 0.5}%, 65%, ${tAlpha * (0.4 - g * 0.1)})`;
-                    ctx.fill();
-                }
+                const vpAngle = segAngle * (0.05 + this.seededRandom(vpSeed + 2) * 0.4);
+                const vpDist = radius * (0.05 + this.seededRandom(vpSeed + 3) * 0.1) * orbitFactor;
+                const vpX = Math.cos(vpAngle) * vpDist;
+                const vpY = Math.sin(vpAngle) * vpDist;
+                const sep = 2 + vpLife * 3;
+                const vpAlpha = (vpLife - 0.2) * 0.25;
+
+                // Particle-antiparticle pair
+                ctx.beginPath();
+                ctx.arc(vpX + sep, vpY, 1 + vpLife, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${cherenkovHue}, ${sat * 0.6}%, 65%, ${vpAlpha})`;
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(vpX - sep, vpY, 1 + vpLife, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${(cherenkovHue + 180) % 360}, ${sat * 0.5}%, 55%, ${vpAlpha})`;
+                ctx.fill();
             }
 
-            // --- Spooky entanglement lines (ghostly connections to opposite segment) ---
-            if (energy > 0.3) {
-                const entSeed = seed + 900 + m * 11;
-                const eAngle = segAngle * (0.2 + this.seededRandom(entSeed) * 0.6);
-                const eDist = radius * (0.2 + this.seededRandom(entSeed + 1) * 0.2) * orbitFactor;
-                const epx = Math.cos(eAngle) * eDist;
-                const epy = Math.sin(eAngle) * eDist;
-
-                // Ghostly line reaching toward center (connecting to entangled twin)
-                const entAlpha = (energy - 0.3) * 0.4;
-                const flickerPhase = Math.sin(rot * 7 + m * 3);
-                if (flickerPhase > 0) {
-                    ctx.beginPath();
-                    ctx.moveTo(epx, epy);
-                    // Wobbly connection line
-                    const segs = 8;
-                    for (let s = 1; s <= segs; s++) {
-                        const t = s / segs;
-                        const lx = epx * (1 - t);
-                        const ly = epy * (1 - t);
-                        const wobble = Math.sin(t * Math.PI * 3 + rot * 5) * radius * 0.01;
-                        ctx.lineTo(lx + wobble, ly + wobble);
-                    }
-                    ctx.strokeStyle = `hsla(${cherenkovHue}, ${sat * 0.6}%, 60%, ${entAlpha * flickerPhase})`;
-                    ctx.lineWidth = 0.8;
-                    ctx.setLineDash([3, 5]);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-
-                    // Particle flash at endpoint
-                    const flashGrad = ctx.createRadialGradient(epx, epy, 0, epx, epy, radius * 0.025);
-                    flashGrad.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.9}%, 85%, ${entAlpha * flickerPhase * 0.8})`);
-                    flashGrad.addColorStop(1, `hsla(${cherenkovHue}, ${sat}%, 40%, 0)`);
-                    ctx.beginPath();
-                    ctx.arc(epx, epy, radius * 0.025, 0, Math.PI * 2);
-                    ctx.fillStyle = flashGrad;
-                    ctx.fill();
-                }
-            }
-
-            // --- Wave function sinusoidal ripple ---
-            const waveAlpha = 0.04 + harmonic * 0.06;
+            // --- PROBABILITY WAVE (ψ) — the wave function ripple through field ---
+            const psiR = radius * 0.35 * orbitFactor;
+            const psiSegs = 40;
+            const psiAlpha = 0.04 + harmonic * 0.06;
             ctx.beginPath();
-            const waveR = radius * 0.35 * orbitFactor;
-            const waveSegs = 40;
-            for (let w = 0; w <= waveSegs; w++) {
-                const angle = (segAngle * w) / waveSegs;
-                const waveAmp = radius * 0.015 * (1 + harmonic * 0.5) * Math.sin(rot * 1.2 + angle * 6);
-                const r = waveR + waveAmp;
+            for (let w = 0; w <= psiSegs; w++) {
+                const angle = (segAngle * w) / psiSegs;
+                const psi = Math.sin(angle * (8 + brightness * 4) + rot * 1.5);
+                const r = psiR + psi * radius * 0.018 * (1 + harmonic * 0.6);
                 const x = Math.cos(angle) * r;
                 const y = Math.sin(angle) * r;
                 w === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
             }
-            ctx.strokeStyle = `hsla(${(cherenkovHue + 30) % 360}, ${sat * 0.4}%, 50%, ${waveAlpha})`;
+            ctx.strokeStyle = `hsla(${(cherenkovHue + 30) % 360}, ${sat * 0.4}%, 50%, ${psiAlpha})`;
             ctx.lineWidth = thickness * 0.2;
             ctx.stroke();
 
             ctx.restore();
         }
 
-        // === Central interference fringes (double-slit) ===
+        // =====================================================
+        // LAYER 3: FIELD RESONANCE WEB — when energy is high, standing waves
+        // connect all particles into one coherent web. The universe talks to itself.
+        // =====================================================
+        if (energy > 0.25 || harmonic > 0.4) {
+            const webAlpha = Math.max(energy - 0.25, 0) * 0.6 + Math.max(harmonic - 0.4, 0) * 0.3;
+            const webNodes = [];
+            // Collect quark positions
+            for (const qp of quarkPositions) webNodes.push(qp);
+            // Add electron approximate positions for web connections
+            for (let m = 0; m < Math.min(mirrors, 6); m++) {
+                const mAngle = (Math.PI * 2 * m) / mirrors;
+                const segAngle = Math.PI / mirrors;
+                const shellR = radius * 0.28 * orbitFactor;
+                const eAngle = mAngle + segAngle * 0.5;
+                webNodes.push({
+                    x: Math.cos(eAngle) * shellR,
+                    y: Math.sin(eAngle) * shellR
+                });
+            }
+
+            // Draw web connections with standing wave patterns
+            for (let i = 0; i < webNodes.length; i++) {
+                for (let j = i + 1; j < webNodes.length; j++) {
+                    const wSeed = seed + i * 100 + j * 7;
+                    if (this.seededRandom(wSeed) > 0.35) continue;
+
+                    const n0 = webNodes[i];
+                    const n1 = webNodes[j];
+                    const wdx = n1.x - n0.x;
+                    const wdy = n1.y - n0.y;
+                    const wLen = Math.sqrt(wdx * wdx + wdy * wdy) || 1;
+                    const wPerpX = -wdy / wLen;
+                    const wPerpY = wdx / wLen;
+
+                    // Standing wave between nodes
+                    ctx.beginPath();
+                    const wSteps = 16;
+                    for (let s = 0; s <= wSteps; s++) {
+                        const t = s / wSteps;
+                        const mx = n0.x + wdx * t;
+                        const my = n0.y + wdy * t;
+                        // Standing wave: sin(n*pi*t) — nodes at endpoints
+                        const standingWave = Math.sin(t * Math.PI * 3) * Math.sin(rot * 3 + i + j) * wLen * 0.04;
+                        ctx.lineTo(mx + wPerpX * standingWave, my + wPerpY * standingWave);
+                    }
+                    const webHue = (cherenkovHue + i * 20) % 360;
+                    ctx.strokeStyle = `hsla(${webHue}, ${sat * 0.5}%, 55%, ${webAlpha * 0.15})`;
+                    ctx.lineWidth = 0.5 + energy * 0.5;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // === Central interference fringes ===
         const fringeRings = 8;
         for (let f = 0; f < fringeRings; f++) {
-            const fR = radius * (0.08 + f * 0.03) * orbitFactor;
+            const fR = radius * (0.07 + f * 0.028) * orbitFactor;
             const phase = Math.cos(rot * 2 + f * Math.PI);
-            const fAlpha = Math.max(0, phase) * (0.1 + energy * 0.2);
+            const fAlpha = Math.max(0, phase) * (0.08 + energy * 0.18);
             if (fAlpha < 0.01) continue;
-
             ctx.beginPath();
             ctx.arc(0, 0, fR, 0, Math.PI * 2);
-            ctx.strokeStyle = `hsla(${cherenkovHue}, ${sat * 0.6}%, ${55 + brightness * 20}%, ${fAlpha})`;
-            ctx.lineWidth = thickness * (0.2 + energy * 0.3);
+            ctx.strokeStyle = `hsla(${cherenkovHue}, ${sat * 0.6}%, ${50 + brightness * 20}%, ${fAlpha})`;
+            ctx.lineWidth = thickness * (0.2 + energy * 0.25);
             ctx.stroke();
         }
 
-        // === Deep uncertainty haze — layered outer boundary ===
+        // === Deep uncertainty haze ===
         const outerR = radius * 0.65 * orbitFactor;
-        const haze1 = ctx.createRadialGradient(0, 0, outerR * 0.6, 0, 0, outerR);
-        haze1.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.2}%, 15%, 0)`);
-        haze1.addColorStop(0.7, `hsla(${cherenkovHue}, ${sat * 0.3}%, 10%, ${0.03 + harmonic * 0.04})`);
-        haze1.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.4}%, 8%, ${0.08 + harmonic * 0.08})`);
+        const haze1 = ctx.createRadialGradient(0, 0, outerR * 0.5, 0, 0, outerR);
+        haze1.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.15}%, 10%, 0)`);
+        haze1.addColorStop(0.6, `hsla(${cherenkovHue}, ${sat * 0.25}%, 8%, ${0.02 + harmonic * 0.03})`);
+        haze1.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.35}%, 6%, ${0.06 + harmonic * 0.07})`);
         ctx.beginPath();
         ctx.arc(0, 0, outerR, 0, Math.PI * 2);
         ctx.fillStyle = haze1;
         ctx.fill();
 
-        // Second haze layer — very subtle Cherenkov fringe
-        const haze2 = ctx.createRadialGradient(0, 0, outerR * 0.85, 0, 0, outerR * 1.05);
+        // Cherenkov rim
+        const haze2 = ctx.createRadialGradient(0, 0, outerR * 0.88, 0, 0, outerR * 1.05);
         haze2.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.5}%, 35%, 0)`);
-        haze2.addColorStop(0.5, `hsla(${cherenkovHue}, ${sat * 0.6}%, 40%, ${0.02 + energy * 0.03})`);
+        haze2.addColorStop(0.5, `hsla(${cherenkovHue}, ${sat * 0.6}%, 40%, ${0.015 + energy * 0.025})`);
         haze2.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.4}%, 25%, 0)`);
         ctx.beginPath();
         ctx.arc(0, 0, outerR * 1.05, 0, Math.PI * 2);
