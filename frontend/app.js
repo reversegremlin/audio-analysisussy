@@ -4916,8 +4916,8 @@ class KaleidoscopeStudio {
     }
 
     /**
-     * Orrery style — Broken steampunk orrery with three-body suns, armillary planets, and brass armatures
-     * Celestial mechanics through a logarithmic spiral kaleidoscope
+     * Orrery style — Broken steampunk orrery with three-body suns, varied celestial bodies,
+     * brass armatures, and independent rotations. Each body is unique via seed-driven shape selection.
      */
     renderOrreryStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
@@ -4930,7 +4930,6 @@ class KaleidoscopeStudio {
         const orbitFactor = config.orbitRadius / 200;
         const sat = config.saturation;
 
-        // Brass palette: warm amber/gold tones offset from base hue
         const brassHue = (hue + 30) % 360;
 
         ctx.save();
@@ -4938,23 +4937,45 @@ class KaleidoscopeStudio {
 
         // === TRI-SUNS: Three central bodies in chaotic three-body orbit ===
         const sunOrbitR = radius * 0.12 * orbitFactor * (0.8 + energy * 0.5);
+        const sunPositions = [];
         for (let s = 0; s < 3; s++) {
-            // Three-body positions using coupled sinusoids for quasi-chaotic motion
             const phase = (Math.PI * 2 * s) / 3;
-            const chaosA = Math.sin(rot * 0.7 + phase) + 0.3 * Math.sin(rot * 1.3 + phase * 2.1);
-            const chaosB = Math.cos(rot * 0.9 + phase) + 0.3 * Math.cos(rot * 1.7 - phase * 1.7);
+            const chaosA = Math.sin(rot * 0.7 + phase) + 0.3 * Math.sin(rot * 1.3 + phase * 2.1)
+                + 0.15 * Math.cos(rot * 2.1 - phase * 0.7);
+            const chaosB = Math.cos(rot * 0.9 + phase) + 0.3 * Math.cos(rot * 1.7 - phase * 1.7)
+                + 0.15 * Math.sin(rot * 2.5 + phase * 1.3);
             const sx = chaosA * sunOrbitR;
             const sy = chaosB * sunOrbitR;
+            sunPositions.push({ x: sx, y: sy });
             const sunSize = radius * (0.04 + energy * 0.025) * orbitFactor;
             const sunHue = (brassHue + s * 25) % 360;
+            // Each sun self-rotates
+            const selfRot = rot * (1.5 + s * 0.7);
+
+            // Corona rays
+            ctx.save();
+            ctx.translate(sx, sy);
+            ctx.rotate(selfRot);
+            const rayCount = 8 + s * 2;
+            for (let r = 0; r < rayCount; r++) {
+                const rayAngle = (Math.PI * 2 * r) / rayCount;
+                const rayLen = sunSize * (1.5 + Math.sin(rot * 4 + r * 1.3) * 0.5 * energy);
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(rayAngle) * sunSize * 0.8, Math.sin(rayAngle) * sunSize * 0.8);
+                ctx.lineTo(Math.cos(rayAngle) * rayLen, Math.sin(rayAngle) * rayLen);
+                ctx.strokeStyle = `hsla(${sunHue}, ${sat * 0.8}%, 75%, ${0.1 + energy * 0.15})`;
+                ctx.lineWidth = 0.8;
+                ctx.stroke();
+            }
+            ctx.restore();
 
             // Glow
-            const sunGlow = ctx.createRadialGradient(sx, sy, 0, sx, sy, sunSize * 3);
+            const sunGlow = ctx.createRadialGradient(sx, sy, 0, sx, sy, sunSize * 3.5);
             sunGlow.addColorStop(0, `hsla(${sunHue}, ${sat * 0.9}%, ${80 + energy * 15}%, ${0.8 + energy * 0.2})`);
-            sunGlow.addColorStop(0.4, `hsla(${sunHue}, ${sat * 0.7}%, 60%, ${0.3 + energy * 0.2})`);
+            sunGlow.addColorStop(0.35, `hsla(${sunHue}, ${sat * 0.7}%, 60%, ${0.3 + energy * 0.2})`);
             sunGlow.addColorStop(1, `hsla(${sunHue}, ${sat * 0.5}%, 30%, 0)`);
             ctx.beginPath();
-            ctx.arc(sx, sy, sunSize * 3, 0, Math.PI * 2);
+            ctx.arc(sx, sy, sunSize * 3.5, 0, Math.PI * 2);
             ctx.fillStyle = sunGlow;
             ctx.fill();
 
@@ -4963,26 +4984,24 @@ class KaleidoscopeStudio {
             ctx.arc(sx, sy, sunSize, 0, Math.PI * 2);
             ctx.fillStyle = `hsla(${sunHue}, ${sat * 0.5}%, 95%, 0.95)`;
             ctx.fill();
+        }
 
-            // Energy filaments between suns
-            const nextS = (s + 1) % 3;
-            const nextPhase = (Math.PI * 2 * nextS) / 3;
-            const nChaosA = Math.sin(rot * 0.7 + nextPhase) + 0.3 * Math.sin(rot * 1.3 + nextPhase * 2.1);
-            const nChaosB = Math.cos(rot * 0.9 + nextPhase) + 0.3 * Math.cos(rot * 1.7 - nextPhase * 1.7);
-            const nx = nChaosA * sunOrbitR;
-            const ny = nChaosB * sunOrbitR;
-
+        // Energy filaments between suns
+        for (let s = 0; s < 3; s++) {
+            const ns = (s + 1) % 3;
+            const p0 = sunPositions[s];
+            const p1 = sunPositions[ns];
             ctx.beginPath();
-            ctx.moveTo(sx, sy);
-            const cpx = (sx + nx) / 2 + Math.sin(rot * 2 + s) * sunOrbitR * 0.3;
-            const cpy = (sy + ny) / 2 + Math.cos(rot * 2.5 + s) * sunOrbitR * 0.3;
-            ctx.quadraticCurveTo(cpx, cpy, nx, ny);
-            ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.8}%, 70%, ${0.2 + energy * 0.3})`;
-            ctx.lineWidth = thickness * 0.4;
+            ctx.moveTo(p0.x, p0.y);
+            const cpx = (p0.x + p1.x) / 2 + Math.sin(rot * 2 + s * 2.1) * sunOrbitR * 0.4;
+            const cpy = (p0.y + p1.y) / 2 + Math.cos(rot * 2.5 + s * 1.7) * sunOrbitR * 0.4;
+            ctx.quadraticCurveTo(cpx, cpy, p1.x, p1.y);
+            ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.8}%, 70%, ${0.15 + energy * 0.3})`;
+            ctx.lineWidth = thickness * 0.35;
             ctx.stroke();
         }
 
-        // === PLANETS IN MIRROR SEGMENTS ===
+        // === CELESTIAL BODIES IN MIRROR SEGMENTS ===
         for (let m = 0; m < mirrors; m++) {
             const mirrorAngle = (Math.PI * 2 * m) / mirrors;
 
@@ -4991,169 +5010,331 @@ class KaleidoscopeStudio {
 
             const segAngle = Math.PI / mirrors;
 
-            // --- Brass armature arms (radial structural lines) ---
-            const armatureCount = 2;
-            for (let a = 0; a < armatureCount; a++) {
-                const armAngle = segAngle * (a + 0.5) / armatureCount;
-                const armLen = radius * 0.7 * orbitFactor;
+            // --- Jointed brass armatures with bends ---
+            const armSeed = seed + m * 97;
+            const armCount = 1 + Math.floor(this.seededRandom(armSeed) * 2);
+            for (let a = 0; a < armCount; a++) {
+                const aS = armSeed + a * 31;
+                const armAngle = segAngle * (0.2 + this.seededRandom(aS) * 0.6);
+                const armLen = radius * (0.5 + this.seededRandom(aS + 1) * 0.25) * orbitFactor;
+                const jointT = 0.35 + this.seededRandom(aS + 2) * 0.3;
+                const bendAngle = (this.seededRandom(aS + 3) - 0.5) * 0.3;
+
+                // Segment 1: center to joint
+                const jx = Math.cos(armAngle) * armLen * jointT;
+                const jy = Math.sin(armAngle) * armLen * jointT;
                 ctx.beginPath();
-                ctx.moveTo(radius * 0.1, 0);
-                const ax = Math.cos(armAngle) * armLen;
-                const ay = Math.sin(armAngle) * armLen;
-                ctx.lineTo(ax, ay);
-                ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.5}%, ${40 + harmonic * 15}%, ${0.3 + harmonic * 0.2})`;
-                ctx.lineWidth = thickness * 0.5;
+                ctx.moveTo(radius * 0.08 * orbitFactor, 0);
+                ctx.lineTo(jx, jy);
+                ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.5}%, ${38 + harmonic * 15}%, ${0.25 + harmonic * 0.2})`;
+                ctx.lineWidth = thickness * 0.45;
                 ctx.stroke();
 
-                // Small rivets along armature
-                for (let r = 0; r < 3; r++) {
-                    const t = 0.3 + r * 0.25;
-                    const rx = Math.cos(armAngle) * armLen * t;
-                    const ry = Math.sin(armAngle) * armLen * t;
-                    ctx.beginPath();
-                    ctx.arc(rx, ry, 1.5, 0, Math.PI * 2);
-                    ctx.fillStyle = `hsla(${brassHue}, ${sat * 0.4}%, 55%, ${0.3 + harmonic * 0.2})`;
-                    ctx.fill();
-                }
+                // Segment 2: joint to end (with bend)
+                const endAngle = armAngle + bendAngle;
+                const ex = jx + Math.cos(endAngle) * armLen * (1 - jointT);
+                const ey = jy + Math.sin(endAngle) * armLen * (1 - jointT);
+                ctx.beginPath();
+                ctx.moveTo(jx, jy);
+                ctx.lineTo(ex, ey);
+                ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.4}%, ${35 + harmonic * 12}%, ${0.2 + harmonic * 0.18})`;
+                ctx.lineWidth = thickness * 0.35;
+                ctx.stroke();
+
+                // Joint rivet
+                ctx.beginPath();
+                ctx.arc(jx, jy, 2 + energy, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${brassHue}, ${sat * 0.5}%, 60%, ${0.4 + harmonic * 0.3})`;
+                ctx.fill();
             }
 
-            // --- Armillary sphere planets (nested concentric rings) ---
-            const planetCount = 2 + Math.floor(this.seededRandom(seed + m * 7) * 2);
-            for (let p = 0; p < planetCount; p++) {
+            // --- Varied celestial bodies: shape chosen by seed ---
+            // 0=armillary, 1=ringed(saturn), 2=crescent, 3=gear-cog, 4=asteroid cluster, 5=comet
+            const bodyCount = 2 + Math.floor(this.seededRandom(seed + m * 7) * 2);
+            for (let p = 0; p < bodyCount; p++) {
                 const pSeed = seed + m * 50 + p * 13;
-                const pAngle = segAngle * (0.2 + this.seededRandom(pSeed) * 0.6);
-                const pDist = radius * (0.2 + p * 0.18 + energy * 0.08) * orbitFactor;
-                const px = Math.cos(pAngle) * pDist;
-                const py = Math.sin(pAngle) * pDist;
-                const planetSize = radius * (0.04 + this.seededRandom(pSeed + 1) * 0.03) * orbitFactor;
-                const planetHue = (brassHue + p * 35 + m * 15) % 360;
+                const bodyType = Math.floor(this.seededRandom(pSeed + 99) * 6);
+                const pAngle = segAngle * (0.15 + this.seededRandom(pSeed) * 0.7);
+                const pDist = radius * (0.18 + p * 0.17 + this.seededRandom(pSeed + 8) * 0.06) * orbitFactor;
+                // Gravitational slingshot: bass pushes orbits out
+                const slingshot = energy * radius * 0.04 * orbitFactor;
+                const px = Math.cos(pAngle) * (pDist + slingshot);
+                const py = Math.sin(pAngle) * (pDist + slingshot);
+                const bodySize = radius * (0.03 + this.seededRandom(pSeed + 1) * 0.035) * orbitFactor;
+                const bodyHue = (brassHue + this.seededRandom(pSeed + 2) * 70 - 10) % 360;
+                // Each body spins independently
+                const selfSpin = rot * (0.3 + this.seededRandom(pSeed + 3) * 1.8) * (this.seededRandom(pSeed + 4) > 0.5 ? 1 : -1);
 
                 ctx.save();
                 ctx.translate(px, py);
+                ctx.rotate(selfSpin);
 
-                // Concentric latticed rings (armillary style)
-                const ringCount = 3;
-                for (let r = 0; r < ringCount; r++) {
-                    const ringR = planetSize * (0.6 + r * 0.35);
-                    const ringTilt = r * 0.8 + rot * (0.5 + r * 0.3) * (this.seededRandom(pSeed + r) > 0.5 ? 1 : -1);
-                    const ringAlpha = 0.4 + energy * 0.3;
-
-                    ctx.save();
-                    ctx.rotate(ringTilt);
-                    ctx.scale(1, 0.4 + r * 0.15); // Perspective foreshortening
-
+                if (bodyType === 0) {
+                    // --- ARMILLARY: tilted concentric rings ---
+                    const ringCount = 2 + Math.floor(this.seededRandom(pSeed + 10) * 2);
+                    for (let r = 0; r < ringCount; r++) {
+                        const ringR = bodySize * (0.7 + r * 0.35);
+                        const tilt = r * 1.1 + this.seededRandom(pSeed + r + 20) * 0.8;
+                        ctx.save();
+                        ctx.rotate(tilt);
+                        ctx.scale(1, 0.35 + r * 0.12);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+                        ctx.strokeStyle = `hsla(${bodyHue}, ${sat * 0.6}%, ${50 + brightness * 20}%, ${0.4 + energy * 0.3})`;
+                        ctx.lineWidth = thickness * 0.3;
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+                    // Core dot
                     ctx.beginPath();
-                    ctx.arc(0, 0, ringR, 0, Math.PI * 2);
-                    ctx.strokeStyle = `hsla(${planetHue}, ${sat * 0.6}%, ${50 + brightness * 20}%, ${ringAlpha})`;
+                    ctx.arc(0, 0, bodySize * 0.25, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${bodyHue}, ${sat * 0.5}%, 80%, 0.8)`;
+                    ctx.fill();
+
+                } else if (bodyType === 1) {
+                    // --- RINGED PLANET (Saturn-like): body + angled ring ---
+                    ctx.beginPath();
+                    ctx.arc(0, 0, bodySize * 0.45, 0, Math.PI * 2);
+                    const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, bodySize * 0.45);
+                    grad.addColorStop(0, `hsla(${bodyHue}, ${sat * 0.5}%, 70%, 0.9)`);
+                    grad.addColorStop(1, `hsla(${bodyHue}, ${sat * 0.6}%, 40%, 0.6)`);
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                    // Ring
+                    ctx.save();
+                    ctx.scale(1, 0.3);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, bodySize * 1.1, 0, Math.PI * 2);
+                    ctx.strokeStyle = `hsla(${(bodyHue + 20) % 360}, ${sat * 0.5}%, 60%, ${0.5 + energy * 0.3})`;
+                    ctx.lineWidth = bodySize * 0.12;
+                    ctx.stroke();
+                    ctx.restore();
+
+                } else if (bodyType === 2) {
+                    // --- CRESCENT MOON: two overlapping circles ---
+                    ctx.beginPath();
+                    ctx.arc(0, 0, bodySize * 0.5, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${bodyHue}, ${sat * 0.4}%, 65%, ${0.5 + brightness * 0.3})`;
+                    ctx.fill();
+                    // Dark bite
+                    ctx.beginPath();
+                    ctx.arc(bodySize * 0.2, -bodySize * 0.1, bodySize * 0.42, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(0, 0%, 5%, 0.7)`;
+                    ctx.fill();
+
+                } else if (bodyType === 3) {
+                    // --- GEAR COG: toothed wheel, self-rotating ---
+                    const teeth = 6 + Math.floor(this.seededRandom(pSeed + 15) * 6);
+                    const innerR = bodySize * 0.5;
+                    const outerR = bodySize * 0.75;
+                    ctx.beginPath();
+                    for (let t = 0; t <= teeth; t++) {
+                        const a = (Math.PI * 2 * t) / teeth;
+                        const r1 = (t % 2 === 0) ? outerR : innerR;
+                        const x = Math.cos(a) * r1;
+                        const y = Math.sin(a) * r1;
+                        t === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.6}%, ${50 + energy * 20}%, ${0.5 + harmonic * 0.3})`;
                     ctx.lineWidth = thickness * 0.35;
                     ctx.stroke();
-
-                    ctx.restore();
-                }
-
-                // Planet core glow
-                const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, planetSize * 0.5);
-                coreGrad.addColorStop(0, `hsla(${planetHue}, ${sat * 0.5}%, 80%, 0.8)`);
-                coreGrad.addColorStop(1, `hsla(${planetHue}, ${sat * 0.6}%, 40%, 0)`);
-                ctx.beginPath();
-                ctx.arc(0, 0, planetSize * 0.5, 0, Math.PI * 2);
-                ctx.fillStyle = coreGrad;
-                ctx.fill();
-
-                // --- Epicycle moons ---
-                const moonCount = 1 + Math.floor(this.seededRandom(pSeed + 5) * 2);
-                for (let mn = 0; mn < moonCount; mn++) {
-                    const moonSeed = pSeed + 100 + mn * 11;
-                    const moonOrbit = planetSize * (1.5 + mn * 0.8);
-                    const moonAngle = rot * (2 + this.seededRandom(moonSeed) * 2) + this.seededRandom(moonSeed + 1) * Math.PI * 2;
-                    const mx = Math.cos(moonAngle) * moonOrbit;
-                    const my = Math.sin(moonAngle) * moonOrbit;
-                    const moonSize = planetSize * 0.2;
-
-                    // Moon orbit trail
+                    // Axle
                     ctx.beginPath();
-                    ctx.arc(0, 0, moonOrbit, 0, Math.PI * 2);
-                    ctx.strokeStyle = `hsla(${planetHue}, ${sat * 0.3}%, 45%, ${0.1 + harmonic * 0.1})`;
-                    ctx.lineWidth = 0.5;
-                    ctx.stroke();
-
-                    // Moon body
-                    ctx.beginPath();
-                    ctx.arc(mx, my, moonSize, 0, Math.PI * 2);
-                    ctx.fillStyle = `hsla(${planetHue}, ${sat * 0.4}%, 70%, ${0.6 + energy * 0.3})`;
+                    ctx.arc(0, 0, bodySize * 0.15, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${brassHue}, ${sat * 0.4}%, 60%, 0.7)`;
                     ctx.fill();
+                    // Spokes
+                    for (let sp = 0; sp < 3; sp++) {
+                        const spA = (Math.PI * 2 * sp) / 3;
+                        ctx.beginPath();
+                        ctx.moveTo(Math.cos(spA) * bodySize * 0.15, Math.sin(spA) * bodySize * 0.15);
+                        ctx.lineTo(Math.cos(spA) * innerR * 0.9, Math.sin(spA) * innerR * 0.9);
+                        ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.4}%, 50%, 0.4)`;
+                        ctx.lineWidth = thickness * 0.25;
+                        ctx.stroke();
+                    }
+
+                } else if (bodyType === 4) {
+                    // --- ASTEROID CLUSTER: scattered irregular rocks ---
+                    const rockCount = 4 + Math.floor(this.seededRandom(pSeed + 20) * 4);
+                    for (let rk = 0; rk < rockCount; rk++) {
+                        const rkSeed = pSeed + 200 + rk * 7;
+                        const rkDist = this.seededRandom(rkSeed) * bodySize * 0.7;
+                        const rkAngle = this.seededRandom(rkSeed + 1) * Math.PI * 2;
+                        const rkSize = bodySize * (0.08 + this.seededRandom(rkSeed + 2) * 0.15);
+                        const rkX = Math.cos(rkAngle) * rkDist;
+                        const rkY = Math.sin(rkAngle) * rkDist;
+                        // Irregular polygon
+                        const rkSides = 4 + Math.floor(this.seededRandom(rkSeed + 3) * 3);
+                        ctx.beginPath();
+                        for (let v = 0; v < rkSides; v++) {
+                            const va = (Math.PI * 2 * v) / rkSides;
+                            const vr = rkSize * (0.6 + this.seededRandom(rkSeed + 10 + v) * 0.5);
+                            const vx = rkX + Math.cos(va) * vr;
+                            const vy = rkY + Math.sin(va) * vr;
+                            v === 0 ? ctx.moveTo(vx, vy) : ctx.lineTo(vx, vy);
+                        }
+                        ctx.closePath();
+                        ctx.fillStyle = `hsla(${brassHue}, ${sat * 0.3}%, ${30 + brightness * 15}%, ${0.4 + energy * 0.2})`;
+                        ctx.fill();
+                        ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.4}%, ${45 + brightness * 15}%, ${0.3 + energy * 0.2})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+
+                } else {
+                    // --- COMET: bright head with trailing bezier tail ---
+                    // Head
+                    const headGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, bodySize * 0.4);
+                    headGrad.addColorStop(0, `hsla(${(bodyHue + 40) % 360}, ${sat * 0.7}%, 85%, 0.9)`);
+                    headGrad.addColorStop(1, `hsla(${(bodyHue + 40) % 360}, ${sat * 0.5}%, 50%, 0)`);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, bodySize * 0.4, 0, Math.PI * 2);
+                    ctx.fillStyle = headGrad;
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(0, 0, bodySize * 0.15, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(0, 0%, 95%, 0.9)`;
+                    ctx.fill();
+                    // Tail (two curves fanning outward)
+                    const tailLen = bodySize * (2 + energy * 1.5);
+                    for (let t = 0; t < 2; t++) {
+                        const spread = (t - 0.5) * bodySize * 0.4;
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.quadraticCurveTo(-tailLen * 0.4, spread * 2, -tailLen, spread * 3);
+                        ctx.strokeStyle = `hsla(${(bodyHue + 40) % 360}, ${sat * 0.6}%, 65%, ${0.2 + energy * 0.15})`;
+                        ctx.lineWidth = bodySize * (0.06 - t * 0.02);
+                        ctx.stroke();
+                    }
                 }
 
-                ctx.restore();
+                // Orbit glow trail (faded arc behind each body)
+                ctx.restore(); // back to mirror coords
+                ctx.beginPath();
+                const trailStart = pAngle - 0.4;
+                const trailEnd = pAngle;
+                ctx.arc(0, 0, pDist + slingshot, trailStart, trailEnd);
+                ctx.strokeStyle = `hsla(${bodyHue}, ${sat * 0.3}%, 50%, ${0.06 + brightness * 0.06})`;
+                ctx.lineWidth = bodySize * 0.4;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // Epicycle moons (only for non-cluster, non-comet types)
+                if (bodyType < 4) {
+                    const moonCount = Math.floor(this.seededRandom(pSeed + 5) * 2);
+                    for (let mn = 0; mn < moonCount; mn++) {
+                        const moonSeed = pSeed + 100 + mn * 11;
+                        const moonOrbit = bodySize * (1.3 + mn * 0.7);
+                        const moonAngle = rot * (2 + this.seededRandom(moonSeed) * 2) + this.seededRandom(moonSeed + 1) * Math.PI * 2;
+                        const moX = px + Math.cos(moonAngle) * moonOrbit;
+                        const moY = py + Math.sin(moonAngle) * moonOrbit;
+                        const moonSize = bodySize * 0.15;
+
+                        // Moon orbit ring
+                        ctx.beginPath();
+                        ctx.arc(px, py, moonOrbit, 0, Math.PI * 2);
+                        ctx.strokeStyle = `hsla(${bodyHue}, ${sat * 0.25}%, 42%, ${0.07 + harmonic * 0.07})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+
+                        // Moon dot
+                        ctx.beginPath();
+                        ctx.arc(moX, moY, moonSize, 0, Math.PI * 2);
+                        ctx.fillStyle = `hsla(${bodyHue}, ${sat * 0.4}%, 70%, ${0.5 + energy * 0.3})`;
+                        ctx.fill();
+                    }
+                }
             }
 
-            // --- Lagrange point shimmer (dust at gravitational balance points) ---
-            const lagrangeAngle = segAngle * 0.5;
-            const lagrangeDist = radius * 0.45 * orbitFactor;
-            const lgx = Math.cos(lagrangeAngle) * lagrangeDist;
-            const lgy = Math.sin(lagrangeAngle) * lagrangeDist;
-            const shimmerSize = radius * 0.06 * (0.5 + harmonic * 0.5);
-            const shimmerAlpha = 0.08 + brightness * 0.12;
+            // --- Lagrange shimmer dust cloud ---
+            const lgAngle = segAngle * 0.5;
+            const lgDist = radius * (0.4 + this.seededRandom(seed + m * 3 + 700) * 0.15) * orbitFactor;
+            const lgx = Math.cos(lgAngle) * lgDist;
+            const lgy = Math.sin(lgAngle) * lgDist;
+            const shimmerSize = radius * 0.05 * (0.5 + harmonic * 0.5);
+            const shimmerAlpha = 0.06 + brightness * 0.1;
 
-            const shimmerGrad = ctx.createRadialGradient(lgx, lgy, 0, lgx, lgy, shimmerSize);
-            shimmerGrad.addColorStop(0, `hsla(${(brassHue + 60) % 360}, ${sat * 0.6}%, 70%, ${shimmerAlpha})`);
-            shimmerGrad.addColorStop(0.6, `hsla(${(brassHue + 60) % 360}, ${sat * 0.4}%, 50%, ${shimmerAlpha * 0.3})`);
-            shimmerGrad.addColorStop(1, `hsla(${(brassHue + 60) % 360}, ${sat * 0.2}%, 30%, 0)`);
-            ctx.beginPath();
-            ctx.arc(lgx, lgy, shimmerSize, 0, Math.PI * 2);
-            ctx.fillStyle = shimmerGrad;
-            ctx.fill();
+            // Scatter particles instead of solid glow
+            const dustN = 6 + Math.floor(brightness * 4);
+            for (let d = 0; d < dustN; d++) {
+                const dS = seed + 800 + m * 20 + d * 7;
+                const dx = lgx + (this.seededRandom(dS) - 0.5) * shimmerSize * 2;
+                const dy = lgy + (this.seededRandom(dS + 1) - 0.5) * shimmerSize * 2;
+                const dSize = 0.5 + this.seededRandom(dS + 2) * 1.5;
+                const twinkle = 0.5 + Math.sin(rot * 3 + this.seededRandom(dS + 3) * 6) * 0.5;
+                ctx.beginPath();
+                ctx.arc(dx, dy, dSize, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${(brassHue + 55) % 360}, ${sat * 0.5}%, 70%, ${shimmerAlpha * twinkle})`;
+                ctx.fill();
+            }
 
             ctx.restore();
         }
 
-        // === THE TICKING HAND — sweeps at rotation speed, triggers sparks ===
-        const handAngle = rot * 0.8;
+        // === THE TICKING HAND — gear-shift motion (snaps to discrete positions) ===
+        // Quantize to tick positions for mechanical feel
+        const ticksPerRev = mirrors * 4;
+        const continuousAngle = rot * 0.8;
+        const tickAngle = Math.floor(continuousAngle * ticksPerRev / (Math.PI * 2)) * (Math.PI * 2) / ticksPerRev;
         const handLen = radius * 0.65 * orbitFactor;
+
         ctx.save();
-        ctx.rotate(handAngle);
+        ctx.rotate(tickAngle);
 
-        // Needle
+        // Needle with taper
         ctx.beginPath();
-        ctx.moveTo(0, 0);
+        ctx.moveTo(0, thickness * 0.3);
         ctx.lineTo(handLen, 0);
-        ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.7}%, ${60 + energy * 25}%, ${0.5 + energy * 0.4})`;
-        ctx.lineWidth = thickness * 0.6;
-        ctx.lineCap = 'round';
-        ctx.stroke();
+        ctx.lineTo(0, -thickness * 0.3);
+        ctx.closePath();
+        ctx.fillStyle = `hsla(${brassHue}, ${sat * 0.6}%, ${55 + energy * 25}%, ${0.5 + energy * 0.4})`;
+        ctx.fill();
 
-        // Tip glow on beats
+        // Tip spark on beats
         if (energy > 0.4) {
-            const tipGrad = ctx.createRadialGradient(handLen, 0, 0, handLen, 0, radius * 0.05);
-            tipGrad.addColorStop(0, `hsla(${brassHue}, ${sat}%, 90%, ${energy * 0.8})`);
+            const tipGrad = ctx.createRadialGradient(handLen, 0, 0, handLen, 0, radius * 0.06);
+            tipGrad.addColorStop(0, `hsla(${brassHue}, ${sat}%, 92%, ${energy * 0.9})`);
             tipGrad.addColorStop(1, `hsla(${brassHue}, ${sat}%, 60%, 0)`);
             ctx.beginPath();
-            ctx.arc(handLen, 0, radius * 0.05, 0, Math.PI * 2);
+            ctx.arc(handLen, 0, radius * 0.06, 0, Math.PI * 2);
             ctx.fillStyle = tipGrad;
             ctx.fill();
         }
-
-        // Pivot hub
         ctx.restore();
-        const hubSize = radius * 0.03;
+
+        // Pivot hub with inner gear
+        const hubSize = radius * 0.035;
+        ctx.save();
+        ctx.rotate(-rot * 0.5); // counter-rotate hub gear
+        const hubTeeth = 10;
         ctx.beginPath();
-        ctx.arc(0, 0, hubSize, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(${brassHue}, ${sat * 0.5}%, 70%, 0.9)`;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(0, 0, hubSize * 1.8, 0, Math.PI * 2);
-        ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.4}%, 50%, 0.4)`;
+        for (let t = 0; t <= hubTeeth * 2; t++) {
+            const a = (Math.PI * 2 * t) / (hubTeeth * 2);
+            const r = (t % 2 === 0) ? hubSize * 1.3 : hubSize;
+            const x = Math.cos(a) * r;
+            const y = Math.sin(a) * r;
+            t === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.5}%, 55%, 0.5)`;
         ctx.lineWidth = thickness * 0.3;
         ctx.stroke();
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.arc(0, 0, hubSize * 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${brassHue}, ${sat * 0.5}%, 75%, 0.9)`;
+        ctx.fill();
 
         // === Logarithmic spiral mirror overlay ===
         const spiralArms = mirrors;
         for (let s = 0; s < spiralArms; s++) {
             const armOffset = (Math.PI * 2 * s) / spiralArms;
-            const spiralSteps = 40;
             ctx.beginPath();
-            for (let st = 0; st < spiralSteps; st++) {
-                const t = st / spiralSteps;
+            for (let st = 0; st < 40; st++) {
+                const t = st / 40;
                 const theta = t * Math.PI * 1.5 + armOffset + rot * 0.1;
                 const r = radius * 0.05 * Math.exp(t * 2.2) * orbitFactor;
                 if (r > radius * 0.8 * orbitFactor) break;
@@ -5161,28 +5342,48 @@ class KaleidoscopeStudio {
                 const y = Math.sin(theta) * r;
                 st === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
             }
-            ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.3}%, 45%, ${0.08 + brightness * 0.07})`;
-            ctx.lineWidth = thickness * 0.25;
+            ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.3}%, 45%, ${0.06 + brightness * 0.06})`;
+            ctx.lineWidth = thickness * 0.2;
             ctx.stroke();
         }
 
-        // === Outer gear ring ===
+        // === Outer gear ring (rotates slowly) ===
+        ctx.save();
+        ctx.rotate(rot * 0.15);
         const gearRadius = radius * 0.7 * orbitFactor;
         const toothCount = mirrors * 4;
         const toothDepth = radius * 0.015;
         ctx.beginPath();
         for (let t = 0; t <= toothCount; t++) {
-            const angle = (Math.PI * 2 * t) / toothCount + rot * 0.2;
+            const angle = (Math.PI * 2 * t) / toothCount;
             const isOuter = t % 2 === 0;
             const r = gearRadius + (isOuter ? toothDepth : -toothDepth);
-            const x = Math.cos(angle) * r;
-            const y = Math.sin(angle) * r;
-            t === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
         }
         ctx.closePath();
-        ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.5}%, ${45 + harmonic * 15}%, ${0.2 + harmonic * 0.15})`;
-        ctx.lineWidth = thickness * 0.4;
+        ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.5}%, ${42 + harmonic * 15}%, ${0.18 + harmonic * 0.15})`;
+        ctx.lineWidth = thickness * 0.35;
         ctx.stroke();
+        ctx.restore();
+
+        // === Inner counter-rotating gear ring ===
+        ctx.save();
+        ctx.rotate(-rot * 0.25);
+        const innerGearR = radius * 0.35 * orbitFactor;
+        const innerTeeth = Math.max(8, mirrors * 2);
+        const innerDepth = radius * 0.01;
+        ctx.beginPath();
+        for (let t = 0; t <= innerTeeth; t++) {
+            const angle = (Math.PI * 2 * t) / innerTeeth;
+            const isOuter = t % 2 === 0;
+            const r = innerGearR + (isOuter ? innerDepth : -innerDepth);
+            ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = `hsla(${brassHue}, ${sat * 0.4}%, ${40 + harmonic * 10}%, ${0.12 + harmonic * 0.1})`;
+        ctx.lineWidth = thickness * 0.25;
+        ctx.stroke();
+        ctx.restore();
 
         ctx.restore();
     }
@@ -5301,8 +5502,9 @@ class KaleidoscopeStudio {
     }
 
     /**
-     * Quark style — Quantum chromodynamics: quark triplet, probability clouds, electron shells,
-     * wave function collapse, and entangled particles across mirror segments
+     * Quark style — Deep quantum chromodynamics: quark triplet, probability clouds, electron shells,
+     * cloud chamber particle tracks, tunneling ghosts, superposition echoes, spooky entanglement,
+     * and wave function collapse. Heavy atmospheric depth.
      */
     renderQuarkStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
@@ -5315,36 +5517,60 @@ class KaleidoscopeStudio {
         const orbitFactor = config.orbitRadius / 200;
         const sat = config.saturation;
 
-        // Cherenkov blue base, with color charge cycling
         const cherenkovHue = 210;
-        // Strong force color charges: R, G, B cycling
         const colorChargePhase = rot * 0.5;
-        const qHues = [0, 120, 240]; // Red, Green, Blue
+        const qHues = [0, 120, 240]; // R, G, B
 
         ctx.save();
         ctx.translate(centerX, centerY);
 
-        // === QUARK TRIPLET at center bound by gluon strings ===
+        // === DEEP VOID: dark gravitational well at center ===
+        const voidR = radius * 0.25 * orbitFactor;
+        const voidGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, voidR);
+        voidGrad.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.2}%, 2%, ${0.4 + harmonic * 0.2})`);
+        voidGrad.addColorStop(0.5, `hsla(${cherenkovHue}, ${sat * 0.3}%, 5%, ${0.15 + harmonic * 0.1})`);
+        voidGrad.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.2}%, 8%, 0)`);
+        ctx.beginPath();
+        ctx.arc(0, 0, voidR, 0, Math.PI * 2);
+        ctx.fillStyle = voidGrad;
+        ctx.fill();
+
+        // === QUARK TRIPLET bound by gluon strings ===
         const quarkOrbit = radius * 0.08 * orbitFactor * (0.7 + energy * 0.5);
+        const quarkPositions = [];
         for (let q = 0; q < 3; q++) {
             const phase = (Math.PI * 2 * q) / 3;
-            // Vibrating positions from mid-range (harmonic)
-            const vibrate = Math.sin(rot * 3 + phase * 2) * quarkOrbit * 0.2 * harmonic;
-            const qx = Math.cos(phase + rot * 0.4) * (quarkOrbit + vibrate);
-            const qy = Math.sin(phase + rot * 0.4) * (quarkOrbit + vibrate);
+            const vibrate = Math.sin(rot * 3 + phase * 2) * quarkOrbit * 0.25 * harmonic;
+            const jitter = Math.sin(rot * 11 + q * 5) * quarkOrbit * 0.05; // quantum jitter
+            const qx = Math.cos(phase + rot * 0.4) * (quarkOrbit + vibrate + jitter);
+            const qy = Math.sin(phase + rot * 0.4) * (quarkOrbit + vibrate + jitter);
+            quarkPositions.push({ x: qx, y: qy });
             const qSize = radius * 0.025 * orbitFactor * (0.8 + energy * 0.3);
-
-            // Color charge: cycling through R/G/B
             const chargeIdx = (q + Math.floor(colorChargePhase)) % 3;
             const qHue = qHues[chargeIdx];
 
-            // Quark glow
-            const qGlow = ctx.createRadialGradient(qx, qy, 0, qx, qy, qSize * 3);
-            qGlow.addColorStop(0, `hsla(${qHue}, ${sat * 0.9}%, 70%, ${0.7 + energy * 0.3})`);
-            qGlow.addColorStop(0.5, `hsla(${qHue}, ${sat * 0.7}%, 50%, 0.2)`);
-            qGlow.addColorStop(1, `hsla(${qHue}, ${sat * 0.5}%, 30%, 0)`);
+            // Superposition ghost echoes — previous positions shown faintly
+            for (let echo = 3; echo >= 1; echo--) {
+                const echoPhase = phase;
+                const echoRot = rot * 0.4 - echo * 0.15;
+                const echoVib = Math.sin((rot - echo * 0.3) * 3 + echoPhase * 2) * quarkOrbit * 0.25 * harmonic;
+                const ex = Math.cos(echoPhase + echoRot) * (quarkOrbit + echoVib);
+                const ey = Math.sin(echoPhase + echoRot) * (quarkOrbit + echoVib);
+                const echoAlpha = 0.06 / echo;
+                ctx.beginPath();
+                ctx.arc(ex, ey, qSize * (1.5 + echo * 0.5), 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${qHue}, ${sat * 0.5}%, 50%, ${echoAlpha})`;
+                ctx.fill();
+            }
+
+            // Quark glow — deeper, wider
+            const qGlow = ctx.createRadialGradient(qx, qy, 0, qx, qy, qSize * 4);
+            qGlow.addColorStop(0, `hsla(${qHue}, ${sat * 0.9}%, 75%, ${0.7 + energy * 0.3})`);
+            qGlow.addColorStop(0.3, `hsla(${qHue}, ${sat * 0.7}%, 50%, ${0.25 + energy * 0.15})`);
+            qGlow.addColorStop(0.7, `hsla(${qHue}, ${sat * 0.4}%, 30%, 0.05)`);
+            qGlow.addColorStop(1, `hsla(${qHue}, ${sat * 0.3}%, 15%, 0)`);
             ctx.beginPath();
-            ctx.arc(qx, qy, qSize * 3, 0, Math.PI * 2);
+            ctx.arc(qx, qy, qSize * 4, 0, Math.PI * 2);
             ctx.fillStyle = qGlow;
             ctx.fill();
 
@@ -5353,49 +5579,53 @@ class KaleidoscopeStudio {
             ctx.arc(qx, qy, qSize, 0, Math.PI * 2);
             ctx.fillStyle = `hsla(${qHue}, ${sat * 0.6}%, 90%, 0.95)`;
             ctx.fill();
+        }
 
-            // Gluon strings to next quark (strong force)
-            const nextQ = (q + 1) % 3;
-            const nextPhase = (Math.PI * 2 * nextQ) / 3;
-            const nextVib = Math.sin(rot * 3 + nextPhase * 2) * quarkOrbit * 0.2 * harmonic;
-            const nx = Math.cos(nextPhase + rot * 0.4) * (quarkOrbit + nextVib);
-            const ny = Math.sin(nextPhase + rot * 0.4) * (quarkOrbit + nextVib);
+        // Gluon strings — double helix with color blending
+        for (let q = 0; q < 3; q++) {
+            const p0 = quarkPositions[q];
+            const p1 = quarkPositions[(q + 1) % 3];
+            const chargeIdx = (q + Math.floor(colorChargePhase)) % 3;
+            const gluonHue = (qHues[chargeIdx] + qHues[(chargeIdx + 1) % 3]) / 2;
+            const dx = p1.x - p0.x;
+            const dy = p1.y - p0.y;
+            const len = Math.sqrt(dx * dx + dy * dy) || 1;
 
-            // Wavy gluon string
-            ctx.beginPath();
-            ctx.moveTo(qx, qy);
-            const gluonSegs = 12;
-            for (let g = 1; g <= gluonSegs; g++) {
-                const t = g / gluonSegs;
-                const mx = qx + (nx - qx) * t;
-                const my = qy + (ny - qy) * t;
-                const perpX = -(ny - qy);
-                const perpY = nx - qx;
-                const perpLen = Math.sqrt(perpX * perpX + perpY * perpY) || 1;
-                const wave = Math.sin(t * Math.PI * 4 + rot * 3) * quarkOrbit * 0.08 * (1 + energy * 0.5);
-                const gx = mx + (perpX / perpLen) * wave;
-                const gy = my + (perpY / perpLen) * wave;
-                ctx.lineTo(gx, gy);
+            // Two helical strands
+            for (let strand = 0; strand < 2; strand++) {
+                ctx.beginPath();
+                ctx.moveTo(p0.x, p0.y);
+                const dir = strand === 0 ? 1 : -1;
+                const segs = 16;
+                for (let g = 1; g <= segs; g++) {
+                    const t = g / segs;
+                    const mx = p0.x + dx * t;
+                    const my = p0.y + dy * t;
+                    const perpX = -dy / len;
+                    const perpY = dx / len;
+                    const wave = Math.sin(t * Math.PI * 5 + rot * 3 + strand * Math.PI) * quarkOrbit * 0.1 * dir * (1 + energy * 0.5);
+                    ctx.lineTo(mx + perpX * wave, my + perpY * wave);
+                }
+                ctx.strokeStyle = `hsla(${gluonHue}, ${sat * 0.7}%, 55%, ${0.15 + energy * 0.25})`;
+                ctx.lineWidth = thickness * 0.25;
+                ctx.stroke();
             }
-            const gluonHue = (qHue + qHues[(chargeIdx + 1) % 3]) / 2;
-            ctx.strokeStyle = `hsla(${gluonHue}, ${sat * 0.8}%, 60%, ${0.3 + energy * 0.4})`;
-            ctx.lineWidth = thickness * 0.4;
-            ctx.stroke();
         }
 
         // White-light core when balanced
         const coreBalance = Math.abs(Math.sin(colorChargePhase * Math.PI / 1.5));
         if (coreBalance > 0.8) {
-            const whiteGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, quarkOrbit * 0.5);
-            whiteGrad.addColorStop(0, `hsla(0, 0%, 100%, ${(coreBalance - 0.8) * 2})`);
+            const whiteGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, quarkOrbit * 0.6);
+            whiteGrad.addColorStop(0, `hsla(0, 0%, 100%, ${(coreBalance - 0.8) * 2.5})`);
+            whiteGrad.addColorStop(0.5, `hsla(${cherenkovHue}, 30%, 80%, ${(coreBalance - 0.8) * 0.5})`);
             whiteGrad.addColorStop(1, `hsla(0, 0%, 100%, 0)`);
             ctx.beginPath();
-            ctx.arc(0, 0, quarkOrbit * 0.5, 0, Math.PI * 2);
+            ctx.arc(0, 0, quarkOrbit * 0.6, 0, Math.PI * 2);
             ctx.fillStyle = whiteGrad;
             ctx.fill();
         }
 
-        // === PROBABILITY DENSITY CLOUDS & ELECTRON SHELLS per mirror segment ===
+        // === PER-SEGMENT: clouds, shells, tracks, tunneling, entanglement ===
         for (let m = 0; m < mirrors; m++) {
             const mirrorAngle = (Math.PI * 2 * m) / mirrors;
 
@@ -5403,122 +5633,278 @@ class KaleidoscopeStudio {
             ctx.rotate(mirrorAngle);
 
             const segAngle = Math.PI / mirrors;
+            // Slow segment drift for eeriness
+            const segDrift = Math.sin(rot * 0.3 + m * 1.7) * 0.02;
+            ctx.rotate(segDrift);
 
-            // --- Probability clouds: fuzzy particle clusters ---
-            const cloudCount = 3 + Math.floor(brightness * 2);
+            // --- Probability clouds: Gaussian particle clusters ---
+            const cloudCount = 2 + Math.floor(brightness * 2);
             for (let c = 0; c < cloudCount; c++) {
                 const cSeed = seed + m * 40 + c * 17;
                 const cAngle = segAngle * (0.15 + this.seededRandom(cSeed) * 0.7);
-                const cDist = radius * (0.15 + c * 0.12 + harmonic * 0.06) * orbitFactor;
-                const cx = Math.cos(cAngle) * cDist;
-                const cy = Math.sin(cAngle) * cDist;
+                const cDist = radius * (0.15 + c * 0.13 + harmonic * 0.06) * orbitFactor;
+                const cloudCX = Math.cos(cAngle) * cDist;
+                const cloudCY = Math.sin(cAngle) * cDist;
 
-                // Cloud is sharper when energy is high (wave function collapse)
-                const cloudSpread = radius * 0.06 * (1.5 - energy * 0.8) * orbitFactor;
-                const particlesInCloud = 8 + Math.floor(energy * 6);
-                const cloudHue = (cherenkovHue + c * 30 + m * 10) % 360;
+                // Cloud sharpness: collapse on energy (quiet=blurry, loud=sharp)
+                const cloudSpread = radius * 0.06 * (1.6 - energy * 0.9) * orbitFactor;
+                const particlesInCloud = 10 + Math.floor(energy * 8);
+                const cloudHue = (cherenkovHue + c * 25 + this.seededRandom(cSeed + 5) * 20) % 360;
+
+                // Cloud rotation
+                ctx.save();
+                ctx.translate(cloudCX, cloudCY);
+                ctx.rotate(rot * (0.2 + this.seededRandom(cSeed + 6) * 0.3) * (this.seededRandom(cSeed + 7) > 0.5 ? 1 : -1));
+
+                // Soft ambient glow behind cloud
+                const ambGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, cloudSpread * 2);
+                ambGlow.addColorStop(0, `hsla(${cloudHue}, ${sat * 0.4}%, 40%, ${0.04 + harmonic * 0.04})`);
+                ambGlow.addColorStop(1, `hsla(${cloudHue}, ${sat * 0.3}%, 20%, 0)`);
+                ctx.beginPath();
+                ctx.arc(0, 0, cloudSpread * 2, 0, Math.PI * 2);
+                ctx.fillStyle = ambGlow;
+                ctx.fill();
 
                 for (let p = 0; p < particlesInCloud; p++) {
                     const pSeed = cSeed + 100 + p * 7;
-                    // Gaussian-like distribution using Box-Muller approximation
                     const r1 = this.seededRandom(pSeed);
                     const r2 = this.seededRandom(pSeed + 1);
                     const gaussR = Math.sqrt(-2 * Math.log(Math.max(0.001, r1))) * cloudSpread;
                     const gaussAngle = r2 * Math.PI * 2;
-                    const px = cx + Math.cos(gaussAngle) * gaussR;
-                    const py = cy + Math.sin(gaussAngle) * gaussR;
+                    const ppx = Math.cos(gaussAngle) * gaussR;
+                    const ppy = Math.sin(gaussAngle) * gaussR;
 
-                    // Probability density ∝ distance from center
-                    const distFromCenter = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+                    const distFromCenter = Math.sqrt(ppx * ppx + ppy * ppy);
                     const prob = Math.exp(-distFromCenter * distFromCenter / (cloudSpread * cloudSpread * 2));
-                    const pSize = 1 + prob * 2 + energy * 1.5;
-                    const pAlpha = prob * (0.3 + energy * 0.5);
+                    const pSize = 0.8 + prob * 2.5 + energy * 1.5;
+                    const pAlpha = prob * (0.25 + energy * 0.55);
 
                     ctx.beginPath();
-                    ctx.arc(px, py, pSize, 0, Math.PI * 2);
-                    ctx.fillStyle = `hsla(${cloudHue}, ${sat * 0.7}%, ${55 + prob * 25}%, ${pAlpha})`;
+                    ctx.arc(ppx, ppy, pSize, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${cloudHue}, ${sat * 0.7}%, ${50 + prob * 30}%, ${pAlpha})`;
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
+
+            // --- Cloud chamber particle tracks: curved trails like real detectors ---
+            const trackCount = 2 + Math.floor(this.seededRandom(seed + m * 13 + 300) * 3);
+            for (let tr = 0; tr < trackCount; tr++) {
+                const trSeed = seed + 300 + m * 30 + tr * 23;
+                const trAngle = segAngle * (0.1 + this.seededRandom(trSeed) * 0.8);
+                const trDist = radius * (0.1 + this.seededRandom(trSeed + 1) * 0.4) * orbitFactor;
+                const trLen = radius * (0.06 + this.seededRandom(trSeed + 2) * 0.12) * orbitFactor;
+                const trCurve = (this.seededRandom(trSeed + 3) - 0.5) * 0.8; // magnetic deflection
+                const trHue = (cherenkovHue + this.seededRandom(trSeed + 4) * 40 - 20) % 360;
+                // Track fades in over time and out
+                const trLife = Math.sin(rot * (1 + this.seededRandom(trSeed + 5)) + this.seededRandom(trSeed + 6) * Math.PI * 2);
+                if (trLife < 0) continue;
+
+                const startX = Math.cos(trAngle) * trDist;
+                const startY = Math.sin(trAngle) * trDist;
+                const endX = Math.cos(trAngle + trCurve) * (trDist + trLen);
+                const endY = Math.sin(trAngle + trCurve) * (trDist + trLen);
+                const cpX = (startX + endX) / 2 + (this.seededRandom(trSeed + 7) - 0.5) * trLen * 0.6;
+                const cpY = (startY + endY) / 2 + (this.seededRandom(trSeed + 8) - 0.5) * trLen * 0.6;
+
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.quadraticCurveTo(cpX, cpY, endX, endY);
+                ctx.strokeStyle = `hsla(${trHue}, ${sat * 0.5}%, 55%, ${trLife * (0.1 + brightness * 0.15)})`;
+                ctx.lineWidth = 0.6 + trLife * 0.8;
+                ctx.stroke();
+
+                // Tiny ionization dots along track
+                const dotCount = 3 + Math.floor(this.seededRandom(trSeed + 9) * 4);
+                for (let d = 0; d < dotCount; d++) {
+                    const t = (d + 0.5) / dotCount;
+                    const ix = startX * (1 - t) * (1 - t) + cpX * 2 * t * (1 - t) + endX * t * t;
+                    const iy = startY * (1 - t) * (1 - t) + cpY * 2 * t * (1 - t) + endY * t * t;
+                    ctx.beginPath();
+                    ctx.arc(ix, iy, 0.8, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${trHue}, ${sat * 0.6}%, 65%, ${trLife * 0.3})`;
                     ctx.fill();
                 }
             }
 
-            // --- Electron shells: orbital rings that "quantum leap" ---
+            // --- Electron shells with quantum leaps ---
             const shellCount = 2 + Math.floor(this.seededRandom(seed + m * 3 + 500) * 2);
             for (let sh = 0; sh < shellCount; sh++) {
                 const shSeed = seed + 200 + m * 30 + sh * 19;
-                // Shell radius snaps between discrete levels (quantum leaps)
-                const baseShellR = radius * (0.25 + sh * 0.15) * orbitFactor;
+                const baseShellR = radius * (0.22 + sh * 0.14) * orbitFactor;
                 const leapTrigger = Math.sin(rot * 1.5 + this.seededRandom(shSeed) * Math.PI * 2);
+                // Snap between discrete energy levels
                 const shellR = leapTrigger > 0.7
-                    ? baseShellR * 1.3  // Excited state
-                    : baseShellR;       // Ground state
-                const shellHue = (cherenkovHue + sh * 40) % 360;
+                    ? baseShellR * 1.35
+                    : leapTrigger < -0.7
+                        ? baseShellR * 0.75
+                        : baseShellR;
+                const shellHue = (cherenkovHue + sh * 35) % 360;
+                const shellAlpha = 0.1 + harmonic * 0.18;
 
-                // Shell arc within mirror segment
+                // Shell arc — with wavy uncertainty
                 ctx.beginPath();
-                ctx.arc(0, 0, shellR, 0, segAngle);
-                ctx.strokeStyle = `hsla(${shellHue}, ${sat * 0.6}%, ${50 + brightness * 25}%, ${0.15 + harmonic * 0.2})`;
-                ctx.lineWidth = thickness * 0.3;
+                const arcSteps = 30;
+                for (let a = 0; a <= arcSteps; a++) {
+                    const angle = (segAngle * a) / arcSteps;
+                    const wobble = Math.sin(angle * 8 + rot * 2 + sh * 2) * shellR * 0.02 * (1 - energy * 0.5);
+                    const r = shellR + wobble;
+                    const x = Math.cos(angle) * r;
+                    const y = Math.sin(angle) * r;
+                    a === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                }
+                ctx.strokeStyle = `hsla(${shellHue}, ${sat * 0.5}%, ${45 + brightness * 20}%, ${shellAlpha})`;
+                ctx.lineWidth = thickness * 0.25;
                 ctx.stroke();
 
-                // Electron on shell
-                const eAngle = segAngle * (0.3 + 0.4 * Math.sin(rot * (2 + sh * 0.5)));
+                // Electron with Cherenkov trail
+                const eAngle = segAngle * (0.2 + 0.6 * ((Math.sin(rot * (1.8 + sh * 0.4)) + 1) / 2));
                 const ex = Math.cos(eAngle) * shellR;
                 const ey = Math.sin(eAngle) * shellR;
 
+                // Trail (ghostly wake behind electron)
+                for (let trail = 4; trail >= 1; trail--) {
+                    const tAngle = eAngle - trail * 0.08;
+                    if (tAngle < 0) continue;
+                    const tx = Math.cos(tAngle) * shellR;
+                    const ty = Math.sin(tAngle) * shellR;
+                    ctx.beginPath();
+                    ctx.arc(tx, ty, 1.5 + (4 - trail) * 0.3, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${cherenkovHue}, ${sat * 0.7}%, 60%, ${0.03 * (5 - trail)})`;
+                    ctx.fill();
+                }
+
+                // Electron glow
+                const eGlow = ctx.createRadialGradient(ex, ey, 0, ex, ey, 6 + energy * 4);
+                eGlow.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.9}%, 80%, ${0.6 + energy * 0.4})`);
+                eGlow.addColorStop(0.5, `hsla(${cherenkovHue}, ${sat * 0.7}%, 55%, ${0.15 + energy * 0.1})`);
+                eGlow.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.5}%, 30%, 0)`);
                 ctx.beginPath();
-                ctx.arc(ex, ey, 2 + energy * 2, 0, Math.PI * 2);
-                ctx.fillStyle = `hsla(${shellHue}, ${sat * 0.8}%, 75%, ${0.5 + energy * 0.4})`;
+                ctx.arc(ex, ey, 6 + energy * 4, 0, Math.PI * 2);
+                ctx.fillStyle = eGlow;
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(ex, ey, 1.5 + energy * 1, 0, Math.PI * 2);
+                ctx.fillStyle = `hsla(${cherenkovHue}, ${sat * 0.6}%, 90%, 0.9)`;
                 ctx.fill();
             }
 
-            // --- Entangled particle flashes (mirrored across segments) ---
-            if (energy > 0.5) {
+            // --- Tunneling ghosts: particles that phase through barriers ---
+            const tunnelSeed = seed + 600 + m * 17;
+            const tunnelPhase = Math.sin(rot * 0.7 + this.seededRandom(tunnelSeed) * Math.PI * 2);
+            if (tunnelPhase > 0.3) {
+                const tAlpha = (tunnelPhase - 0.3) * 0.3;
+                const tAngle = segAngle * (0.3 + this.seededRandom(tunnelSeed + 1) * 0.4);
+                const tDist = radius * 0.4 * orbitFactor;
+                const tx = Math.cos(tAngle) * tDist;
+                const ty = Math.sin(tAngle) * tDist;
+                const tSize = radius * 0.02 * orbitFactor;
+
+                // Ghost particle — partially transparent, smeared
+                for (let g = 0; g < 3; g++) {
+                    const gOffset = (g - 1) * tSize * 0.8;
+                    ctx.beginPath();
+                    ctx.arc(tx + gOffset, ty, tSize * (1.2 - g * 0.15), 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${cherenkovHue}, ${sat * 0.5}%, 65%, ${tAlpha * (0.4 - g * 0.1)})`;
+                    ctx.fill();
+                }
+            }
+
+            // --- Spooky entanglement lines (ghostly connections to opposite segment) ---
+            if (energy > 0.3) {
                 const entSeed = seed + 900 + m * 11;
                 const eAngle = segAngle * (0.2 + this.seededRandom(entSeed) * 0.6);
-                const eDist = radius * 0.35 * orbitFactor;
+                const eDist = radius * (0.2 + this.seededRandom(entSeed + 1) * 0.2) * orbitFactor;
                 const epx = Math.cos(eAngle) * eDist;
                 const epy = Math.sin(eAngle) * eDist;
-                const flashSize = radius * 0.02 * (energy - 0.5) * 2;
-                const flashAlpha = (energy - 0.5) * 1.5;
 
-                const flashGrad = ctx.createRadialGradient(epx, epy, 0, epx, epy, flashSize * 3);
-                flashGrad.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.9}%, 85%, ${flashAlpha})`);
-                flashGrad.addColorStop(0.5, `hsla(${cherenkovHue}, ${sat * 0.7}%, 60%, ${flashAlpha * 0.3})`);
-                flashGrad.addColorStop(1, `hsla(${cherenkovHue}, ${sat}%, 40%, 0)`);
-                ctx.beginPath();
-                ctx.arc(epx, epy, flashSize * 3, 0, Math.PI * 2);
-                ctx.fillStyle = flashGrad;
-                ctx.fill();
+                // Ghostly line reaching toward center (connecting to entangled twin)
+                const entAlpha = (energy - 0.3) * 0.4;
+                const flickerPhase = Math.sin(rot * 7 + m * 3);
+                if (flickerPhase > 0) {
+                    ctx.beginPath();
+                    ctx.moveTo(epx, epy);
+                    // Wobbly connection line
+                    const segs = 8;
+                    for (let s = 1; s <= segs; s++) {
+                        const t = s / segs;
+                        const lx = epx * (1 - t);
+                        const ly = epy * (1 - t);
+                        const wobble = Math.sin(t * Math.PI * 3 + rot * 5) * radius * 0.01;
+                        ctx.lineTo(lx + wobble, ly + wobble);
+                    }
+                    ctx.strokeStyle = `hsla(${cherenkovHue}, ${sat * 0.6}%, 60%, ${entAlpha * flickerPhase})`;
+                    ctx.lineWidth = 0.8;
+                    ctx.setLineDash([3, 5]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // Particle flash at endpoint
+                    const flashGrad = ctx.createRadialGradient(epx, epy, 0, epx, epy, radius * 0.025);
+                    flashGrad.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.9}%, 85%, ${entAlpha * flickerPhase * 0.8})`);
+                    flashGrad.addColorStop(1, `hsla(${cherenkovHue}, ${sat}%, 40%, 0)`);
+                    ctx.beginPath();
+                    ctx.arc(epx, epy, radius * 0.025, 0, Math.PI * 2);
+                    ctx.fillStyle = flashGrad;
+                    ctx.fill();
+                }
             }
+
+            // --- Wave function sinusoidal ripple ---
+            const waveAlpha = 0.04 + harmonic * 0.06;
+            ctx.beginPath();
+            const waveR = radius * 0.35 * orbitFactor;
+            const waveSegs = 40;
+            for (let w = 0; w <= waveSegs; w++) {
+                const angle = (segAngle * w) / waveSegs;
+                const waveAmp = radius * 0.015 * (1 + harmonic * 0.5) * Math.sin(rot * 1.2 + angle * 6);
+                const r = waveR + waveAmp;
+                const x = Math.cos(angle) * r;
+                const y = Math.sin(angle) * r;
+                w === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = `hsla(${(cherenkovHue + 30) % 360}, ${sat * 0.4}%, 50%, ${waveAlpha})`;
+            ctx.lineWidth = thickness * 0.2;
+            ctx.stroke();
 
             ctx.restore();
         }
 
-        // === Interference pattern ring at center (double-slit) ===
-        const fringeRings = 6;
+        // === Central interference fringes (double-slit) ===
+        const fringeRings = 8;
         for (let f = 0; f < fringeRings; f++) {
-            const fR = radius * (0.1 + f * 0.04) * orbitFactor;
-            // In-phase = bright, out-of-phase = vanish
+            const fR = radius * (0.08 + f * 0.03) * orbitFactor;
             const phase = Math.cos(rot * 2 + f * Math.PI);
-            const fAlpha = Math.max(0, phase) * (0.15 + energy * 0.25);
-
+            const fAlpha = Math.max(0, phase) * (0.1 + energy * 0.2);
             if (fAlpha < 0.01) continue;
 
             ctx.beginPath();
             ctx.arc(0, 0, fR, 0, Math.PI * 2);
-            ctx.strokeStyle = `hsla(${cherenkovHue}, ${sat * 0.7}%, ${60 + brightness * 20}%, ${fAlpha})`;
-            ctx.lineWidth = thickness * (0.3 + energy * 0.4);
+            ctx.strokeStyle = `hsla(${cherenkovHue}, ${sat * 0.6}%, ${55 + brightness * 20}%, ${fAlpha})`;
+            ctx.lineWidth = thickness * (0.2 + energy * 0.3);
             ctx.stroke();
         }
 
-        // === Uncertainty blur ring — outer boundary ===
-        const outerR = radius * 0.6 * orbitFactor;
-        const blurGrad = ctx.createRadialGradient(0, 0, outerR * 0.8, 0, 0, outerR);
-        blurGrad.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.3}%, 30%, 0)`);
-        blurGrad.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.4}%, 20%, ${0.06 + harmonic * 0.06})`);
+        // === Deep uncertainty haze — layered outer boundary ===
+        const outerR = radius * 0.65 * orbitFactor;
+        const haze1 = ctx.createRadialGradient(0, 0, outerR * 0.6, 0, 0, outerR);
+        haze1.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.2}%, 15%, 0)`);
+        haze1.addColorStop(0.7, `hsla(${cherenkovHue}, ${sat * 0.3}%, 10%, ${0.03 + harmonic * 0.04})`);
+        haze1.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.4}%, 8%, ${0.08 + harmonic * 0.08})`);
         ctx.beginPath();
         ctx.arc(0, 0, outerR, 0, Math.PI * 2);
-        ctx.fillStyle = blurGrad;
+        ctx.fillStyle = haze1;
+        ctx.fill();
+
+        // Second haze layer — very subtle Cherenkov fringe
+        const haze2 = ctx.createRadialGradient(0, 0, outerR * 0.85, 0, 0, outerR * 1.05);
+        haze2.addColorStop(0, `hsla(${cherenkovHue}, ${sat * 0.5}%, 35%, 0)`);
+        haze2.addColorStop(0.5, `hsla(${cherenkovHue}, ${sat * 0.6}%, 40%, ${0.02 + energy * 0.03})`);
+        haze2.addColorStop(1, `hsla(${cherenkovHue}, ${sat * 0.4}%, 25%, 0)`);
+        ctx.beginPath();
+        ctx.arc(0, 0, outerR * 1.05, 0, Math.PI * 2);
+        ctx.fillStyle = haze2;
         ctx.fill();
 
         ctx.restore();
