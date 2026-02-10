@@ -75,6 +75,8 @@ A premium web-based interface designed for musicians:
 
 ## Quick Start
 
+For a step‑by‑step, musician‑friendly walkthrough of the Studio, CLI, and Python API, see the **[User Guide](docs/USER_GUIDE.md)**.
+
 ### Installation
 
 ```bash

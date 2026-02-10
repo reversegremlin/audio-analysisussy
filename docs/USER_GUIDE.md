@@ -1,30 +1,56 @@
-# User Guide
+# Chromascope User Guide
 
-Complete guide to using Chromascope for audio analysis and visualization.
+Practical guide to using Chromascope as an **audio engineer or musician** – from “drop in a track and get pretty motion” to deep integration in your own visuals.
+
+If you’re comfortable with a DAW but not a programmer, focus on the **Studio** and **Command Line** sections. If you write code or build custom visuals, the **Pipeline**, **Manifest**, and **Integration** sections are for you.
 
 ## Table of Contents
 
-1. [Installation](#installation)
-2. [Quick Start](#quick-start)
-3. [Chromascope Studio (Web UI)](#kaleidoscope-studio-web-ui)
-4. [Understanding the Output](#understanding-the-output)
-5. [Using the Pipeline](#using-the-pipeline)
-6. [Creating Visualizations](#creating-visualizations)
-7. [Advanced Configuration](#advanced-configuration)
+1. [What Chromascope Does (Musician’s View)](#what-chromascope-does-musicians-view)
+2. [Installing Chromascope](#installing-chromascope)
+3. [Fastest Paths to Results](#fastest-paths-to-results)
+   - [A. Chromascope Studio (Web UI)](#a-chromascope-studio-web-ui)
+   - [B. Command Line (no coding)](#b-command-line-no-coding)
+   - [C. Python API (for developers)](#c-python-api-for-developers)
+4. [Understanding the Visual Driver Manifest](#understanding-the-visual-driver-manifest)
+5. [Working with the Audio Pipeline](#working-with-the-audio-pipeline)
+6. [Creating Visuals](#creating-visuals)
+   - [Built‑in Kaleidoscope Video](#built-in-kaleidoscope-video)
+   - [Driving Your Own Visuals](#driving-your-own-visuals)
+7. [Shaping the Feel: Advanced Configuration](#shaping-the-feel-advanced-configuration)
 8. [Integrating with Other Tools](#integrating-with-other-tools)
-9. [Troubleshooting](#troubleshooting)
+9. [Troubleshooting & Tips](#troubleshooting--tips)
 
 ---
 
-## Installation
+## What Chromascope Does (Musician’s View)
+
+Think of Chromascope as a **translator between music and motion**:
+
+- You give it an **audio file** (MP3, WAV, FLAC…).
+- It “listens like an audio engineer” – separating **drums vs. harmony**, tracking **beats**, measuring **energy and brightness**, and recognizing **which notes are active**.
+- It outputs a **Visual Driver Manifest**: a timeline where every frame knows things like:
+  - “Is this a beat?”
+  - “How loud is the bass right now?”
+  - “Which note is dominating – F#, G, A?”
+  - “How bright is the sound?”
+- That manifest can then drive:
+  - The built‑in **kaleidoscope video renderer**, or
+  - Your own visual system in **Blender, TouchDesigner, Unity, p5.js, custom engines**, etc.
+
+Chromascope is built so visuals feel **musical**, not just “EQ bars that bounce.”
+
+---
+
+## Installing Chromascope
 
 ### Prerequisites
 
-- Python 3.10 or higher
-- FFmpeg (for video rendering)
-- 2GB+ RAM recommended for long audio files
+- **Python 3.10+**
+- **FFmpeg** (required for video export)
+- **2GB+ RAM** recommended for long or high‑resolution renders
 
-### Step-by-Step Installation
+### Step‑by‑Step Installation
 
 ```bash
 # 1. Clone the repository
@@ -33,77 +59,149 @@ cd chromascope
 
 # 2. Create a virtual environment
 python3 -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# or: .venv\Scripts\activate  # Windows
+source .venv/bin/activate         # Linux/macOS
+# or on Windows:
+# .venv\Scripts\activate
 
-# 3. Install the package
+# 3. Install Chromascope
 pip install -e .
 
-# 4. (Optional) Install development dependencies
+# 4. (Optional) Install development extras
 pip install -e ".[dev]"
 
-# 5. Verify installation
+# 5. Make sure the CLI is visible
 chromascope --help
 ```
 
-### Verify FFmpeg
+### Check FFmpeg
 
 ```bash
 ffmpeg -version
-# Should show FFmpeg version info
+# You should see version information
 ```
 
-If FFmpeg is not installed:
-- **Ubuntu/Debian**: `sudo apt install ffmpeg`
-- **macOS**: `brew install ffmpeg`
-- **Windows**: Download from https://ffmpeg.org/download.html
+If FFmpeg is missing:
+- **Ubuntu / Debian**: `sudo apt install ffmpeg`
+- **macOS (Homebrew)**: `brew install ffmpeg`
+- **Windows**: download from `https://ffmpeg.org/download.html` and add it to your PATH.
 
 ---
 
-## Quick Start
+## Fastest Paths to Results
 
-### Analyze an Audio File
+### A. Chromascope Studio (Web UI)
 
-```python
-from chromascope import AudioPipeline
+**Best for:** producers, musicians, VJs, and visual artists who want **hands‑on knobs and instant feedback**.
 
-# Create pipeline with default settings (60 FPS)
-pipeline = AudioPipeline()
+#### Start the Studio
 
-# Process audio and save manifest
-result = pipeline.process(
-    "my_song.mp3",
-    output_path="my_song_manifest.json"
-)
-
-print(f"BPM: {result['bpm']:.1f}")
-print(f"Duration: {result['duration']:.1f}s")
-print(f"Frames: {result['n_frames']}")
+```bash
+cd chromascope
+source .venv/bin/activate
+python frontend/server.py
 ```
 
-### Command Line Usage
+Then open `http://localhost:8080` in your browser.
+
+#### The Studio Layout
+
+- **Left panel – Audio & Macro Controls**
+  - **Audio Source**: drag & drop files or click to browse.
+  - **Style**: pick the visual style (Geometric, Glass, Flower, Spiral, Circuit, Fibonacci, DMT, Sacred Geometry, Mycelial, Fluid, Orrery, Quark).
+  - **Geometry & Dynamics**: mirrors (symmetry), base size, orbit distance, rotation speed, punchiness, and motion trails.
+
+- **Center – Live Preview & Waveform**
+  - **Canvas**: real‑time visualization locked to your audio.
+  - **Waveform**: shows your track with a **playhead** so you can scrub.
+  - **Transport**: play / pause / seek / volume.
+
+- **Right panel – Shape, Color & Export**
+  - **Shape**: polygon sides, line thickness, orbit patterns.
+  - **Color**: main accent color, chroma‑driven hues, saturation.
+  - **Background**: gradients, particles, pulse rings, and their reactivity.
+  - **Export**: choose resolution (720p / 1080p / 4K) and FPS (30 / 60), then export.
+
+#### Working the Knobs (for audio people)
+
+Knobs behave like studio hardware:
+- Click and **drag up/down** to change a value.
+- Use the **mouse wheel** for fine adjustments.
+- Hover to see **current value** and get a soft highlight.
+
+#### Styles & When to Use Them
+
+All styles share the same musical brain, but “move” differently:
+
+- **Geometric** – clean, orbiting polygons. Great for **EDM, techno, crisp grooves**.
+- **Glass** – faceted, gem‑like reflections. Fits **rock, cinematic, orchestral**.
+- **Flower** – soft petal shapes, flowing motion. Ideal for **ambient, acoustic, chill**.
+- **Spiral** – hypnotic spirals and builds. Works for **trance, progressive, buildups**.
+- **Circuit** – hex grids and glowing traces. Perfect for **synthwave, cyberpunk**.
+- **Fibonacci** – golden ratio spirals, sacred patterns. Nice for **jazz, classical**.
+- **DMT** – intense, fractal, “hyperspace” vibes.
+- **Sacred Geometry** – mandalas, symmetry locks, temple‑like visuals.
+- **Mycelial** – fungal networks and bioluminescent threads.
+- **Fluid** – ferrofluid / liquid metal blobs.
+- **Orrery** – orbiting planets and brass rings.
+- **Quark** – quantum‑field style with dancing particles.
+
+#### Fullscreen & Performance
+
+- Double‑click the preview or hit the fullscreen button for immersive mode.
+- Controls fade out while playing; move the mouse to bring them back.
+- For smoother performance while tweaking:
+  - Start at **1080p, 30 fps**.
+  - Once you like the look, bump it to **60 fps** for the final render.
+
+#### Export Workflow (Studio)
+
+1. Load your audio file.
+2. Pick a style that matches the vibe.
+3. Tweak knobs while listening – treat it like mixing the light show.
+4. Choose resolution and fps.
+5. Click **Export Video** – the server renders a video that matches what you saw.
+
+> **Note:** The Studio uses the rich, style‑aware web visualizer. The Python CLI/video renderer currently provides a **geometric kaleidoscope** style; use Studio when you want the full set of 12 styles.
+
+---
+
+### B. Command Line (no coding)
+
+**Best for:** audio people comfortable with a terminal who want reliable, repeatable renders or manifests.
+
+#### Analyze a Track to a Manifest
 
 ```bash
 # Basic analysis
 chromascope song.mp3
 
 # Custom output path and FPS
-chromascope song.mp3 -o output.json --fps 30
+chromascope song.mp3 -o manifest.json --fps 30
 
-# Show summary after processing
+# Show a human‑readable summary
 chromascope song.mp3 --summary
 
-# Export as NumPy for faster loading
+# Export as NumPy for faster loading in code
 chromascope song.mp3 --format numpy
 ```
 
-### Render a Video
+Useful flags (from the CLI in `cli.py`):
+
+- `-o / --output` – where to write the manifest.
+- `-f / --fps` – frames per second of the timeline.
+- `-s / --sample-rate` – analysis sample rate (usually leave at 22050).
+- `--format json|numpy` – file format.
+- `--attack` / `--release` – how quickly percussive hits rise/fall.
+- `-q / --quiet` – less console noise.
+- `--summary` – print manifest metadata and some sample frames.
+
+#### Render a Kaleidoscope Video (Python script)
 
 ```bash
-# Using the render script
+# Simple HD video
 python -m chromascope.render_video song.mp3 -o video.mp4
 
-# With custom settings
+# With custom visual settings
 python -m chromascope.render_video song.mp3 \
     --width 1920 --height 1080 \
     --fps 60 \
@@ -111,96 +209,53 @@ python -m chromascope.render_video song.mp3 \
     --trail 60
 ```
 
+This uses the **geometric** kaleidoscope implemented in Python (`render_video.py` + `visualizers/kaleidoscope.py`), driven by the same manifest you get from the pipeline.
+
 ---
 
-## Chromascope Studio (Web UI)
+### C. Python API (for developers)
 
-The easiest way to create visualizations is through Chromascope Studio, a web-based interface designed for musicians.
+**Best for:** people building their own tools, renderers, or research pipelines.
 
-### Starting the Studio
+#### One‑liner: audio → manifest file
 
-```bash
-# Make sure you're in the virtual environment
-source .venv/bin/activate
+```python
+from chromascope import AudioPipeline
 
-# Start the server
-python frontend/server.py
+pipeline = AudioPipeline(target_fps=60)
 
-# Open in your browser
-# http://localhost:8080
+result = pipeline.process(
+    "my_song.mp3",
+    output_path="my_song_manifest.json",  # or .npz when format="numpy"
+    format="json",
+)
+
+print(f"BPM: {result['bpm']:.1f}")
+print(f"Duration: {result['duration']:.1f}s")
+print(f"Frames:  {result['n_frames']}")
 ```
 
-### Interface Overview
+#### In‑memory manifest (no file)
 
-The Studio is divided into three main areas:
+```python
+from chromascope import AudioPipeline
 
-**Left Panel - Audio, Style & Geometry**
-- **Audio Source**: Drag & drop or click to load audio files
-- **Style**: Choose visualization style (Geometric, Glass, Flower, Spiral)
-- **Geometry**: Control mirrors (radial symmetry), size, orbit distance, and rotation speed
-- **Dynamics**: Adjust punch intensity, motion trails, and envelope settings
+pipeline = AudioPipeline(target_fps=60)
+manifest = pipeline.process_to_manifest("my_song.mp3")
+```
 
-**Center - Preview & Timeline**
-- **Canvas**: Real-time visualization preview synced to audio
-- **Waveform**: Visual representation of your audio with playhead
-- **Transport**: Play/pause, skip, and volume controls
-
-**Right Panel - Shape, Colors & Export**
-- **Shape**: Control polygon complexity and stroke thickness
-- **Colors**: Accent color, chroma-based coloring, saturation
-- **Background**: Two-color gradients, particles, pulse rings, reactivity
-- **Export**: Resolution, frame rate, and video export options
-
-### Visualization Styles
-
-The Studio includes six distinct visualization styles, each with its own character:
-
-| Style | Description | Best For |
-|-------|-------------|----------|
-| **Geometric** | Orbiting polygons with radial symmetry | Electronic, EDM, clean beats |
-| **Glass** | Faceted kaleidoscope with gem-like tessellation, prismatic light rays, and internal reflections | Rock, orchestral, complex audio |
-| **Flower** | Organic petal shapes with smooth bezier curves | Ambient, acoustic, soft music |
-| **Spiral** | Hypnotic spiraling arms with flowing motion | Trance, progressive, buildups |
-| **Circuit** | Hexagonal grid with glowing circuit traces and nodes | Synthwave, cyberpunk, industrial |
-| **Fibonacci** | Golden spiral meets kaleidoscope with phyllotaxis patterns, sacred geometry, and Fibonacci-numbered petal rings | Classical, jazz, contemplative |
-
-Click any style button to switch instantly - changes apply in real-time during playback.
-
-### Fullscreen Mode
-
-Click the fullscreen button (bottom-right of preview) or double-click the canvas to enter immersive fullscreen mode. Controls fade out automatically - move your mouse to reveal them.
-
-### Using Rotary Knobs
-
-The knobs work like real studio hardware:
-- **Click and drag up/down** to adjust values
-- **Mouse wheel** for fine adjustments
-- **Hover** to see the glow effect and current value
-
-### Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `Space` | Play/Pause |
-| Click waveform | Seek to position |
-
-### Export Workflow
-
-1. Load your audio file
-2. Adjust visualization parameters while previewing
-3. Select resolution (720p, 1080p, or 4K)
-4. Select frame rate (30 or 60 FPS)
-5. Click "Export Video"
-
-The export uses the same rendering engine as the command line, ensuring what you preview is what you get.
+From there you can feed the manifest directly into your renderer.
 
 ---
 
-## Understanding the Output
+## Understanding the Visual Driver Manifest
 
-### The Visual Driver Manifest
+The **Visual Driver Manifest** is a JSON (or NumPy archive) that contains:
 
-The manifest is a JSON file containing frame-by-frame audio features:
+- Global **metadata** about the track.
+- A list of **frames**, one per visual frame (e.g. 60 per second).
+
+### Manifest Structure
 
 ```json
 {
@@ -215,27 +270,27 @@ The manifest is a JSON file containing frame-by-frame audio features:
 }
 ```
 
-### Frame Data Fields
+Each frame is a musical snapshot at a moment in time.
 
-Each frame contains these fields:
+### Per‑frame Fields (musician‑friendly glossary)
 
-| Field | Type | Range | Description |
-|-------|------|-------|-------------|
-| `frame_index` | int | 0 to n_frames-1 | Sequential frame number |
-| `time` | float | 0 to duration | Timestamp in seconds |
-| `is_beat` | bool | true/false | True if this frame is on a beat |
-| `is_onset` | bool | true/false | True if a note attack occurs |
-| `percussive_impact` | float | 0.0 - 1.0 | Drum/transient energy |
-| `harmonic_energy` | float | 0.0 - 1.0 | Melody/chord energy |
-| `global_energy` | float | 0.0 - 1.0 | Overall volume |
-| `low_energy` | float | 0.0 - 1.0 | Bass frequencies (0-200Hz) |
-| `mid_energy` | float | 0.0 - 1.0 | Midrange (200Hz-4kHz) |
-| `high_energy` | float | 0.0 - 1.0 | Treble (4kHz+) |
-| `spectral_brightness` | float | 0.0 - 1.0 | Perceived brightness |
-| `dominant_chroma` | string | "C" to "B" | Most prominent musical note |
-| `chroma_values` | object | 12 floats | Intensity of each note |
+| Field | What it means to you |
+|-------|----------------------|
+| `frame_index` | Which frame in the sequence this is (0 → n_frames‑1). |
+| `time` | Where you are in the song, in seconds. |
+| `is_beat` | `true` when this frame is on a beat – great for kicks, flashes, jumps. |
+| `is_onset` | `true` on note attacks and transients – more sensitive than `is_beat`. |
+| `percussive_impact` | How hard the **drums/transients** are hitting (0.0–1.0). |
+| `harmonic_energy` | How strong the **melody/chords** are (0.0–1.0). |
+| `global_energy` | Overall loudness / intensity (0.0–1.0). |
+| `low_energy` | Bass (roughly 0–200 Hz). |
+| `mid_energy` | Body and presence (roughly 200 Hz–4 kHz). |
+| `high_energy` | Air and sizzle (roughly 4 kHz+). |
+| `spectral_brightness` | Perceived brightness; higher = more high‑frequency content. |
+| `dominant_chroma` | The most prominent **note** (e.g. `"G#"`). |
+| `chroma_values` | How strong each of the 12 notes (C–B) is at this moment. |
 
-### Example: Reading Frame Data
+### Reading a Manifest in Python
 
 ```python
 import json
@@ -243,24 +298,37 @@ import json
 with open("manifest.json") as f:
     manifest = json.load(f)
 
-# Find all beats
-beats = [f for f in manifest["frames"] if f["is_beat"]]
+frames = manifest["frames"]
+
+# All beat frames
+beats = [fr for fr in frames if fr["is_beat"]]
 print(f"Total beats: {len(beats)}")
 
-# Get average energy
-avg_energy = sum(f["global_energy"] for f in manifest["frames"]) / len(manifest["frames"])
+# Average energy over the song
+avg_energy = sum(fr["global_energy"] for fr in frames) / len(frames)
 print(f"Average energy: {avg_energy:.2f}")
 
-# Find the loudest moment
-loudest = max(manifest["frames"], key=lambda f: f["global_energy"])
-print(f"Peak at {loudest['time']:.2f}s")
+# Loudest moment
+loudest = max(frames, key=lambda fr: fr["global_energy"])
+print(f"Peak loudness at {loudest['time']:.2f}s")
 ```
+
+Once you’re comfortable reading these values, designing visuals becomes “mapping musical parameters to shapes/colors.”
 
 ---
 
-## Using the Pipeline
+## Working with the Audio Pipeline
 
-### Basic Pipeline
+Under the hood, Chromascope runs a 4‑phase pipeline (see `pipeline.py` for the orchestrator):
+
+1. **Decompose** – separate harmonic vs. percussive content.
+2. **Analyze** – extract timing, energy, and tonality features.
+3. **Polish** – smooth and normalize signals (attack/release envelopes).
+4. **Export** – build the manifest (JSON / NumPy).
+
+You can either use the whole thing at once (via `AudioPipeline`) or drive each phase manually.
+
+### Simple Pipeline Usage
 
 ```python
 from chromascope import AudioPipeline
@@ -269,34 +337,30 @@ pipeline = AudioPipeline(target_fps=60)
 manifest = pipeline.process_to_manifest("song.mp3")
 ```
 
-### Step-by-Step Processing
-
-For more control, run each phase separately:
+### Phase‑by‑phase Control
 
 ```python
-from chromascope import (
-    AudioDecomposer,
-    FeatureAnalyzer,
-    SignalPolisher,
-    ManifestExporter,
-)
+from chromascope.core.decomposer import AudioDecomposer
+from chromascope.core.analyzer import FeatureAnalyzer
+from chromascope.core.polisher import SignalPolisher
+from chromascope.io.exporter import ManifestExporter
 
-# Phase A: Decompose
+# Phase A: Decomposition (HPSS)
 decomposer = AudioDecomposer()
 decomposed = decomposer.decompose_file("song.mp3")
 print(f"Duration: {decomposed.duration:.1f}s")
 
-# Phase B: Analyze
+# Phase B: Feature extraction
 analyzer = FeatureAnalyzer(target_fps=60)
 features = analyzer.analyze(decomposed)
-print(f"BPM: {features.temporal.bpm:.1f}")
+print(f"BPM:   {features.temporal.bpm:.1f}")
 print(f"Beats: {len(features.temporal.beat_frames)}")
 
-# Phase C: Polish
+# Phase C: Polishing / envelopes
 polisher = SignalPolisher(fps=60)
 polished = polisher.polish(features)
 
-# Phase D: Export
+# Phase D: Export to a manifest
 exporter = ManifestExporter()
 exporter.export_json(
     polished,
@@ -306,23 +370,25 @@ exporter.export_json(
 )
 ```
 
-### Accessing Raw Features
+### Accessing Raw Arrays
 
 ```python
-# After analysis, access raw numpy arrays
-print(f"RMS shape: {features.energy.rms.shape}")
-print(f"Chroma shape: {features.tonality.chroma.shape}")
+print("RMS shape:", features.energy.rms.shape)
+print("Chroma shape:", features.tonality.chroma.shape)
 
-# Get beat times in seconds
 beat_times = features.temporal.beat_times
-print(f"First 5 beats: {beat_times[:5]}")
+print("First 5 beats (s):", beat_times[:5])
 ```
+
+This is useful for debugging or designing custom feature mappings.
 
 ---
 
-## Creating Visualizations
+## Creating Visuals
 
-### Built-in Kaleidoscope
+### Built‑in Kaleidoscope Video
+
+The quickest programmatic way to get a video from audio is the built‑in geometric kaleidoscope:
 
 ```python
 from pathlib import Path
@@ -335,63 +401,64 @@ render_video(
     height=1080,     # HD height
     fps=60,          # Frame rate
     num_mirrors=8,   # Radial copies
-    trail_alpha=40,  # Motion blur (0-255)
+    trail_alpha=40,  # Motion blur (0–255)
 )
 ```
 
-### Custom Visualization
+Internally, this uses `KaleidoscopeRenderer` from `visualizers/kaleidoscope.py` and drives it with the manifest built from your track.
 
-Use the manifest data to drive your own graphics:
+---
+
+### Driving Your Own Visuals
+
+You can treat the manifest as “automation data” for any visual engine.
+
+#### Example: Simple Pygame Visual
 
 ```python
 import json
 import pygame
 
-# Load manifest
 with open("manifest.json") as f:
     manifest = json.load(f)
 
-# Initialize pygame
 pygame.init()
 screen = pygame.display.set_mode((800, 600))
 clock = pygame.time.Clock()
 
-# Animation loop
+frames = manifest["frames"]
+fps = manifest["metadata"]["fps"]
+
 frame_idx = 0
 running = True
 
-while running and frame_idx < len(manifest["frames"]):
+while running and frame_idx < len(frames):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
-    frame = manifest["frames"][frame_idx]
+    frame = frames[frame_idx]
 
-    # Use frame data for visuals
     energy = frame["global_energy"]
     is_beat = frame["is_beat"]
 
-    # Clear screen
     screen.fill((0, 0, 0))
 
-    # Draw circle that pulses with energy
     radius = int(50 + energy * 200)
     color = (255, 100, 100) if is_beat else (100, 100, 255)
     pygame.draw.circle(screen, color, (400, 300), radius)
 
     pygame.display.flip()
-    clock.tick(manifest["metadata"]["fps"])
+    clock.tick(fps)
     frame_idx += 1
 
 pygame.quit()
 ```
 
-### Integration with Processing/p5.js
-
-Export manifest and load in JavaScript:
+#### Example: p5.js / Processing‑style Sketch
 
 ```javascript
-// p5.js example
+// In p5.js
 let manifest;
 let frameIdx = 0;
 
@@ -399,21 +466,23 @@ function preload() {
   manifest = loadJSON('manifest.json');
 }
 
+function setup() {
+  createCanvas(800, 600);
+  colorMode(HSB, 360, 100, 100);
+}
+
 function draw() {
-  if (frameIdx >= manifest.frames.length) return;
+  if (!manifest || frameIdx >= manifest.frames.length) return;
 
   const frame = manifest.frames[frameIdx];
-
   background(0);
 
-  // Size based on percussive impact
   const size = 50 + frame.percussive_impact * 200;
+  const hue = chromaToHue(frame.dominant_chroma); // your own mapping
 
-  // Color based on dominant chroma
-  const hue = chromaToHue(frame.dominant_chroma);
   fill(hue, 80, 90);
-
-  ellipse(width/2, height/2, size, size);
+  noStroke();
+  ellipse(width / 2, height / 2, size, size);
 
   frameIdx++;
 }
@@ -421,22 +490,24 @@ function draw() {
 
 ---
 
-## Advanced Configuration
+## Shaping the Feel: Advanced Configuration
 
-### Envelope Tuning
+Chromascope exposes a few “macro” controls that change how your visuals feel: **envelopes**, **HPSS strength**, and **sample rate**.
 
-Control how features are smoothed:
+### Envelope Tuning (Attack / Release)
+
+Envelopes answer: *“How quickly should visuals react, and how long should they hang around?”*
 
 ```python
 from chromascope import AudioPipeline
 from chromascope.core.polisher import EnvelopeParams
 
-# Punchy, responsive settings
+# Punchy, club‑style
 punchy = AudioPipeline(
     target_fps=60,
     impact_envelope=EnvelopeParams(
-        attack_ms=0.0,     # Instant response
-        release_ms=100.0,  # Quick decay
+        attack_ms=0.0,     # hits react instantly
+        release_ms=100.0,  # short decay
     ),
     energy_envelope=EnvelopeParams(
         attack_ms=20.0,
@@ -444,12 +515,12 @@ punchy = AudioPipeline(
     ),
 )
 
-# Smooth, flowing settings
+# Smooth, ambient
 smooth = AudioPipeline(
     target_fps=60,
     impact_envelope=EnvelopeParams(
-        attack_ms=50.0,    # Gradual rise
-        release_ms=500.0,  # Long tail
+        attack_ms=50.0,    # gentle fade‑in
+        release_ms=500.0,  # long tail
     ),
     energy_envelope=EnvelopeParams(
         attack_ms=100.0,
@@ -460,21 +531,23 @@ smooth = AudioPipeline(
 
 ### HPSS Separation Strength
 
+Controls how aggressively Chromascope separates **drums** from **harmonies**:
+
 ```python
-# Aggressive separation (cleaner but may lose nuance)
+# Strong separation: very clear drums vs. music, but might lose some nuance
 pipeline = AudioPipeline(hpss_margin=(3.0, 3.0))
 
-# Gentle separation (preserves detail)
+# Gentle separation: more blended but retains detail (default)
 pipeline = AudioPipeline(hpss_margin=(1.0, 1.0))
 ```
 
-### Sample Rate
+### Sample Rate vs. Speed
 
 ```python
-# Higher quality analysis (slower)
+# Higher fidelity (slower, more CPU)
 pipeline = AudioPipeline(sample_rate=44100)
 
-# Faster analysis (usually sufficient)
+# Fast and usually sufficient (default)
 pipeline = AudioPipeline(sample_rate=22050)
 ```
 
@@ -482,9 +555,11 @@ pipeline = AudioPipeline(sample_rate=22050)
 
 ## Integrating with Other Tools
 
+Here are some ways to wire Chromascope into common creative pipelines.
+
 ### Blender
 
-Export manifest and use in Blender Python:
+Use the manifest to keyframe objects in Blender:
 
 ```python
 # In Blender's Python console
@@ -494,7 +569,6 @@ import json
 with open("/path/to/manifest.json") as f:
     manifest = json.load(f)
 
-# Keyframe object scale to percussive impact
 obj = bpy.context.active_object
 fps = manifest["metadata"]["fps"]
 
@@ -508,17 +582,14 @@ for frame in manifest["frames"]:
 
 ### TouchDesigner
 
-Load JSON and map to CHOPs:
+1. Use a **File In DAT** to load `manifest.json`.
+2. Parse with a **JSON DAT**.
+3. Convert to a **Table DAT**.
+4. Feed that into **DAT to CHOP** to drive parameters with energy/beat data.
 
-1. Use a **File In DAT** to load `manifest.json`
-2. Parse with **JSON DAT**
-3. Convert to **Table DAT**
-4. Use **DAT to CHOP** for animation data
-
-### Unity
+### Unity (C#)
 
 ```csharp
-// C# example
 [System.Serializable]
 public class Frame {
     public int frame_index;
@@ -533,64 +604,72 @@ public class Manifest {
     public Frame[] frames;
 }
 
-// Load and use
+// Load and parse
 var json = File.ReadAllText("manifest.json");
 var manifest = JsonUtility.FromJson<Manifest>(json);
 ```
 
+From there, you can drive camera shakes, light intensity, shader params, etc.
+
 ---
 
-## Troubleshooting
+## Troubleshooting & Tips
 
 ### Common Issues
 
-**"No module named 'chromascope'"**
+**“No module named 'chromascope'”**
+
 ```bash
-# Make sure you're in the virtual environment
 source .venv/bin/activate
 pip install -e .
 ```
 
-**"FFmpeg not found"**
+**“FFmpeg not found”**
+
 ```bash
-# Install FFmpeg
-sudo apt install ffmpeg  # Ubuntu
-brew install ffmpeg      # macOS
+sudo apt install ffmpeg   # Ubuntu / Debian
+brew install ffmpeg       # macOS
 ```
 
 **Out of memory during video render**
+
 ```python
-# Use lower resolution
-render_video(audio_path, output_path, width=1280, height=720)
+from chromascope.render_video import render_video
+
+render_video(
+    audio_path="song.mp3",
+    output_path="video.mp4",
+    width=1280,
+    height=720,
+)
 ```
 
 **Video rendering is slow**
-- Reduce resolution (1280x720 instead of 1920x1080)
-- Lower FPS (30 instead of 60)
-- Use faster FFmpeg preset (already set to "fast")
 
-**Beat detection seems off**
-- Try different HPSS margins
-- Check if audio has clear rhythmic content
-- Very ambient or arrhythmic music may not track well
+- Use **1280×720** instead of 1920×1080.
+- Render at **30 fps** instead of 60.
+- Close other heavy apps while rendering.
+
+**Beat detection feels “off”**
+
+- Very ambient or free‑time music may not produce stable beats.
+- Try different HPSS margins (stronger separation can help for dense mixes).
+- Check that the audio has a clear kick/snare pattern for the detector to lock onto.
 
 ### Performance Tips
 
-1. **Use 22050 Hz sample rate** - Sufficient for most analysis
-2. **Process in batches** - For multiple files, reuse the pipeline object
-3. **Use NumPy export** - Faster to load than JSON for large manifests
-4. **Render at target resolution** - Don't upscale later
+1. **Use 22050 Hz** for quick iteration; switch to 44100 Hz only if needed.
+2. **Reuse the same `AudioPipeline`** object when batch‑processing multiple tracks.
+3. Prefer **NumPy export (`--format numpy`)** for large manifests.
+4. **Render at your target resolution** – avoid heavy upscaling later.
 
-### Getting Help
+### Getting Help & Going Deeper
 
-- Check existing issues on GitHub
-- Include Python version, OS, and error traceback
-- Provide sample audio if possible (or describe genre/tempo)
+- See the detailed **API docs** in `API_REFERENCE.md`.
+- For internals and data structures, read `architecture.md`.
+- When opening an issue, include:
+  - OS + Python version
+  - How you installed Chromascope
+  - Your command or code snippet
+  - Any error messages (and, if possible, a short example audio description or file).
 
----
-
-## Next Steps
-
-- Explore the [API Reference](API_REFERENCE.md) for detailed documentation
-- Check out [examples/](../examples/) for more use cases
-- Read [ARCHITECTURE.md](../architecture.md) to understand the internals
