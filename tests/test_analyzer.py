@@ -139,3 +139,45 @@ class TestFeatureAnalyzer:
         assert result.frame_times[0] >= 0
         # Times should be increasing
         assert np.all(np.diff(result.frame_times) > 0)
+
+    def test_frame_time_spacing_matches_fps(self, decomposed_mixed):
+        """Average frame spacing in seconds should match target FPS."""
+        analyzer = FeatureAnalyzer(target_fps=60)
+        result = analyzer.analyze(decomposed_mixed)
+
+        diffs = np.diff(result.frame_times)
+        mean_step = np.mean(diffs)
+        target_step = 1.0 / analyzer.target_fps
+
+        # Allow small numerical tolerance, but enforce tight alignment.
+        assert np.isclose(mean_step, target_step, rtol=0.05)
+
+    def test_tempo_curve_follows_click_track(self, decomposed_clicks):
+        """
+        Tempo curve should reflect local tempo and agree with global BPM
+        for a simple click track.
+        """
+        analyzer = FeatureAnalyzer(target_fps=60)
+        result = analyzer.analyze(decomposed_clicks)
+
+        tempo_curve = result.temporal.tempo_curve_bpm
+
+        # Should produce a non-empty, positive tempo curve
+        assert tempo_curve.size > 0
+        assert np.all(tempo_curve > 0)
+
+        # Median of tempo curve should be close to global BPM
+        median_tempo = np.median(tempo_curve)
+        assert np.isclose(median_tempo, result.temporal.bpm, atol=10.0)
+
+    def test_mfcc_timbre_features_present(self, decomposed_mixed):
+        """MFCC-based timbre features should be extracted alongside tonality."""
+        analyzer = FeatureAnalyzer(target_fps=60)
+        result = analyzer.analyze(decomposed_mixed)
+
+        mfcc = result.tonality.mfcc
+
+        # Expect a compact MFCC representation aligned with frame count
+        assert mfcc.ndim == 2
+        assert mfcc.shape[0] == 13  # default n_mfcc
+        assert mfcc.shape[1] == result.n_frames

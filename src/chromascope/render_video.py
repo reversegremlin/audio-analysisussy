@@ -33,6 +33,14 @@ def render_video(
     max_duration: float = None,
     progress_callback: callable = None,
     style: str = "geometric",
+    base_radius: float = 150.0,
+    max_scale: float = 1.8,
+    base_thickness: int = 3,
+    max_thickness: int = 12,
+    orbit_radius: float = 200.0,
+    rotation_speed: float = 2.0,
+    min_sides: int = 3,
+    max_sides: int = 12,
 ):
     """
     Render kaleidoscope video from audio file.
@@ -49,7 +57,15 @@ def render_video(
         trail_alpha: Trail persistence (0-255).
         max_duration: Maximum duration in seconds (None for full audio).
         progress_callback: Optional callback(progress: int, message: str) for progress updates.
-        style: Visualization style (geometric, glass, flower, spiral, circuit, fibonacci).
+        style: Visualization style.
+        base_radius: Base shape size.
+        max_scale: Maximum pulse scale.
+        base_thickness: Base line thickness.
+        max_thickness: Maximum line thickness.
+        orbit_radius: Base orbit distance.
+        rotation_speed: Base rotation multiplier.
+        min_sides: Minimum polygon sides.
+        max_sides: Maximum polygon sides.
     """
     from chromascope.pipeline import AudioPipeline
     from chromascope.visualizers.kaleidoscope import (
@@ -58,9 +74,30 @@ def render_video(
     )
 
     def report_progress(pct: int, msg: str):
-        print(msg, flush=True)
+        """
+        Report progress to both stdout (for CLI users) and any provided
+        callback (for programmatic callers).
+
+        For CLI usage, render a simple text progress bar so users can
+        see long renders advancing at a glance.
+        """
+        bar_width = 30
+        pct_clamped = max(0, min(100, int(pct)))
+        filled = int(bar_width * (pct_clamped / 100.0))
+        bar = "[" + "#" * filled + "-" * (bar_width - filled) + "]"
+
+        # If running in a real terminal, use an in-place updating bar.
+        if sys.stdout.isatty():
+            sys.stdout.write(f"\r{bar} {pct_clamped:3d}%  {msg:60.60}")
+            sys.stdout.flush()
+            if pct_clamped >= 100:
+                sys.stdout.write("\n")
+        else:
+            # Fallback for non-interactive environments (e.g. logs)
+            print(f"{pct_clamped:3d}% {msg}", flush=True)
+
         if progress_callback:
-            progress_callback(pct, msg)
+            progress_callback(pct_clamped, msg)
 
     report_progress(0, f"Processing audio: {audio_path}")
 
@@ -80,6 +117,14 @@ def render_video(
         num_mirrors=num_mirrors,
         trail_alpha=trail_alpha,
         style=style,
+        base_radius=base_radius,
+        max_scale=max_scale,
+        base_thickness=base_thickness,
+        max_thickness=max_thickness,
+        orbit_radius=orbit_radius,
+        rotation_speed=rotation_speed,
+        min_sides=min_sides,
+        max_sides=max_sides,
     )
     renderer = KaleidoscopeRenderer(config)
 

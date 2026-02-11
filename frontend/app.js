@@ -187,6 +187,12 @@ class KaleidoscopeStudio {
             fps: 60
         };
 
+        // Shared style presets loaded from the backend (styles.json)
+        this.stylePresets = null;
+
+        // High-level session model (audio, style, mapping, export)
+        this.session = this.createDefaultSession();
+
         // Background animation state
         this.bgState = {
             gradientAngle: 0,
@@ -260,6 +266,8 @@ class KaleidoscopeStudio {
         this.setupEventListeners();
         this.setupKnobs();
         this.updateKnobTooltips();
+        // Load shared style presets in the background
+        this.loadStylePresets();
         this.initParticles();
         this.render();
         this.startAnimationLoop();
@@ -315,6 +323,7 @@ class KaleidoscopeStudio {
                 document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.config.style = btn.dataset.style;
+                this.applyStylePreset(btn.dataset.style);
                 this.updateKnobTooltips();
                 // Show/hide glass-specific controls
                 if (glassSlicesControl) {
@@ -540,6 +549,177 @@ class KaleidoscopeStudio {
                 control.removeAttribute('data-tooltip');
             }
         });
+    }
+
+    createDefaultSession() {
+        /**
+         * Create a default session snapshot that captures the current
+         * configuration in a JSON-serializable structure.
+         */
+        return {
+            style: this.config.style,
+            geometry: {
+                mirrors: this.config.mirrors,
+                baseRadius: this.config.baseRadius,
+                orbitRadius: this.config.orbitRadius,
+                rotationSpeed: this.config.rotationSpeed,
+                minSides: this.config.minSides,
+                maxSides: this.config.maxSides,
+                baseThickness: this.config.baseThickness,
+                maxThickness: this.config.maxThickness
+            },
+            dynamics: {
+                maxScale: this.config.maxScale,
+                trailAlpha: this.config.trailAlpha,
+                attackMs: this.config.attackMs,
+                releaseMs: this.config.releaseMs
+            },
+            colors: {
+                bgColor: this.config.bgColor,
+                bgColor2: this.config.bgColor2,
+                accentColor: this.config.accentColor,
+                chromaColors: this.config.chromaColors,
+                saturation: this.config.saturation
+            },
+            background: {
+                dynamicBg: this.config.dynamicBg,
+                bgReactivity: this.config.bgReactivity,
+                bgParticles: this.config.bgParticles,
+                bgPulse: this.config.bgPulse
+            },
+            export: {
+                width: this.config.width,
+                height: this.config.height,
+                fps: this.config.fps
+            }
+        };
+    }
+
+    getSessionSnapshot() {
+        /**
+         * Return a fresh snapshot of the current session state.
+         */
+        const snapshot = this.createDefaultSession();
+        snapshot.style = this.config.style;
+        return snapshot;
+    }
+
+    applySessionSnapshot(snapshot) {
+        /**
+         * Apply a previously saved session snapshot back onto the current
+         * configuration. Unknown fields are ignored.
+         */
+        if (!snapshot || typeof snapshot !== 'object') return;
+
+        if (snapshot.style) {
+            this.config.style = snapshot.style;
+            this.applyStylePreset(snapshot.style);
+        }
+
+        const g = snapshot.geometry || {};
+        if (typeof g.mirrors === 'number') this.config.mirrors = g.mirrors;
+        if (typeof g.baseRadius === 'number') this.config.baseRadius = g.baseRadius;
+        if (typeof g.orbitRadius === 'number') this.config.orbitRadius = g.orbitRadius;
+        if (typeof g.rotationSpeed === 'number') this.config.rotationSpeed = g.rotationSpeed;
+        if (typeof g.minSides === 'number') this.config.minSides = g.minSides;
+        if (typeof g.maxSides === 'number') this.config.maxSides = g.maxSides;
+        if (typeof g.baseThickness === 'number') this.config.baseThickness = g.baseThickness;
+        if (typeof g.maxThickness === 'number') this.config.maxThickness = g.maxThickness;
+
+        const d = snapshot.dynamics || {};
+        if (typeof d.maxScale === 'number') this.config.maxScale = d.maxScale;
+        if (typeof d.trailAlpha === 'number') this.config.trailAlpha = d.trailAlpha;
+        if (typeof d.attackMs === 'number') this.config.attackMs = d.attackMs;
+        if (typeof d.releaseMs === 'number') this.config.releaseMs = d.releaseMs;
+
+        const c = snapshot.colors || {};
+        if (typeof c.bgColor === 'string') this.config.bgColor = c.bgColor;
+        if (typeof c.bgColor2 === 'string') this.config.bgColor2 = c.bgColor2;
+        if (typeof c.accentColor === 'string') this.config.accentColor = c.accentColor;
+        if (typeof c.chromaColors === 'boolean') this.config.chromaColors = c.chromaColors;
+        if (typeof c.saturation === 'number') this.config.saturation = c.saturation;
+
+        const b = snapshot.background || {};
+        if (typeof b.dynamicBg === 'boolean') this.config.dynamicBg = b.dynamicBg;
+        if (typeof b.bgReactivity === 'number') this.config.bgReactivity = b.bgReactivity;
+        if (typeof b.bgParticles === 'boolean') this.config.bgParticles = b.bgParticles;
+        if (typeof b.bgPulse === 'boolean') this.config.bgPulse = b.bgPulse;
+
+        const ex = snapshot.export || {};
+        if (typeof ex.width === 'number') this.config.width = ex.width;
+        if (typeof ex.height === 'number') this.config.height = ex.height;
+        if (typeof ex.fps === 'number') this.config.fps = ex.fps;
+
+        // After applying, refresh tooltips and session cache
+        this.updateKnobTooltips();
+        this.session = this.getSessionSnapshot();
+    }
+
+    saveSessionToLocalStorage(key = 'chromascope_session') {
+        /**
+         * Persist the current session into localStorage under a given key.
+         */
+        try {
+            const snapshot = this.getSessionSnapshot();
+            window.localStorage.setItem(key, JSON.stringify(snapshot));
+        } catch (e) {
+            console.warn('Failed to save session', e);
+        }
+    }
+
+    loadSessionFromLocalStorage(key = 'chromascope_session') {
+        /**
+         * Load a session from localStorage and apply it if present.
+         */
+        try {
+            const raw = window.localStorage.getItem(key);
+            if (!raw) return;
+            const snapshot = JSON.parse(raw);
+            this.applySessionSnapshot(snapshot);
+        } catch (e) {
+            console.warn('Failed to load session', e);
+        }
+    }
+
+    async loadStylePresets() {
+        /**
+         * Load shared style presets from the backend so that Studio and the
+         * Python renderer use the same style definitions.
+         */
+        try {
+            const response = await fetch('/styles.json');
+            if (!response.ok) {
+                return;
+            }
+            const data = await response.json();
+            this.stylePresets = data.kaleidoscope || null;
+        } catch (err) {
+            // Non-fatal: fall back to built-in defaults if presets can't load
+            console.warn('Failed to load style presets', err);
+        }
+    }
+
+    applyStylePreset(styleName) {
+        /**
+         * Apply a style preset from the shared preset table to the current
+         * Studio config. Only touches geometry/dynamics parameters.
+         */
+        if (!this.stylePresets) return;
+        const preset = this.stylePresets[styleName];
+        if (!preset) return;
+
+        const k = preset;
+
+        if (typeof k.num_mirrors === 'number') this.config.mirrors = k.num_mirrors;
+        if (typeof k.base_radius === 'number') this.config.baseRadius = k.base_radius;
+        if (typeof k.orbit_radius === 'number') this.config.orbitRadius = k.orbit_radius;
+        if (typeof k.rotation_speed === 'number') this.config.rotationSpeed = k.rotation_speed;
+        if (typeof k.max_scale === 'number') this.config.maxScale = k.max_scale;
+        if (typeof k.trail_alpha === 'number') this.config.trailAlpha = k.trail_alpha;
+        if (typeof k.min_sides === 'number') this.config.minSides = k.min_sides;
+        if (typeof k.max_sides === 'number') this.config.maxSides = k.max_sides;
+        if (typeof k.base_thickness === 'number') this.config.baseThickness = k.base_thickness;
+        if (typeof k.max_thickness === 'number') this.config.maxThickness = k.max_thickness;
     }
 
     async loadAudioFile(file) {
@@ -6643,72 +6823,118 @@ class KaleidoscopeStudio {
         exportProgress.style.display = 'block';
 
         try {
-            // Get the audio file
-            const audioInput = document.getElementById('audioInput');
-            if (!audioInput.files.length) {
-                throw new Error('No audio file loaded');
+            // Stop any current playback
+            if (this.isPlaying) {
+                this.stop();
             }
 
-            const formData = new FormData();
-            formData.append('audio', audioInput.files[0]);
-            formData.append('config', JSON.stringify(this.config));
+            progressText.textContent = 'Preparing export...';
+            progressFill.style.width = '0%';
 
-            // Send to backend for rendering
-            const response = await fetch('/api/render', {
-                method: 'POST',
-                body: formData
+            // Resume audio context if suspended
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
+
+            // Create a MediaStream destination to tap audio for recording
+            const audioDest = this.audioContext.createMediaStreamDestination();
+            this.gainNode.connect(audioDest);
+
+            // Capture video stream from canvas
+            const canvasStream = this.canvas.captureStream(60);
+
+            // Combine video + audio tracks
+            const combinedStream = new MediaStream([
+                ...canvasStream.getVideoTracks(),
+                ...audioDest.stream.getAudioTracks()
+            ]);
+
+            // Choose best available codec
+            const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+                ? 'video/webm;codecs=vp9,opus'
+                : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+                ? 'video/webm;codecs=vp8,opus'
+                : 'video/webm';
+
+            const recorder = new MediaRecorder(combinedStream, {
+                mimeType,
+                videoBitsPerSecond: 8000000
             });
 
-            if (!response.ok) {
-                throw new Error('Export failed');
-            }
+            const chunks = [];
+            recorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunks.push(e.data);
+            };
 
-            // Poll for progress
-            const taskId = (await response.json()).task_id;
-            await this.pollExportProgress(taskId, progressFill, progressText);
+            const recordingDone = new Promise((resolve) => {
+                recorder.onstop = () => resolve();
+            });
+
+            // Start recording
+            recorder.start(1000);
+
+            // Play audio from the beginning — this feeds the analyser
+            // which drives the visualization render loop
+            this.pauseTime = 0;
+            this.play();
+
+            const duration = this.audioBuffer.duration;
+            const exportStartTime = this.startTime;
+
+            // Track progress
+            const progressInterval = setInterval(() => {
+                if (!this.audioContext) return;
+                const elapsed = this.audioContext.currentTime - exportStartTime;
+                const pct = Math.min(99, Math.max(0, (elapsed / duration) * 100));
+                progressFill.style.width = `${pct}%`;
+                progressText.textContent = `Recording ${this.config.style} style... ${Math.floor(elapsed)}s / ${Math.floor(duration)}s`;
+            }, 500);
+
+            // Wait for playback to end (play() sets onended → this.stop() → isPlaying = false)
+            await new Promise((resolve) => {
+                const check = setInterval(() => {
+                    if (!this.isPlaying) {
+                        clearInterval(check);
+                        resolve();
+                    }
+                }, 200);
+            });
+
+            // Brief delay to capture final frames
+            await new Promise(r => setTimeout(r, 300));
+
+            // Stop recording
+            recorder.stop();
+            clearInterval(progressInterval);
+
+            // Disconnect the recording tap
+            try { this.gainNode.disconnect(audioDest); } catch(e) {}
+
+            await recordingDone;
+
+            // Create and trigger download
+            const blob = new Blob(chunks, { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'chromascope_export.webm';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            progressFill.style.width = '100%';
+            progressText.textContent = 'Export complete!';
 
         } catch (error) {
             console.error('Export error:', error);
             progressText.textContent = 'Export failed: ' + error.message;
-
-            // Fallback: Show message about using CLI
-            setTimeout(() => {
-                alert(
-                    'To export video, use the command line:\n\n' +
-                    'python -m chromascope.render_video your_audio.mp3\n\n' +
-                    'The frontend preview uses the same visualization engine.'
-                );
-            }, 1000);
         } finally {
             setTimeout(() => {
                 exportBtn.disabled = false;
                 exportProgress.style.display = 'none';
                 progressFill.style.width = '0%';
             }, 3000);
-        }
-    }
-
-    async pollExportProgress(taskId, progressFill, progressText) {
-        while (true) {
-            const response = await fetch(`/api/render/status/${taskId}`);
-            const status = await response.json();
-
-            progressFill.style.width = `${status.progress}%`;
-            progressText.textContent = status.message;
-
-            if (status.complete) {
-                if (status.output_path) {
-                    // Trigger download
-                    window.location.href = `/api/render/download/${taskId}`;
-                }
-                break;
-            }
-
-            if (status.error) {
-                throw new Error(status.error);
-            }
-
-            await new Promise(r => setTimeout(r, 500));
         }
     }
 }

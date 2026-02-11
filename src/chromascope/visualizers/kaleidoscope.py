@@ -17,6 +17,8 @@ from typing import Any
 import numpy as np
 import pygame
 
+from chromascope.visualizers.styles import get_kaleidoscope_style
+
 
 @dataclass
 class KaleidoscopeConfig:
@@ -79,6 +81,15 @@ class KaleidoscopeRenderer:
             config: Rendering configuration. Uses defaults if None.
         """
         self.config = config or KaleidoscopeConfig()
+
+        # Apply shared style presets as defaults — only fill in values
+        # that the caller didn't explicitly set (i.e. still at class default).
+        style_overrides = get_kaleidoscope_style(self.config.style)
+        if style_overrides:
+            defaults = KaleidoscopeConfig()
+            for key, value in style_overrides.items():
+                if hasattr(self.config, key) and getattr(self.config, key) == getattr(defaults, key):
+                    setattr(self.config, key, value)
         self.accumulated_rotation = 0.0
         self.surface: pygame.Surface | None = None
 

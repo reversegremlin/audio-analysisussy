@@ -48,7 +48,9 @@ class KaleidoscopeHandler(SimpleHTTPRequestHandler):
         """Handle GET requests."""
         parsed = urlparse(self.path)
 
-        if parsed.path.startswith("/api/render/status/"):
+        if parsed.path == "/styles.json":
+            self.handle_styles()
+        elif parsed.path.startswith("/api/render/status/"):
             task_id = parsed.path.split("/")[-1]
             self.handle_render_status(task_id)
         elif parsed.path.startswith("/api/render/download/"):
@@ -58,36 +60,69 @@ class KaleidoscopeHandler(SimpleHTTPRequestHandler):
             # Serve static files
             super().do_GET()
 
+    def handle_styles(self):
+        """Serve shared style presets as JSON."""
+        try:
+            from chromascope.visualizers.styles import load_style_presets
+
+            data = load_style_presets()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(data).encode())
+        except Exception as e:
+            self.send_error(500, str(e))
+
     def handle_analyze(self):
         """Analyze audio file and return manifest."""
         try:
             content_length = int(self.headers["Content-Length"])
             post_data = self.rfile.read(content_length)
+            content_type = self.headers.get("Content-Type", "")
 
-            # Parse multipart form data (simplified)
-            # In production, use proper multipart parsing
-            boundary = self.headers["Content-Type"].split("boundary=")[1]
+            if "multipart/form-data" not in content_type:
+                self.send_error(400, "Expected multipart/form-data")
+                return
+
+            # Parse multipart form data (simplified; for production use robust parsing)
+            environ = {
+                "REQUEST_METHOD": "POST",
+                "CONTENT_TYPE": content_type,
+                "CONTENT_LENGTH": content_length,
+            }
+            fs = cgi.FieldStorage(
+                fp=BytesIO(post_data),
+                headers=self.headers,
+                environ=environ,
+            )
+
+            audio_item = fs["audio"]
+            if not audio_item.file:
+                self.send_error(400, "No audio file provided")
+                return
 
             # Save uploaded file temporarily
-            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-                # Extract file content (simplified - in production use proper parsing)
+            audio_suffix = Path(audio_item.filename).suffix or ".mp3"
+            with tempfile.NamedTemporaryFile(suffix=audio_suffix, delete=False) as f:
+                f.write(audio_item.file.read())
                 temp_path = f.name
-                # For now, we'll use the data directly
 
-            # Import and run analysis
-            from chromascope import AudioPipeline
+            try:
+                # Import and run analysis
+                from chromascope import AudioPipeline
 
-            pipeline = AudioPipeline(target_fps=60)
-            result = pipeline.process(temp_path)
+                pipeline = AudioPipeline(target_fps=60)
+                result = pipeline.process(temp_path)
 
-            # Clean up
-            os.unlink(temp_path)
-
-            # Send response
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(result["manifest"]).encode())
+                # Send response
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(result["manifest"]).encode())
+            finally:
+                # Clean up temp file
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
 
         except Exception as e:
             self.send_error(500, str(e))
@@ -188,12 +223,9 @@ class KaleidoscopeHandler(SimpleHTTPRequestHandler):
                         render_tasks[task_id]["message"] = msg
 
             # Get render parameters from config
-            width = config.get("exportWidth", 1920)
-            height = config.get("exportHeight", 1080)
-            fps = config.get("exportFps", 60)
-            mirrors = config.get("mirrors", 8)
-            trail = config.get("trailAlpha", 40)
-            style = config.get("style", "geometric")
+            width = config.get("width", config.get("exportWidth", 1920))
+            height = config.get("height", config.get("exportHeight", 1080))
+            fps = config.get("fps", config.get("exportFps", 60))
 
             # Map resolution strings to dimensions
             if isinstance(width, str):
@@ -206,10 +238,18 @@ class KaleidoscopeHandler(SimpleHTTPRequestHandler):
                 width=width,
                 height=height,
                 fps=fps,
-                num_mirrors=mirrors,
-                trail_alpha=trail,
+                num_mirrors=config.get("mirrors", 8),
+                trail_alpha=config.get("trailAlpha", 40),
+                base_radius=config.get("baseRadius", 150.0),
+                max_scale=config.get("maxScale", 1.8),
+                base_thickness=config.get("baseThickness", 3),
+                max_thickness=config.get("maxThickness", 12),
+                orbit_radius=config.get("orbitRadius", 200.0),
+                rotation_speed=config.get("rotationSpeed", 2.0),
+                min_sides=config.get("minSides", 3),
+                max_sides=config.get("maxSides", 12),
                 progress_callback=progress_callback,
-                style=style,
+                style=config.get("style", "geometric"),
             )
 
             with render_tasks_lock:

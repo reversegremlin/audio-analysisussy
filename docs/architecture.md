@@ -30,16 +30,50 @@ The system is divided into four distinct phases:
 - **Output:** `manifest.json` aligned to a specific FPS (default 60).
 
 ## 3. Data Contract (The Manifest Schema)
-Every frame in the output JSON must follow this structure:
+The Visual Driver Manifest is a JSON document with a metadata header and
+frame-by-frame data. It is versioned via `schema_version` to allow the
+feature set to evolve over time without breaking consumers.
+
 ```json
 {
-  "frame": "int",
-  "time": "float",
-  "is_beat": "bool",
-  "impact": "float",    // From Percussive component
-  "fluidity": "float",  // From Harmonic component
-  "brightness": "float" // Spectral Centroid
+  "metadata": {
+    "bpm": "float",
+    "duration": "float",
+    "fps": "int",
+    "n_frames": "int",
+    "version": "string",         // Exporter/engine version
+    "schema_version": "string"   // Manifest schema version, e.g. "1.0"
+  },
+  "frames": [
+    {
+      "frame_index": "int",
+      "time": "float",
+      "is_beat": "bool",
+      "is_onset": "bool",
+
+      // Core continuous drivers (polished signals, all normalized [0.0, 1.0])
+      "percussive_impact": "float",
+      "harmonic_energy": "float",
+      "global_energy": "float",
+      "low_energy": "float",
+      "mid_energy": "float",
+      "high_energy": "float",
+      "spectral_brightness": "float",
+
+      // Tonality
+      "dominant_chroma": "string",        // Note name: C, C#, ..., B
+      "chroma_values": { "C": "float", "C#": "float", "...": "float" },
+
+      // Visual primitives: renderer-agnostic semantic controls
+      "impact": "float",      // Alias of percussive_impact
+      "fluidity": "float",    // Alias of harmonic_energy
+      "brightness": "float",  // Alias of spectral_brightness
+      "pitch_hue": "float",   // Normalized [0.0, 1.0] mapping of dominant_chroma
+      "texture": "float"      // Aggregated mid/high-band activity
+    }
+  ]
 }
+```
 
 ## 4. Architectural Decision Log (ADR)
 The Trail: Newest decisions at the top.
@@ -47,6 +81,11 @@ The Trail: Newest decisions at the top.
 ADR-001 (2023-10-27): Decided to use librosa over scipy.fft for initial extraction to leverage high-level MIR (Music Information Retrieval) functions and better beat tracking.
 
 ADR-002 (2023-10-27): Implemented HPSS separation as the first step to ensure "Drum" visuals don't get triggered by loud "Melody" notes.
+
+ADR-003 (2026-02-10): Added explicit manifest schema versioning and a visual
+primitives layer (`impact`, `fluidity`, `brightness`, `pitch_hue`, `texture`)
+computed from polished features. Introduced shared style presets consumed by
+both Python and web renderers.
 
 
 ## 5. Testing Infrastructure

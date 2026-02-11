@@ -155,3 +155,28 @@ class TestSignalPolisher:
 
         # Should complete without error
         assert result.n_frames > 0
+
+    def test_adaptive_envelopes_respond_to_bpm(self, extracted_features):
+        """
+        Adaptive envelopes should produce longer decay at lower BPM and
+        shorter decay at higher BPM for the same underlying features.
+        """
+        import copy
+
+        # Create two views of the same features with different BPM values.
+        slow = copy.deepcopy(extracted_features)
+        fast = copy.deepcopy(extracted_features)
+
+        slow.temporal.bpm = 60.0
+        fast.temporal.bpm = 180.0
+
+        polisher = SignalPolisher(fps=60, adaptive_envelopes=True)
+
+        slow_result = polisher.polish(slow)
+        fast_result = polisher.polish(fast)
+
+        # With longer release at low BPM, total impact energy should be higher.
+        slow_sum = slow_result.percussive_impact.sum()
+        fast_sum = fast_result.percussive_impact.sum()
+
+        assert slow_sum > fast_sum

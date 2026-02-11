@@ -24,7 +24,10 @@ class ManifestMetadata:
     duration: float
     fps: int
     n_frames: int
+    # Engine or exporter version (kept for backward compatibility)
     version: str = "1.0"
+    # Explicit schema version for the manifest payload
+    schema_version: str = "1.0"
 
 
 class ManifestExporter:
@@ -66,7 +69,8 @@ class ManifestExporter:
         chroma_idx = int(polished.dominant_chroma_indices[index])
         dominant_chroma = FeatureAnalyzer.chroma_index_to_name(chroma_idx)
 
-        return {
+        # Base feature fields derived directly from polished features
+        frame: dict[str, Any] = {
             "frame_index": index,
             "time": self._round(polished.frame_times[index]),
             "is_beat": bool(polished.is_beat[index]),
@@ -83,6 +87,47 @@ class ManifestExporter:
                 FeatureAnalyzer.CHROMA_NAMES[i]: self._round(polished.chroma[i, index])
                 for i in range(12)
             },
+        }
+
+        # Derived visual primitives that provide a stable, renderer-agnostic contract.
+        # These are intentionally simple aliases/aggregations over the richer fields.
+        primitives = self._compute_primitives(frame)
+        frame.update(primitives)
+
+        return frame
+
+    def _compute_primitives(self, frame: dict[str, Any]) -> dict[str, float]:
+        """
+        Compute high-level visual primitives from a frame's raw fields.
+
+        This provides a small, stable set of semantic controls that renderers
+        can rely on, even as lower-level features evolve.
+        """
+        # Core primitives map 1:1 to key polished signals
+        impact = frame["percussive_impact"]
+        fluidity = frame["harmonic_energy"]
+        brightness = frame["spectral_brightness"]
+
+        # Map dominant chroma onto a [0.0, 1.0] hue-like scale
+        dominant = frame.get("dominant_chroma", "C")
+        try:
+            chroma_index = FeatureAnalyzer.CHROMA_NAMES.index(dominant)
+        except ValueError:
+            chroma_index = 0
+        # Use 0-1 scale over the 12 chroma bins
+        pitch_hue = chroma_index / (len(FeatureAnalyzer.CHROMA_NAMES) - 1)
+
+        # Texture: simple aggregation of mid/high band activity
+        mid = frame["mid_energy"]
+        high = frame["high_energy"]
+        texture = max(0.0, min(1.0, (mid + high) / 2.0))
+
+        return {
+            "impact": impact,
+            "fluidity": fluidity,
+            "brightness": brightness,
+            "pitch_hue": pitch_hue,
+            "texture": texture,
         }
 
     def build_manifest(
@@ -121,6 +166,7 @@ class ManifestExporter:
                 "fps": metadata.fps,
                 "n_frames": metadata.n_frames,
                 "version": metadata.version,
+                "schema_version": metadata.schema_version,
             },
             "frames": frames,
         }
