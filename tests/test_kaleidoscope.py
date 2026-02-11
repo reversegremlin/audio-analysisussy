@@ -186,3 +186,23 @@ class TestKaleidoscopeRenderer:
 
         config = KaleidoscopeConfig(bg_reactivity=0.5)
         assert config.bg_reactivity == 0.5
+
+    def test_style_presets_applied_for_named_style(self):
+        """Creating a renderer with a named style should apply style presets."""
+        from chromascope.visualizers.kaleidoscope import (
+            KaleidoscopeConfig,
+            KaleidoscopeRenderer,
+        )
+        from chromascope.visualizers.styles import get_kaleidoscope_style
+
+        # Use a style whose presets differ from the defaults
+        preset = get_kaleidoscope_style("glass")
+        assert preset is not None
+
+        config = KaleidoscopeConfig(style="glass")
+        renderer = KaleidoscopeRenderer(config)
+
+        # Config values should reflect the shared preset
+        assert renderer.config.num_mirrors == preset["num_mirrors"]
+        assert renderer.config.base_radius == preset["base_radius"]
+        assert renderer.config.trail_alpha == preset["trail_alpha"]

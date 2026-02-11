@@ -65,6 +65,7 @@ class SignalPolisher:
         fps: int = 60,
         impact_envelope: EnvelopeParams | None = None,
         energy_envelope: EnvelopeParams | None = None,
+        adaptive_envelopes: bool = False,
     ):
         """
         Initialize the polisher.
@@ -83,6 +84,8 @@ class SignalPolisher:
             attack_ms=50.0,
             release_ms=300.0,
         )
+        # When enabled, envelope timings are adaptively scaled based on BPM.
+        self.adaptive_envelopes = adaptive_envelopes
 
     def _ms_to_frames(self, ms: float) -> int:
         """Convert milliseconds to number of frames at current FPS."""
@@ -229,34 +232,52 @@ class SignalPolisher:
         is_beat = self.create_beat_array(n_frames, features.temporal.beat_frames)
         is_onset = self.create_onset_array(n_frames, features.temporal.onset_frames)
 
+        # Optionally adapt envelope timings based on detected BPM.
+        impact_env = self.impact_envelope
+        energy_env = self.energy_envelope
+        if self.adaptive_envelopes:
+            bpm = getattr(features.temporal, "bpm", 120.0) or 120.0
+            # Scale release inversely with tempo: slower songs -> longer glow.
+            scale = 120.0 / max(bpm, 1.0)
+            scale = float(np.clip(scale, 0.5, 2.0))
+
+            impact_env = EnvelopeParams(
+                attack_ms=impact_env.attack_ms,
+                release_ms=impact_env.release_ms * scale,
+            )
+            energy_env = EnvelopeParams(
+                attack_ms=energy_env.attack_ms,
+                release_ms=energy_env.release_ms * scale,
+            )
+
         # Energy signals with envelope smoothing
         percussive_impact = self.apply_envelope(
             self.normalize(features.energy.rms_percussive),
-            self.impact_envelope,
+            impact_env,
         )
 
         harmonic_energy = self.apply_envelope(
             self.normalize(features.energy.rms_harmonic),
-            self.energy_envelope,
+            energy_env,
         )
 
         global_energy = self.apply_envelope(
             self.normalize(features.energy.rms),
-            self.energy_envelope,
+            energy_env,
         )
 
         # Frequency bands
         low_energy = self.apply_envelope(
             self.normalize(features.energy.frequency_bands.low),
-            self.energy_envelope,
+            energy_env,
         )
         mid_energy = self.apply_envelope(
             self.normalize(features.energy.frequency_bands.mid),
-            self.energy_envelope,
+            energy_env,
         )
         high_energy = self.apply_envelope(
             self.normalize(features.energy.frequency_bands.high),
-            self.energy_envelope,
+            energy_env,
         )
 
         # Spectral brightness

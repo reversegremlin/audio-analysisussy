@@ -144,7 +144,9 @@ python frontend/server.py
 
 ## Output Format
 
-The Visual Driver Manifest is a JSON file with frame-by-frame data:
+The Visual Driver Manifest is a JSON file with frame-by-frame data. It is
+explicitly versioned via `schema_version` so renderers can safely evolve
+alongside the analysis pipeline.
 
 ```json
 {
@@ -153,7 +155,8 @@ The Visual Driver Manifest is a JSON file with frame-by-frame data:
     "duration": 180.0,
     "fps": 60,
     "n_frames": 10800,
-    "version": "1.0"
+    "version": "1.0",
+    "schema_version": "1.0"
   },
   "frames": [
     {
@@ -161,6 +164,7 @@ The Visual Driver Manifest is a JSON file with frame-by-frame data:
       "time": 0.0,
       "is_beat": true,
       "is_onset": true,
+
       "percussive_impact": 0.85,
       "harmonic_energy": 0.42,
       "global_energy": 0.65,
@@ -168,10 +172,18 @@ The Visual Driver Manifest is a JSON file with frame-by-frame data:
       "mid_energy": 0.58,
       "high_energy": 0.31,
       "spectral_brightness": 0.44,
+
       "dominant_chroma": "G#",
       "chroma_values": {
-        "C": 0.12, "C#": 0.08, "D": 0.15, ...
-      }
+        "C": 0.12, "C#": 0.08, "D": 0.15, "D#": 0.10, "E": 0.05, "F": 0.03,
+        "F#": 0.02, "G": 0.25, "G#": 0.44, "A": 0.18, "A#": 0.09, "B": 0.06
+      },
+
+      "impact": 0.85,
+      "fluidity": 0.42,
+      "brightness": 0.44,
+      "pitch_hue": 0.73,
+      "texture": 0.45
     }
   ]
 }

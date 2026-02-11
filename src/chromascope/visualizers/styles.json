@@ -1,0 +1,149 @@
+{
+  "kaleidoscope": {
+    "geometric": {
+      "num_mirrors": 8,
+      "trail_alpha": 40,
+      "base_radius": 150.0,
+      "max_scale": 1.8,
+      "min_sides": 3,
+      "max_sides": 12,
+      "base_thickness": 3,
+      "max_thickness": 12,
+      "orbit_radius": 200.0,
+      "rotation_speed": 2.0
+    },
+    "glass": {
+      "num_mirrors": 10,
+      "trail_alpha": 55,
+      "base_radius": 180.0,
+      "max_scale": 2.0,
+      "min_sides": 5,
+      "max_sides": 16,
+      "base_thickness": 2,
+      "max_thickness": 10,
+      "orbit_radius": 230.0,
+      "rotation_speed": 1.6
+    },
+    "flower": {
+      "num_mirrors": 12,
+      "trail_alpha": 50,
+      "base_radius": 200.0,
+      "max_scale": 2.2,
+      "min_sides": 5,
+      "max_sides": 14,
+      "base_thickness": 2,
+      "max_thickness": 8,
+      "orbit_radius": 260.0,
+      "rotation_speed": 1.4
+    },
+    "spiral": {
+      "num_mirrors": 14,
+      "trail_alpha": 45,
+      "base_radius": 140.0,
+      "max_scale": 2.4,
+      "min_sides": 4,
+      "max_sides": 18,
+      "base_thickness": 2,
+      "max_thickness": 9,
+      "orbit_radius": 280.0,
+      "rotation_speed": 2.5
+    },
+    "circuit": {
+      "num_mirrors": 8,
+      "trail_alpha": 60,
+      "base_radius": 160.0,
+      "max_scale": 1.9,
+      "min_sides": 6,
+      "max_sides": 16,
+      "base_thickness": 2,
+      "max_thickness": 7,
+      "orbit_radius": 220.0,
+      "rotation_speed": 1.8
+    },
+    "fibonacci": {
+      "num_mirrors": 9,
+      "trail_alpha": 50,
+      "base_radius": 190.0,
+      "max_scale": 2.1,
+      "min_sides": 5,
+      "max_sides": 17,
+      "base_thickness": 2,
+      "max_thickness": 9,
+      "orbit_radius": 250.0,
+      "rotation_speed": 1.9
+    },
+    "dmt": {
+      "num_mirrors": 16,
+      "trail_alpha": 70,
+      "base_radius": 170.0,
+      "max_scale": 2.6,
+      "min_sides": 6,
+      "max_sides": 20,
+      "base_thickness": 2,
+      "max_thickness": 10,
+      "orbit_radius": 300.0,
+      "rotation_speed": 2.8
+    },
+    "sacred": {
+      "num_mirrors": 12,
+      "trail_alpha": 55,
+      "base_radius": 210.0,
+      "max_scale": 2.0,
+      "min_sides": 6,
+      "max_sides": 18,
+      "base_thickness": 3,
+      "max_thickness": 9,
+      "orbit_radius": 260.0,
+      "rotation_speed": 1.5
+    },
+    "mycelial": {
+      "num_mirrors": 10,
+      "trail_alpha": 65,
+      "base_radius": 180.0,
+      "max_scale": 2.3,
+      "min_sides": 4,
+      "max_sides": 14,
+      "base_thickness": 2,
+      "max_thickness": 8,
+      "orbit_radius": 240.0,
+      "rotation_speed": 1.7
+    },
+    "fluid": {
+      "num_mirrors": 6,
+      "trail_alpha": 75,
+      "base_radius": 200.0,
+      "max_scale": 2.5,
+      "min_sides": 5,
+      "max_sides": 16,
+      "base_thickness": 2,
+      "max_thickness": 8,
+      "orbit_radius": 220.0,
+      "rotation_speed": 1.2
+    },
+    "orrery": {
+      "num_mirrors": 8,
+      "trail_alpha": 50,
+      "base_radius": 190.0,
+      "max_scale": 1.9,
+      "min_sides": 5,
+      "max_sides": 15,
+      "base_thickness": 3,
+      "max_thickness": 10,
+      "orbit_radius": 260.0,
+      "rotation_speed": 1.6
+    },
+    "quark": {
+      "num_mirrors": 14,
+      "trail_alpha": 60,
+      "base_radius": 170.0,
+      "max_scale": 2.2,
+      "min_sides": 6,
+      "max_sides": 18,
+      "base_thickness": 2,
+      "max_thickness": 9,
+      "orbit_radius": 280.0,
+      "rotation_speed": 2.2
+    }
+  }
+}
+

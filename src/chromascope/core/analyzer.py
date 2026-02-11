@@ -32,6 +32,9 @@ class TemporalFeatures:
     beat_times: np.ndarray
     onset_frames: np.ndarray
     onset_times: np.ndarray
+    # Local tempo estimates derived from beat spacing
+    tempo_curve_bpm: np.ndarray | None = None
+    tempo_curve_times: np.ndarray | None = None
 
 
 @dataclass
@@ -51,6 +54,8 @@ class TonalityFeatures:
     chroma: np.ndarray  # Shape: (12, n_frames)
     spectral_centroid: np.ndarray
     dominant_chroma_indices: np.ndarray
+    # Compact timbre representation (MFCCs)
+    mfcc: np.ndarray | None = None
 
 
 @dataclass
@@ -151,12 +156,25 @@ class FeatureAnalyzer:
         )
         onset_times = librosa.frames_to_time(onset_frames, sr=sr, hop_length=hop_length)
 
+        # Derive a simple tempo curve from beat-to-beat intervals.
+        if len(beat_times) >= 2:
+            intervals = np.diff(beat_times)
+            # Guard against extremely small or zero intervals.
+            intervals = np.clip(intervals, 1e-3, None)
+            tempo_curve_bpm = 60.0 / intervals
+            tempo_curve_times = beat_times[:-1] + intervals / 2.0
+        else:
+            tempo_curve_bpm = np.array([], dtype=float)
+            tempo_curve_times = np.array([], dtype=float)
+
         return TemporalFeatures(
             bpm=bpm,
             beat_frames=beat_frames,
             beat_times=beat_times,
             onset_frames=onset_frames,
             onset_times=onset_times,
+            tempo_curve_bpm=tempo_curve_bpm,
+            tempo_curve_times=tempo_curve_times,
         )
 
     def extract_energy(
@@ -284,10 +302,19 @@ class FeatureAnalyzer:
         # Dominant chroma per frame
         dominant_chroma_indices = np.argmax(chroma, axis=0)
 
+        # MFCC-based timbre representation from the original signal
+        mfcc = librosa.feature.mfcc(
+            y=decomposed.original,
+            sr=sr,
+            hop_length=hop_length,
+            n_mfcc=13,
+        )
+
         return TonalityFeatures(
             chroma=chroma,
             spectral_centroid=spectral_centroid,
             dominant_chroma_indices=dominant_chroma_indices,
+            mfcc=mfcc,
         )
 
     def analyze(self, decomposed: DecomposedAudio) -> ExtractedFeatures:
