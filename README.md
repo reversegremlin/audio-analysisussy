@@ -43,7 +43,7 @@ Built-in visualizer with **twelve distinct styles**, each mapping audio features
 | **Spiral** | Hypnotic spiraling arms with flowing motion | ![Spiral](docs/demos/preview_spiral.png) |
 | **Circuit** | Hexagonal grid with glowing circuit traces | ![Circuit](docs/demos/preview_circuit.png) |
 | **Fibonacci** | Golden spiral meets kaleidoscope with phyllotaxis patterns | ![Fibonacci](docs/demos/preview_fibonacci.png) |
-| **DMT** | Hyperspace tunnel of non‑Euclidean, recursively folded geometry and neon fractals | ![DMT](docs/demos/preview_dmt.png) |
+| **Spirit Molecule** | Hyperspace tunnel of non‑Euclidean, recursively folded geometry and neon fractals | ![DMT](docs/demos/preview_dmt.png) |
 | **Sacred Geometry** | Mandala-style tiling, aperiodic patterns, and temple-like symmetry locks | ![Sacred Geometry](docs/demos/preview_sacred.png) |
 | **Mycelial** | Biomorphic fungal networks, bioluminescent growth, and spore-driven particle blooms | ![Mycelial](docs/demos/preview_mycelial.png) |
 | **Fluid** | Chrome-like ferrofluid blobs with viscous metal ripples and specular reflections | ![Fluid](docs/demos/preview_fluid.png) |
