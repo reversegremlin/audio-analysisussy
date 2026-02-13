@@ -226,6 +226,7 @@ def main():
         help="Output MP4 file (default: <audio>_kaleidoscope.mp4)",
     )
 
+    # Resolution & framerate
     parser.add_argument(
         "--width",
         type=int,
@@ -247,20 +248,7 @@ def main():
         help="Frames per second (default: 60)",
     )
 
-    parser.add_argument(
-        "-m", "--mirrors",
-        type=int,
-        default=8,
-        help="Number of radial mirrors (default: 8)",
-    )
-
-    parser.add_argument(
-        "-t", "--trail",
-        type=int,
-        default=40,
-        help="Trail persistence 0-100 (default: 40)",
-    )
-
+    # Style & quality
     parser.add_argument(
         "-s", "--style",
         type=str,
@@ -277,6 +265,147 @@ def main():
              "medium (yuv420p, medium preset), fast (quick preview) (default: high)",
     )
 
+    # Geometry params
+    parser.add_argument(
+        "-m", "--mirrors",
+        type=int,
+        default=8,
+        help="Number of radial mirrors (default: 8)",
+    )
+
+    parser.add_argument(
+        "-t", "--trail",
+        type=int,
+        default=40,
+        help="Trail persistence 0-100 (default: 40)",
+    )
+
+    parser.add_argument(
+        "--base-radius",
+        type=float,
+        default=150.0,
+        help="Base shape size (default: 150)",
+    )
+
+    parser.add_argument(
+        "--orbit-radius",
+        type=float,
+        default=200.0,
+        help="Orbit distance (default: 200)",
+    )
+
+    parser.add_argument(
+        "--rotation-speed",
+        type=float,
+        default=2.0,
+        help="Rotation speed multiplier (default: 2.0)",
+    )
+
+    parser.add_argument(
+        "--max-scale",
+        type=float,
+        default=1.8,
+        help="Beat punch intensity (default: 1.8)",
+    )
+
+    parser.add_argument(
+        "--min-sides",
+        type=int,
+        default=3,
+        help="Minimum polygon sides (default: 3)",
+    )
+
+    parser.add_argument(
+        "--max-sides",
+        type=int,
+        default=12,
+        help="Maximum polygon sides (default: 12)",
+    )
+
+    parser.add_argument(
+        "--base-thickness",
+        type=int,
+        default=3,
+        help="Base line thickness (default: 3)",
+    )
+
+    parser.add_argument(
+        "--max-thickness",
+        type=int,
+        default=12,
+        help="Maximum line thickness on beats (default: 12)",
+    )
+
+    # Color params
+    parser.add_argument(
+        "--bg-color",
+        type=str,
+        default="#05050f",
+        help="Background color 1 (default: #05050f)",
+    )
+
+    parser.add_argument(
+        "--bg-color2",
+        type=str,
+        default="#1a0a2e",
+        help="Background color 2 (default: #1a0a2e)",
+    )
+
+    parser.add_argument(
+        "--accent-color",
+        type=str,
+        default="#f59e0b",
+        help="Accent color (default: #f59e0b)",
+    )
+
+    parser.add_argument(
+        "--saturation",
+        type=int,
+        default=85,
+        help="Color saturation 0-100 (default: 85)",
+    )
+
+    parser.add_argument(
+        "--no-chroma-colors",
+        action="store_true",
+        help="Disable chroma-driven colors",
+    )
+
+    # Background effects
+    parser.add_argument(
+        "--no-dynamic-bg",
+        action="store_true",
+        help="Disable dynamic background",
+    )
+
+    parser.add_argument(
+        "--no-particles",
+        action="store_true",
+        help="Disable background particles",
+    )
+
+    parser.add_argument(
+        "--no-pulse",
+        action="store_true",
+        help="Disable beat pulse effect",
+    )
+
+    parser.add_argument(
+        "--bg-reactivity",
+        type=int,
+        default=70,
+        help="Background reactivity 0-100 (default: 70)",
+    )
+
+    # Config file (overrides all other visual params)
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=None,
+        help="JSON config file exported from Chromascope Studio "
+             "(overrides individual visual params)",
+    )
+
     args = parser.parse_args()
 
     if not args.audio.exists():
@@ -287,16 +416,47 @@ def main():
     if output is None:
         output = args.audio.with_name(f"{args.audio.stem}_kaleidoscope.mp4")
 
+    # Build config dict from args or config file
+    config = None
+    if args.config:
+        if not args.config.exists():
+            print(f"Error: Config file not found: {args.config}", file=sys.stderr)
+            sys.exit(1)
+        with open(args.config) as f:
+            config = json.load(f)
+    else:
+        config = {
+            "style": args.style,
+            "mirrors": args.mirrors,
+            "trailAlpha": args.trail,
+            "baseRadius": args.base_radius,
+            "orbitRadius": args.orbit_radius,
+            "rotationSpeed": args.rotation_speed,
+            "maxScale": args.max_scale,
+            "minSides": args.min_sides,
+            "maxSides": args.max_sides,
+            "baseThickness": args.base_thickness,
+            "maxThickness": args.max_thickness,
+            "bgColor": args.bg_color,
+            "bgColor2": args.bg_color2,
+            "accentColor": args.accent_color,
+            "saturation": args.saturation,
+            "chromaColors": not args.no_chroma_colors,
+            "dynamicBg": not args.no_dynamic_bg,
+            "bgParticles": not args.no_particles,
+            "bgPulse": not args.no_pulse,
+            "bgReactivity": args.bg_reactivity,
+        }
+
     render_video(
         audio_path=args.audio,
         output_path=output,
         width=args.width,
         height=args.height,
         fps=args.fps,
-        num_mirrors=args.mirrors,
-        trail_alpha=args.trail,
         style=args.style,
         quality=args.quality,
+        config=config,
     )
 
 

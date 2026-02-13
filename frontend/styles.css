@@ -820,6 +820,170 @@ body {
     font-family: 'JetBrains Mono', monospace;
 }
 
+/* Custom Resolution Inputs */
+.custom-resolution {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+}
+
+.res-input {
+    width: 80px;
+    padding: var(--space-sm);
+    background: var(--bg-surface);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-sm);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    text-align: center;
+    outline: none;
+    transition: border-color 0.2s ease;
+    -moz-appearance: textfield;
+}
+
+.res-input::-webkit-inner-spin-button,
+.res-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.res-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.res-separator {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+/* CLI Command Export */
+.cli-export-section {
+    margin-top: var(--space-lg);
+    padding-top: var(--space-lg);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cli-export-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-surface);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s var(--ease-out);
+}
+
+.cli-export-btn:hover {
+    background: var(--bg-elevated);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.cli-export-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.cli-config-btn {
+    margin-top: var(--space-sm);
+}
+
+.cli-command-output {
+    margin-top: var(--space-sm);
+    background: var(--bg-deep);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.cli-command-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--bg-surface);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cli-command-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+}
+
+.cli-copy-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.cli-copy-icon:hover {
+    background: var(--bg-elevated);
+    color: var(--accent);
+}
+
+.cli-copy-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.cli-command-text {
+    padding: var(--space-sm) var(--space-md);
+    margin: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    line-height: 1.6;
+    color: var(--accent-bright);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 200px;
+    overflow-y: auto;
+    user-select: all;
+}
+
+.cli-command-text::-webkit-scrollbar {
+    width: 4px;
+}
+
+.cli-command-text::-webkit-scrollbar-thumb {
+    background: var(--bg-elevated);
+    border-radius: 2px;
+}
+
+.cli-command-hint {
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    transition: color 0.2s ease;
+}
+
+.cli-command-hint.copied {
+    color: var(--success);
+}
+
 /* Preview Section */
 .preview-section {
     display: flex;

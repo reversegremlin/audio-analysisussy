@@ -395,18 +395,30 @@ class KaleidoscopeStudio {
         });
 
         // Resolution buttons
+        const customResPanel = document.getElementById('customResolution');
         document.querySelectorAll('[data-resolution]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 document.querySelectorAll('[data-resolution]').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
-                const [w, h] = e.target.dataset.resolution.split('x').map(Number);
-                this.config.width = w;
-                this.config.height = h;
-                this.canvas.width = w;
-                this.canvas.height = h;
-                document.getElementById('resolutionBadge').textContent = `${w} × ${h}`;
+
+                if (e.target.dataset.resolution === 'custom') {
+                    customResPanel.style.display = 'flex';
+                    this.applyCustomResolution();
+                } else {
+                    customResPanel.style.display = 'none';
+                    const [w, h] = e.target.dataset.resolution.split('x').map(Number);
+                    this.config.width = w;
+                    this.config.height = h;
+                    this.canvas.width = w;
+                    this.canvas.height = h;
+                    document.getElementById('resolutionBadge').textContent = `${w} × ${h}`;
+                }
             });
         });
+
+        // Custom resolution inputs
+        document.getElementById('customWidth').addEventListener('input', () => this.applyCustomResolution());
+        document.getElementById('customHeight').addEventListener('input', () => this.applyCustomResolution());
 
         // FPS buttons
         document.querySelectorAll('[data-fps]').forEach(btn => {
@@ -429,6 +441,11 @@ class KaleidoscopeStudio {
 
         // Export button
         document.getElementById('exportBtn').addEventListener('click', () => this.exportVideo());
+
+        // CLI command export
+        document.getElementById('copyCliBtn').addEventListener('click', () => this.showCliCommand());
+        document.getElementById('cliCopyIcon').addEventListener('click', () => this.copyCliToClipboard());
+        document.getElementById('exportConfigBtn').addEventListener('click', () => this.exportConfigJson());
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -1193,6 +1210,155 @@ class KaleidoscopeStudio {
         } else {
             document.exitFullscreen();
         }
+    }
+
+    applyCustomResolution() {
+        const w = parseInt(document.getElementById('customWidth').value) || 1280;
+        const h = parseInt(document.getElementById('customHeight').value) || 720;
+        // Clamp to reasonable bounds
+        const width = Math.max(320, Math.min(7680, w));
+        const height = Math.max(240, Math.min(4320, h));
+        this.config.width = width;
+        this.config.height = height;
+        this.canvas.width = width;
+        this.canvas.height = height;
+        document.getElementById('resolutionBadge').textContent = `${width} × ${height}`;
+    }
+
+    generateCliCommand() {
+        const c = this.config;
+        const parts = ['python -m chromascope.render_video'];
+
+        // Audio file placeholder
+        parts.push('your_audio.mp3');
+
+        // Output
+        parts.push('-o output.mp4');
+
+        // Resolution & FPS
+        parts.push(`--width ${c.width}`);
+        parts.push(`--height ${c.height}`);
+        parts.push(`--fps ${c.fps}`);
+
+        // Style
+        if (c.style !== 'geometric') {
+            parts.push(`--style ${c.style}`);
+        }
+
+        // Quality
+        if (c.quality !== 'high') {
+            parts.push(`--quality ${c.quality}`);
+        }
+
+        // Geometry params (only if non-default)
+        if (c.mirrors !== 8) parts.push(`--mirrors ${c.mirrors}`);
+        if (c.trailAlpha !== 40) parts.push(`--trail ${c.trailAlpha}`);
+        if (c.baseRadius !== 150) parts.push(`--base-radius ${c.baseRadius}`);
+        if (c.orbitRadius !== 200) parts.push(`--orbit-radius ${c.orbitRadius}`);
+        if (c.rotationSpeed !== 2.0) parts.push(`--rotation-speed ${c.rotationSpeed}`);
+        if (c.maxScale !== 1.8) parts.push(`--max-scale ${c.maxScale}`);
+        if (c.minSides !== 3) parts.push(`--min-sides ${c.minSides}`);
+        if (c.maxSides !== 12) parts.push(`--max-sides ${c.maxSides}`);
+        if (c.baseThickness !== 3) parts.push(`--base-thickness ${c.baseThickness}`);
+        if (c.maxThickness !== 12) parts.push(`--max-thickness ${c.maxThickness}`);
+
+        // Colors
+        if (c.bgColor !== '#05050f') parts.push(`--bg-color "${c.bgColor}"`);
+        if (c.bgColor2 !== '#1a0a2e') parts.push(`--bg-color2 "${c.bgColor2}"`);
+        if (c.accentColor !== '#f59e0b') parts.push(`--accent-color "${c.accentColor}"`);
+        if (c.saturation !== 85) parts.push(`--saturation ${c.saturation}`);
+        if (!c.chromaColors) parts.push('--no-chroma-colors');
+
+        // Background effects
+        if (!c.dynamicBg) parts.push('--no-dynamic-bg');
+        if (!c.bgParticles) parts.push('--no-particles');
+        if (!c.bgPulse) parts.push('--no-pulse');
+        if (c.bgReactivity !== 70) parts.push(`--bg-reactivity ${c.bgReactivity}`);
+
+        // Format with line continuation for readability
+        if (parts.length <= 4) {
+            return parts.join(' ');
+        }
+        return parts[0] + ' ' + parts[1] + ' \\\n    ' +
+            parts.slice(2).join(' \\\n    ');
+    }
+
+    showCliCommand() {
+        const output = document.getElementById('cliCommandOutput');
+        const text = document.getElementById('cliCommandText');
+        const hint = document.getElementById('cliCommandHint');
+
+        const command = this.generateCliCommand();
+        text.textContent = command;
+        output.style.display = 'block';
+        hint.textContent = 'Paste into your terminal to render offline';
+        hint.classList.remove('copied');
+    }
+
+    async copyCliToClipboard() {
+        const text = document.getElementById('cliCommandText').textContent;
+        const hint = document.getElementById('cliCommandHint');
+        try {
+            await navigator.clipboard.writeText(text);
+            hint.textContent = 'Copied to clipboard!';
+            hint.classList.add('copied');
+            setTimeout(() => {
+                hint.textContent = 'Paste into your terminal to render offline';
+                hint.classList.remove('copied');
+            }, 2000);
+        } catch (err) {
+            // Fallback: select text for manual copy
+            const range = document.createRange();
+            range.selectNodeContents(document.getElementById('cliCommandText'));
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            hint.textContent = 'Press Ctrl+C to copy';
+        }
+    }
+
+    exportConfigJson() {
+        const snapshot = this.getSessionSnapshot();
+        // Flatten into the config format the CLI expects
+        const flatConfig = {
+            style: this.config.style,
+            width: this.config.width,
+            height: this.config.height,
+            fps: this.config.fps,
+            quality: this.config.quality,
+            mirrors: this.config.mirrors,
+            baseRadius: this.config.baseRadius,
+            orbitRadius: this.config.orbitRadius,
+            rotationSpeed: this.config.rotationSpeed,
+            maxScale: this.config.maxScale,
+            trailAlpha: this.config.trailAlpha,
+            minSides: this.config.minSides,
+            maxSides: this.config.maxSides,
+            baseThickness: this.config.baseThickness,
+            maxThickness: this.config.maxThickness,
+            bgColor: this.config.bgColor,
+            bgColor2: this.config.bgColor2,
+            accentColor: this.config.accentColor,
+            chromaColors: this.config.chromaColors,
+            saturation: this.config.saturation,
+            dynamicBg: this.config.dynamicBg,
+            bgReactivity: this.config.bgReactivity,
+            bgParticles: this.config.bgParticles,
+            bgPulse: this.config.bgPulse,
+            shapeSeed: this.config.shapeSeed,
+            glassSlices: this.config.glassSlices,
+        };
+
+        const json = JSON.stringify(flatConfig, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `chromascope_${this.config.style}_config.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     async exportVideo() {

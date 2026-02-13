@@ -522,6 +522,12 @@
                                 <button class="option-btn" data-resolution="1280x720">720p</button>
                                 <button class="option-btn active" data-resolution="1920x1080">1080p</button>
                                 <button class="option-btn" data-resolution="3840x2160">4K</button>
+                                <button class="option-btn" data-resolution="custom" id="customResBtn">Custom</button>
+                            </div>
+                            <div class="custom-resolution" id="customResolution" style="display: none;">
+                                <input type="number" id="customWidth" min="320" max="7680" step="2" value="1280" placeholder="Width" class="res-input">
+                                <span class="res-separator">&times;</span>
+                                <input type="number" id="customHeight" min="240" max="4320" step="2" value="720" placeholder="Height" class="res-input">
                             </div>
                         </div>
                         <div class="option-group">
@@ -553,6 +559,37 @@
                             <div class="progress-fill" id="progressFill"></div>
                         </div>
                         <span class="progress-text" id="progressText">Rendering... 0%</span>
+                    </div>
+                    <div class="cli-export-section">
+                        <button class="cli-export-btn" id="copyCliBtn" title="Generate a CLI command with your current settings">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="4 17 10 11 4 5"/>
+                                <line x1="12" y1="19" x2="20" y2="19"/>
+                            </svg>
+                            Copy CLI Command
+                        </button>
+                        <div class="cli-command-output" id="cliCommandOutput" style="display: none;">
+                            <div class="cli-command-header">
+                                <span class="cli-command-label">Command</span>
+                                <button class="cli-copy-icon" id="cliCopyIcon" title="Copy to clipboard">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2"/>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <pre class="cli-command-text" id="cliCommandText"></pre>
+                            <div class="cli-command-hint" id="cliCommandHint">Paste into your terminal to render offline</div>
+                        </div>
+                        <button class="cli-export-btn cli-config-btn" id="exportConfigBtn" title="Download current settings as a JSON config file">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="12" y1="18" x2="12" y2="12"/>
+                                <polyline points="9 15 12 18 15 15"/>
+                            </svg>
+                            Export Config JSON
+                        </button>
                     </div>
                 </div>
             </aside>

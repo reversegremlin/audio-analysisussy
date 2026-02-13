@@ -153,15 +153,42 @@ All styles share the same musical brain, but “move” differently:
   - Start at **1080p, 30 fps**.
   - Once you like the look, bump it to **60 fps** for the final render.
 
+#### Custom Resolution
+
+The Studio supports custom resolutions beyond the built-in presets (720p / 1080p / 4K):
+
+1. Click the **Custom** button in the Resolution selector.
+2. Enter your desired **width** and **height** in pixels.
+3. The preview and export will use your custom resolution.
+
+Lower resolutions (e.g. 854x480) run much smoother in the browser. Set up your look at a comfortable resolution, then export at full quality via the CLI.
+
 #### Export Workflow (Studio)
 
 1. Load your audio file.
 2. Pick a style that matches the vibe.
 3. Tweak knobs while listening – treat it like mixing the light show.
 4. Choose resolution and fps.
-5. Click **Export Video** – the server renders a video that matches what you saw.
+5. Export using one of these methods:
+   - **Export Video** – the server renders a video in-browser.
+   - **Copy CLI Command** – generates a ready-to-paste terminal command with all your current settings. Run it on a powerful machine for heavy renders.
+   - **Export Config JSON** – downloads your settings as a JSON file for use with `--config`.
 
-> **Note:** The Studio uses the rich, style‑aware web visualizer. The Python CLI/video renderer currently provides a **geometric kaleidoscope** style; use Studio when you want the full set of 12 styles.
+#### Copy CLI Command (Studio to Terminal)
+
+When full HD or 4K rendering is too heavy for your browser, use the **Copy CLI Command** button:
+
+1. Configure your visualization in the Studio (style, knobs, colors, resolution).
+2. Click **Copy CLI Command** in the Export panel.
+3. The generated command appears with all your settings as CLI flags.
+4. Click the copy icon, then paste into your terminal.
+5. Replace `your_audio.mp3` with your actual audio file path.
+
+This lets you design in the browser and render on a beefy machine or overnight.
+
+> **Tip:** You can also click **Export Config JSON** to download a config file, then use `--config config.json` on the command line. This is cleaner for configs with many custom values.
+
+> **Note:** The Studio uses the rich, style-aware web visualizer. The Python CLI/video renderer currently provides a **geometric kaleidoscope** style; use Studio when you want the full set of 12 styles.
 
 ---
 
@@ -201,13 +228,62 @@ Useful flags (from the CLI in `cli.py`):
 # Simple HD video
 python -m chromascope.render_video song.mp3 -o video.mp4
 
+# Lower resolution for faster renders
+python -m chromascope.render_video song.mp3 \
+    --width 1280 --height 720 \
+    --fps 30 --quality fast
+
 # With custom visual settings
 python -m chromascope.render_video song.mp3 \
     --width 1920 --height 1080 \
     --fps 60 \
+    --style geometric \
     --mirrors 12 \
-    --trail 60
+    --trail 60 \
+    --base-radius 200 \
+    --max-scale 2.5
+
+# With color and background customization
+python -m chromascope.render_video song.mp3 \
+    --accent-color "#ff6b6b" \
+    --bg-color "#0a0014" \
+    --saturation 90 \
+    --no-particles
+
+# Using a config file exported from the Studio
+python -m chromascope.render_video song.mp3 \
+    --config chromascope_geometric_config.json
 ```
+
+Full list of render flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--width` | 1920 | Video width in pixels |
+| `--height` | 1080 | Video height in pixels |
+| `--fps` | 60 | Frames per second |
+| `--style` | geometric | Visualization style |
+| `--quality` | high | Encoding quality (high/medium/fast) |
+| `--mirrors` | 8 | Radial mirror count |
+| `--trail` | 40 | Trail persistence (0-100) |
+| `--base-radius` | 150 | Base shape size |
+| `--orbit-radius` | 200 | Orbit distance |
+| `--rotation-speed` | 2.0 | Spin speed multiplier |
+| `--max-scale` | 1.8 | Beat punch intensity |
+| `--min-sides` | 3 | Minimum polygon sides |
+| `--max-sides` | 12 | Maximum polygon sides |
+| `--base-thickness` | 3 | Base line thickness |
+| `--max-thickness` | 12 | Max line thickness on beats |
+| `--bg-color` | #05050f | Background color 1 |
+| `--bg-color2` | #1a0a2e | Background color 2 |
+| `--accent-color` | #f59e0b | Accent color |
+| `--saturation` | 85 | Color saturation (0-100) |
+| `--bg-reactivity` | 70 | Background reactivity (0-100) |
+| `--no-chroma-colors` | | Disable chroma-driven colors |
+| `--no-dynamic-bg` | | Disable dynamic background |
+| `--no-particles` | | Disable background particles |
+| `--no-pulse` | | Disable beat pulse effect |
+| `--config` | | JSON config file from Studio |
 
 This uses the **geometric** kaleidoscope implemented in Python (`render_video.py` + `visualizers/kaleidoscope.py`), driven by the same manifest you get from the pipeline.
 
