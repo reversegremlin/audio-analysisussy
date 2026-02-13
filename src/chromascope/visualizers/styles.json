@@ -13,16 +13,16 @@
       "rotation_speed": 2.0
     },
     "glass": {
-      "num_mirrors": 10,
-      "trail_alpha": 55,
-      "base_radius": 180.0,
-      "max_scale": 2.0,
-      "min_sides": 5,
-      "max_sides": 16,
-      "base_thickness": 2,
-      "max_thickness": 10,
-      "orbit_radius": 230.0,
-      "rotation_speed": 1.6
+      "num_mirrors": 14,
+      "trail_alpha": 70,
+      "base_radius": 130.0,
+      "max_scale": 2.4,
+      "min_sides": 6,
+      "max_sides": 22,
+      "base_thickness": 1,
+      "max_thickness": 11,
+      "orbit_radius": 300.0,
+      "rotation_speed": 2.4
     },
     "flower": {
       "num_mirrors": 12,
@@ -146,4 +146,3 @@
     }
   }
 }
-
