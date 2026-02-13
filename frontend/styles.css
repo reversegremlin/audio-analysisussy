@@ -859,6 +859,28 @@ body {
     font-size: 0.9rem;
 }
 
+.cli-path-group {
+    margin-top: var(--space-xs);
+}
+
+.cli-path-input {
+    width: 100%;
+    margin-top: var(--space-xs);
+    padding: var(--space-sm);
+    background: var(--bg-surface);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+}
+
+.cli-path-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
 /* CLI Command Export */
 .cli-export-section {
     margin-top: var(--space-lg);

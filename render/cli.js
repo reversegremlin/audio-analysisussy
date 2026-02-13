@@ -32,8 +32,8 @@ const QUALITY_PROFILES = {
     high: {
         preset: 'slow',
         crf: '16',
-        pixFmt: 'yuv444p',
-        profile: 'high444',
+        pixFmt: 'yuv420p',
+        profile: 'high',
         tune: 'animation',
         audioBitrate: '256k',
     },
@@ -164,14 +164,26 @@ async function main() {
         stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    // Collect ffmpeg stderr for error reporting
+    // Collect ffmpeg stderr for robust error reporting
     let ffmpegStderr = '';
+    let ffmpegError = null;
     ffmpeg.stderr.on('data', (chunk) => { ffmpegStderr += chunk.toString(); });
+
+    ffmpeg.stdin.on('error', (err) => {
+        ffmpegError = err;
+    });
 
     const ffmpegDone = new Promise((resolve, reject) => {
         ffmpeg.on('close', (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`ffmpeg exited with code ${code}: ${ffmpegStderr.slice(-500)}`));
+            if (code === 0) {
+                resolve();
+                return;
+            }
+            const stderrTail = ffmpegStderr.slice(-1500).trim();
+            reject(new Error(
+                `ffmpeg exited with code ${code}` +
+                (stderrTail ? `: ${stderrTail}` : '')
+            ));
         });
         ffmpeg.on('error', reject);
     });
@@ -179,12 +191,48 @@ async function main() {
     // Helper: write buffer with backpressure handling
     function writeFrame(buf) {
         return new Promise((resolve, reject) => {
-            const ok = ffmpeg.stdin.write(buf);
-            if (ok) {
+            if (ffmpegError) {
+                const stderrTail = ffmpegStderr.slice(-1500).trim();
+                reject(new Error(
+                    `ffmpeg pipe failure (${ffmpegError.message})` +
+                    (stderrTail ? `: ${stderrTail}` : '')
+                ));
+                return;
+            }
+
+            if (ffmpeg.stdin.destroyed || ffmpeg.stdin.writableEnded) {
+                const stderrTail = ffmpegStderr.slice(-1500).trim();
+                reject(new Error(
+                    'ffmpeg stdin is closed before frame write' +
+                    (stderrTail ? `: ${stderrTail}` : '')
+                ));
+                return;
+            }
+
+            const onError = (err) => {
+                ffmpeg.stdin.off('drain', onDrain);
+                const stderrTail = ffmpegStderr.slice(-1500).trim();
+                reject(new Error(
+                    `ffmpeg write error (${err.message})` +
+                    (stderrTail ? `: ${stderrTail}` : '')
+                ));
+            };
+
+            const onDrain = () => {
+                ffmpeg.stdin.off('error', onError);
                 resolve();
-            } else {
-                ffmpeg.stdin.once('drain', resolve);
-                ffmpeg.stdin.once('error', reject);
+            };
+
+            try {
+                const ok = ffmpeg.stdin.write(buf);
+                if (ok) {
+                    resolve();
+                } else {
+                    ffmpeg.stdin.once('drain', onDrain);
+                    ffmpeg.stdin.once('error', onError);
+                }
+            } catch (err) {
+                onError(err);
             }
         });
     }
@@ -212,7 +260,9 @@ async function main() {
     }
 
     // Close ffmpeg stdin and wait for it to finish
-    ffmpeg.stdin.end();
+    if (!ffmpeg.stdin.destroyed && !ffmpeg.stdin.writableEnded) {
+        ffmpeg.stdin.end();
+    }
     reportProgress(totalFrames, totalFrames, 'Encoding final MP4...');
     await ffmpegDone;
 

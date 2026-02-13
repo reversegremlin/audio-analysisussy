@@ -274,6 +274,24 @@ class KaleidoscopeStudio {
             }
         });
 
+        // CLI path fields
+        const cliInputSong = document.getElementById('cliInputSong');
+        const cliOutputFolder = document.getElementById('cliOutputFolder');
+        if (cliInputSong) {
+            cliInputSong.addEventListener('input', () => {
+                if (!cliInputSong.value.trim()) {
+                    cliInputSong.placeholder = '/path/to/your song.mp3';
+                }
+            });
+        }
+        if (cliOutputFolder) {
+            cliOutputFolder.addEventListener('blur', () => {
+                if (!cliOutputFolder.value.trim()) {
+                    cliOutputFolder.value = './renders';
+                }
+            });
+        }
+
         // Style buttons
         const glassSlicesControl = document.getElementById('glassSlicesControl');
         document.querySelectorAll('.style-btn').forEach(btn => {
@@ -708,6 +726,11 @@ class KaleidoscopeStudio {
 
     async loadAudioFile(file) {
         this.audioFile = file; // Store for server-side export
+
+        const cliInputSong = document.getElementById('cliInputSong');
+        if (cliInputSong && (!cliInputSong.value || cliInputSong.value === '/path/to/your song.mp3')) {
+            cliInputSong.value = file.name;
+        }
 
         const statusIndicator = document.getElementById('statusIndicator');
         const statusText = statusIndicator.querySelector('.status-text');
@@ -1228,12 +1251,18 @@ class KaleidoscopeStudio {
     generateCliCommand() {
         const c = this.config;
         const parts = ['python -m chromascope.render_video'];
+        const cliInputSong = document.getElementById('cliInputSong')?.value?.trim();
+        const cliOutputFolder = document.getElementById('cliOutputFolder')?.value?.trim() || './renders';
 
-        // Audio file placeholder
-        parts.push('your_audio.mp3');
+        // Audio input path
+        const inputSongPath = cliInputSong || this.audioFile?.name || '/path/to/your song.mp3';
+        parts.push(this.shellQuote(inputSongPath));
 
         // Output
-        parts.push('-o output.mp4');
+        const outputFileName = `chromascope_${c.style}_export.mp4`;
+        const normalizedOutputFolder = cliOutputFolder.replace(/[\\/]+$/, '');
+        const outputPath = normalizedOutputFolder ? `${normalizedOutputFolder}/${outputFileName}` : outputFileName;
+        parts.push(`-o ${this.shellQuote(outputPath)}`);
 
         // Resolution & FPS
         parts.push(`--width ${c.width}`);
@@ -1281,6 +1310,12 @@ class KaleidoscopeStudio {
         }
         return parts[0] + ' ' + parts[1] + ' \\\n    ' +
             parts.slice(2).join(' \\\n    ');
+    }
+
+    shellQuote(value) {
+        const text = String(value ?? '');
+        if (!text) return "''";
+        return `'${text.replace(/'/g, `'\\''`)}'`;
     }
 
     showCliCommand() {

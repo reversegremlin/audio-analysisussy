@@ -152,6 +152,11 @@ def render_video(
     with open(config_path, "w") as f:
         json.dump(render_config, f)
 
+
+    # Ensure output directory exists before invoking renderer
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     report_progress(12, "Starting Node.js renderer...")
 
     try:
@@ -187,7 +192,9 @@ def render_video(
                     overall_pct = 12 + int(renderer_pct * 0.83)
                     report_progress(overall_pct, msg.get("message", "Rendering..."))
                 elif msg.get("type") == "error":
-                    raise RuntimeError(f"Node.js renderer error: {msg.get('message')}")
+                    raise RuntimeError(
+                        f"Node.js renderer error: {msg.get('message')}"
+                    )
             except json.JSONDecodeError:
                 # Non-JSON output from ffmpeg or node, ignore
                 pass
