@@ -1703,481 +1703,147 @@
         const harmonic = this.smoothedValues.harmonicEnergy;
         const brightness = this.smoothedValues.spectralBrightness;
 
-        const mirrors = Math.max(10, config.mirrors * 2);
         const canvasW = Number.isFinite(this.canvas?.width) ? this.canvas.width : config.width;
         const canvasH = Number.isFinite(this.canvas?.height) ? this.canvas.height : config.height;
-        const maxReach = Math.max(canvasW || 0, canvasH || 0) * 0.76;
-        const beatBoost = 1 + energy * (config.maxScale - 1) * 0.32;
-        const rings = Math.max(7, Math.floor(config.glassSlices / 3));
-        const petalsBase = Math.max(16, numSides * 2);
+        const maxReach = Math.max(canvasW || 0, canvasH || 0) * 0.78;
+        if (!Number.isFinite(maxReach) || maxReach <= 0 || !Number.isFinite(hue)) return;
 
-        // Build a vibrant kaleidoscopic palette inspired by high-saturation glass art.
-        const violet = (hue + 250) % 360;
-        const cyan = (hue + 170) % 360;
-        const magenta = (hue + 320) % 360;
-        const amber = (hue + 30) % 360;
+        const mirrors = Math.max(12, config.mirrors * 2);
+        const wedge = (Math.PI * 2) / mirrors;
+        const beatBoost = 1 + Math.max(0.12, energy) * (config.maxScale - 1) * 0.36;
+        const ringCount = Math.max(8, Math.floor(config.glassSlices / 2.6));
 
-        if (!Number.isFinite(maxReach) || maxReach <= 0 || !Number.isFinite(hue)) {
-            return;
-        }
+        const palette = [
+            (hue + 252) % 360, // violet
+            (hue + 176) % 360, // cyan
+            (hue + 326) % 360, // magenta
+            (hue + 42) % 360,  // amber
+            (hue + 8) % 360,   // hot red-orange
+        ];
 
         ctx.save();
         ctx.translate(centerX, centerY);
-        ctx.rotate(this.accumulatedRotation * 0.08);
+        ctx.rotate(this.accumulatedRotation * 0.1);
         ctx.globalCompositeOperation = 'lighter';
 
-        // Layer 0: stained background wash to avoid flat center/empty zones.
-        const wash = ctx.createRadialGradient(0, 0, 0, 0, 0, maxReach * 1.05);
-        wash.addColorStop(0, `hsla(${cyan}, 90%, 60%, 0.1)`);
-        wash.addColorStop(0.45, `hsla(${magenta}, 95%, 50%, 0.13)`);
-        wash.addColorStop(1, `hsla(${violet}, 95%, 40%, 0.2)`);
-        ctx.fillStyle = wash;
+        // Base stained wash (keeps center from going empty/dull).
+        const bg = ctx.createRadialGradient(0, 0, 0, 0, 0, maxReach * 1.02);
+        bg.addColorStop(0, `hsla(${palette[1]}, 95%, ${58 + brightness * 18}%, 0.22)`);
+        bg.addColorStop(0.4, `hsla(${palette[2]}, 98%, ${48 + brightness * 16}%, 0.16)`);
+        bg.addColorStop(1, `hsla(${palette[0]}, 96%, ${35 + harmonic * 18}%, 0.3)`);
+        ctx.fillStyle = bg;
         ctx.beginPath();
-        ctx.arc(0, 0, maxReach * 1.05, 0, Math.PI * 2);
+        ctx.arc(0, 0, maxReach * 1.02, 0, Math.PI * 2);
         ctx.fill();
 
-        // Layer 1: nested petal lace (dominant kaleidoscope structure).
-        for (let ring = 0; ring < rings; ring++) {
-            const rp = (ring + 1) / rings;
-            const ringR = maxReach * (0.12 + rp * 0.9) * beatBoost;
-            const petals = petalsBase + ring * 3;
-            const spin = this.accumulatedRotation * (0.22 + rp * 1.35) * (ring % 2 ? -1 : 1);
-            const curl = 0.2 + rp * 0.55;
+        // Layer A: dense mirrored filament petals.
+        for (let ring = 0; ring < ringCount; ring++) {
+            const rp = (ring + 1) / ringCount;
+            const ringR = maxReach * (0.1 + rp * 0.92) * beatBoost;
+            const petals = Math.max(20, numSides * 2 + ring * 4);
+            const spin = this.accumulatedRotation * (0.28 + rp * 1.5) * (ring % 2 ? -1 : 1);
 
-            for (let p = 0; p < petals; p++) {
-                const a = (Math.PI * 2 * p) / petals + spin;
-                const wave = Math.sin(a * (2 + (ring % 5)) + this.accumulatedRotation * (2.2 + rp));
-                const r1 = ringR * (0.86 + wave * (0.06 + rp * 0.07));
-                const r2 = ringR * (1.06 + wave * 0.08);
+            for (let i = 0; i < petals; i++) {
+                const a = (Math.PI * 2 * i) / petals + spin;
+                const tA = a + Math.sin(a * 3 + ring * 0.45 + this.accumulatedRotation * 2.6) * (0.16 + rp * 0.08);
+                const tB = a + wedge * 0.92 + Math.cos(a * 5 + this.accumulatedRotation * 3.1) * (0.12 + rp * 0.08);
+                const rA = ringR * (0.84 + Math.sin(a * (2 + ring % 5)) * (0.08 + rp * 0.05));
+                const rB = ringR * (1.07 + Math.cos(a * (3 + ring % 4)) * (0.07 + rp * 0.06));
 
-                const x0 = Math.cos(a) * r1;
-                const y0 = Math.sin(a) * r1;
-                const x3 = Math.cos(a + (Math.PI * 2) / petals * 0.9) * r2;
-                const y3 = Math.sin(a + (Math.PI * 2) / petals * 0.9) * r2;
+                const x0 = Math.cos(a) * rA;
+                const y0 = Math.sin(a) * rA;
+                const c1x = Math.cos(tA) * rB;
+                const c1y = Math.sin(tA) * rB;
+                const c2x = Math.cos(tB) * rB;
+                const c2y = Math.sin(tB) * rB;
+                const x3 = Math.cos(a + wedge * 0.86) * (rA * 1.03);
+                const y3 = Math.sin(a + wedge * 0.86) * (rA * 1.03);
 
-                const c1a = a + curl;
-                const c2a = a - curl * 0.5;
-                const cx1 = Math.cos(c1a) * (ringR * (0.92 + rp * 0.35));
-                const cy1 = Math.sin(c1a) * (ringR * (0.92 + rp * 0.35));
-                const cx2 = Math.cos(c2a) * (ringR * (1.08 + rp * 0.42));
-                const cy2 = Math.sin(c2a) * (ringR * (1.08 + rp * 0.42));
-
-                const hueMix = [violet, cyan, magenta, amber][(ring + p) % 4];
-                const l = 42 + rp * 32 + brightness * 16;
-                const alpha = 0.07 + rp * 0.16;
-
+                const ph = palette[(ring + i) % palette.length];
+                ctx.strokeStyle = `hsla(${ph}, ${Math.min(100, config.saturation + 14)}%, ${44 + rp * 36 + brightness * 14}%, ${0.06 + rp * 0.2})`;
+                ctx.lineWidth = Math.max(0.45, thickness * (0.1 + rp * 0.22));
                 ctx.beginPath();
                 ctx.moveTo(x0, y0);
-                ctx.bezierCurveTo(cx1, cy1, cx2, cy2, x3, y3);
-                ctx.strokeStyle = `hsla(${hueMix}, ${Math.min(100, config.saturation + 12)}%, ${l}%, ${alpha})`;
-                ctx.lineWidth = Math.max(0.5, thickness * (0.12 + rp * 0.28));
+                ctx.bezierCurveTo(c1x, c1y, c2x, c2y, x3, y3);
                 ctx.stroke();
             }
         }
 
-        // Layer 2: clustered dot-corals and shard sparks to mimic organic texture in reference.
-        const clusters = mirrors * 2;
-        for (let i = 0; i < clusters; i++) {
-            const axis = (Math.PI * 2 * i) / clusters + this.accumulatedRotation * 0.35;
-            const clusterR = maxReach * (0.35 + (i % 7) * 0.08);
-            const cx = Math.cos(axis) * clusterR;
-            const cy = Math.sin(axis) * clusterR;
+        // Layer B: coral-like microtexture clusters.
+        const clusterRings = Math.max(4, Math.floor(config.glassSlices / 6));
+        for (let cr = 0; cr < clusterRings; cr++) {
+            const rp = (cr + 1) / clusterRings;
+            const baseDist = maxReach * (0.36 + rp * 0.58);
+            const clusterCount = mirrors + cr * 2;
+            for (let c = 0; c < clusterCount; c++) {
+                const ca = (Math.PI * 2 * c) / clusterCount + this.accumulatedRotation * (0.34 + rp * 0.4);
+                const cx = Math.cos(ca) * baseDist;
+                const cy = Math.sin(ca) * baseDist;
+                const dots = 20 + Math.floor(config.glassSlices * 0.8);
 
-            const count = 24 + Math.floor(config.glassSlices * 0.65);
-            for (let j = 0; j < count; j++) {
-                const seed = i * 97 + j * 37;
-                const rr = (8 + this.seededRandom(seed) * (32 + brightness * 30)) * (0.7 + energy * 0.45);
-                const aa = this.seededRandom(seed + 1) * Math.PI * 2;
-                const px = cx + Math.cos(aa) * rr;
-                const py = cy + Math.sin(aa) * rr;
-                const dotHue = [cyan, amber, magenta, violet][(j + i) % 4] + this.seededRandom(seed + 2) * 18;
-                const dotSize = 0.8 + this.seededRandom(seed + 3) * (2.4 + brightness * 1.8);
+                for (let d = 0; d < dots; d++) {
+                    const seed = c * 173 + d * 41 + cr * 89;
+                    const rn = this.seededRandom(seed);
+                    const rn2 = this.seededRandom(seed + 1);
+                    const rr = (6 + rn * 32) * (0.8 + brightness * 0.6);
+                    const da = rn2 * Math.PI * 2;
+                    const x = cx + Math.cos(da) * rr;
+                    const y = cy + Math.sin(da) * rr;
+                    const dh = palette[(d + c + cr) % palette.length] + rn * 18;
+                    const size = 0.7 + rn2 * (1.8 + brightness * 2.2);
 
-                ctx.beginPath();
-                ctx.arc(px, py, dotSize, 0, Math.PI * 2);
-                ctx.fillStyle = `hsla(${dotHue % 360}, 100%, ${58 + this.seededRandom(seed + 4) * 34}%, ${0.28 + this.seededRandom(seed + 5) * 0.42})`;
-                ctx.fill();
-            }
-
-            // Spark shards around the coral cluster
-            const shardCount = 9 + Math.floor(energy * 8);
-            for (let s = 0; s < shardCount; s++) {
-                const sa = axis + (s / shardCount - 0.5) * 1.2;
-                const len = 14 + brightness * 18 + (s % 3) * 6;
-                const sx = cx + Math.cos(sa) * (20 + (s % 4) * 8);
-                const sy = cy + Math.sin(sa) * (20 + (s % 4) * 8);
-                const ex = sx + Math.cos(sa + 0.15) * len;
-                const ey = sy + Math.sin(sa + 0.15) * len;
-
-                ctx.beginPath();
-                ctx.moveTo(sx, sy);
-                ctx.lineTo(ex, ey);
-                ctx.strokeStyle = `hsla(${(amber + s * 9) % 360}, 100%, ${62 + brightness * 20}%, 0.35)`;
-                ctx.lineWidth = Math.max(0.5, thickness * 0.14);
-                ctx.stroke();
+                    ctx.fillStyle = `hsla(${dh % 360}, 100%, ${56 + rn * 38}%, ${0.22 + rn2 * 0.44})`;
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
 
-        // Layer 3: ornate center mandala (small, detailed, and bright).
-        const centerLayers = 7;
-        for (let layer = 0; layer < centerLayers; layer++) {
-            const lp = (layer + 1) / centerLayers;
-            const points = 14 + layer * 4;
-            const baseR = radius * (0.06 + lp * 0.28) * beatBoost;
-
+        // Layer C: ornate compact nucleus mandala.
+        const coreLayers = 9;
+        for (let layer = 0; layer < coreLayers; layer++) {
+            const lp = (layer + 1) / coreLayers;
+            const vertices = 12 + layer * 4;
+            const baseR = radius * (0.05 + lp * 0.3) * beatBoost;
+            const wobble = 0.1 + lp * 0.05;
             ctx.beginPath();
-            for (let k = 0; k < points; k++) {
-                const a = (Math.PI * 2 * k) / points + this.accumulatedRotation * (0.4 + lp * 1.1);
-                const pulse = 1 + Math.sin(a * (3 + layer) + this.accumulatedRotation * 3.2) * (0.11 + lp * 0.05);
-                const rr = baseR * pulse;
+            for (let v = 0; v < vertices; v++) {
+                const a = (Math.PI * 2 * v) / vertices + this.accumulatedRotation * (0.5 + lp * 1.3);
+                const rr = baseR * (1 + Math.sin(a * (3 + layer % 5) + this.accumulatedRotation * 3.6) * wobble);
                 const x = Math.cos(a) * rr;
                 const y = Math.sin(a) * rr;
-                if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                if (v === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
             }
             ctx.closePath();
 
-            const lh = [cyan, amber, magenta, violet][layer % 4];
-            ctx.fillStyle = `hsla(${lh}, 95%, ${45 + lp * 30}%, ${0.18 + lp * 0.2})`;
-            ctx.strokeStyle = `hsla(${(lh + 30) % 360}, 100%, ${66 + lp * 18}%, ${0.3 + lp * 0.28})`;
-            ctx.lineWidth = Math.max(0.5, thickness * 0.18);
+            const lh = palette[layer % palette.length];
+            ctx.fillStyle = `hsla(${lh}, 100%, ${46 + lp * 32}%, ${0.16 + lp * 0.2})`;
+            ctx.strokeStyle = `hsla(${(lh + 28) % 360}, 100%, ${65 + lp * 20}%, ${0.26 + lp * 0.26})`;
+            ctx.lineWidth = Math.max(0.45, thickness * 0.16);
             ctx.fill();
             ctx.stroke();
         }
 
-        const nucleusR = Math.max(6, radius * (0.028 + energy * 0.018));
-        const centerGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, nucleusR * 7);
-        centerGlow.addColorStop(0, `hsla(${amber}, 100%, 96%, 1)`);
-        centerGlow.addColorStop(0.2, `hsla(${cyan}, 100%, 78%, 0.85)`);
-        centerGlow.addColorStop(1, `hsla(${magenta}, 100%, 45%, 0)`);
-        ctx.fillStyle = centerGlow;
+        const coreR = Math.max(5, radius * (0.025 + energy * 0.024));
+        const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * 7.5);
+        glow.addColorStop(0, `hsla(${palette[3]}, 100%, 98%, 1)`);
+        glow.addColorStop(0.2, `hsla(${palette[1]}, 100%, 82%, 0.86)`);
+        glow.addColorStop(0.55, `hsla(${palette[2]}, 100%, 64%, 0.44)`);
+        glow.addColorStop(1, `hsla(${palette[0]}, 100%, 38%, 0)`);
+        ctx.fillStyle = glow;
         ctx.beginPath();
-        ctx.arc(0, 0, nucleusR * 7, 0, Math.PI * 2);
+        ctx.arc(0, 0, coreR * 7.5, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = `hsla(${amber}, 100%, 93%, 0.95)`;
+        ctx.fillStyle = `hsla(${palette[3]}, 100%, 95%, 0.98)`;
         ctx.beginPath();
-        ctx.arc(0, 0, nucleusR, 0, Math.PI * 2);
+        ctx.arc(0, 0, coreR, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.restore();
     }
 
-    drawGlassWedge(ctx, maxRadius, hue, thickness, baseSeed, wedgeIndex, numSides, orbitFactor) {
-        const config = this.config;
-        const energy = this.smoothedValues.percussiveImpact;
-        const harmonic = this.smoothedValues.harmonicEnergy;
-        const brightness = this.smoothedValues.spectralBrightness;
-        const wedgeAngle = Math.PI / config.mirrors;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.arc(0, 0, maxRadius, 0, wedgeAngle);
-        ctx.closePath();
-        ctx.clip();
-
-        // --- Layer 0: Triangular tessellation (real kaleidoscope grid) ---
-        const tessSize = 40 + config.glassSlices * 1.5 + brightness * 20;
-        const triH = tessSize * Math.sqrt(3) / 2;
-        const rows = Math.ceil(maxRadius / triH) + 2;
-        const cols = Math.ceil(maxRadius / tessSize) + 2;
-
-        for (let row = -1; row < rows; row++) {
-            for (let col = -1; col < cols; col++) {
-                const cx = col * tessSize + (row % 2 === 0 ? 0 : tessSize * 0.5);
-                const cy = row * triH;
-                const dist = Math.sqrt(cx * cx + cy * cy);
-                if (dist > maxRadius * 1.1) continue;
-
-                // Check if roughly in wedge
-                const ptAngle = Math.atan2(cy, cx);
-                if (ptAngle < -0.15 || ptAngle > wedgeAngle + 0.15) continue;
-
-                const distRatio = dist / maxRadius;
-                const triSeed = baseSeed + row * 137 + col * 59;
-                const gemHue = (hue + this.seededRandom(triSeed) * 90 - 30 + harmonic * 40 + distRatio * 60) % 360;
-                const gemLightness = 35 + brightness * 20 + energy * 15 + this.seededRandom(triSeed + 1) * 15;
-                const gemAlpha = (0.15 + energy * 0.25 + harmonic * 0.1) * (1 - distRatio * 0.4);
-
-                // Upward triangle
-                const triScale = tessSize * 0.48 * (0.85 + energy * 0.3 + Math.sin(this.accumulatedRotation * 2 + dist * 0.01) * 0.05);
-                ctx.beginPath();
-                ctx.moveTo(cx, cy - triScale * 0.6);
-                ctx.lineTo(cx + triScale * 0.5, cy + triScale * 0.35);
-                ctx.lineTo(cx - triScale * 0.5, cy + triScale * 0.35);
-                ctx.closePath();
-
-                ctx.fillStyle = `hsla(${gemHue}, ${config.saturation}%, ${gemLightness}%, ${gemAlpha})`;
-                ctx.fill();
-                ctx.strokeStyle = `hsla(${gemHue}, ${config.saturation * 0.8}%, ${gemLightness + 20}%, ${gemAlpha * 0.7})`;
-                ctx.lineWidth = thickness * (0.15 + energy * 0.25);
-                ctx.stroke();
-
-                // Downward triangle (inverted)
-                const invHue = (gemHue + 30 + brightness * 20) % 360;
-                ctx.beginPath();
-                ctx.moveTo(cx + tessSize * 0.5, cy + triScale * 0.35);
-                ctx.lineTo(cx, cy + triH * 0.9);
-                ctx.lineTo(cx - tessSize * 0.05, cy + triScale * 0.35);
-                ctx.closePath();
-
-                ctx.fillStyle = `hsla(${invHue}, ${config.saturation * 0.9}%, ${gemLightness + 8}%, ${gemAlpha * 0.8})`;
-                ctx.fill();
-            }
-        }
-
-        // --- Layer 1: Hexagonal gem facets at multiple depths ---
-        const numGems = 4 + Math.floor(config.glassSlices / 10);
-        for (let i = 0; i < numGems; i++) {
-            const seed = baseSeed + 500 + i * 23.7;
-            const dist = maxRadius * (0.15 + this.seededRandom(seed) * 0.65) * orbitFactor;
-            const angle = this.seededRandom(seed + 1) * wedgeAngle * 0.9;
-            const gemSize = (30 + this.seededRandom(seed + 2) * 60) * (0.8 + energy * 0.5);
-            const gemHue = (hue + this.seededRandom(seed + 3) * 80 - 30 + harmonic * 40) % 360;
-            const gemRotation = this.seededRandom(seed + 4) * Math.PI + this.accumulatedRotation * (0.3 + this.seededRandom(seed + 5) * 0.4);
-
-            const x = Math.cos(angle) * dist;
-            const y = Math.sin(angle) * dist;
-
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.rotate(gemRotation);
-
-            // Draw gem with internal facet lines (sides from numSides knob)
-            const sides = numSides;
-            const points = [];
-            for (let j = 0; j < sides; j++) {
-                const a = (Math.PI * 2 * j) / sides;
-                points.push({ x: Math.cos(a) * gemSize * 0.5, y: Math.sin(a) * gemSize * 0.5 });
-            }
-
-            // Outer hex
-            ctx.beginPath();
-            points.forEach((p, idx) => idx === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-            ctx.closePath();
-
-            const alpha = 0.2 + energy * 0.35 + harmonic * 0.1;
-            ctx.fillStyle = `hsla(${gemHue}, ${config.saturation}%, ${45 + brightness * 20}%, ${alpha})`;
-            ctx.fill();
-            ctx.strokeStyle = `hsla(${gemHue}, ${config.saturation}%, ${70 + energy * 15}%, ${alpha + 0.25})`;
-            ctx.lineWidth = thickness * (0.3 + energy * 0.4);
-            ctx.stroke();
-
-            // Internal facet lines - from center to each vertex (gem cut pattern)
-            for (let j = 0; j < sides; j++) {
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                ctx.lineTo(points[j].x, points[j].y);
-                ctx.strokeStyle = `hsla(${(gemHue + 20) % 360}, ${config.saturation * 0.7}%, 75%, ${alpha * 0.5})`;
-                ctx.lineWidth = thickness * (0.15 + energy * 0.15);
-                ctx.stroke();
-            }
-
-            // Inner facet (smaller polygon rotated) - creates depth
-            const innerScale = 0.5 + energy * 0.15;
-            const innerRot = Math.PI / sides;
-            ctx.beginPath();
-            for (let j = 0; j < sides; j++) {
-                const a = (Math.PI * 2 * j) / sides + innerRot;
-                const px = Math.cos(a) * gemSize * 0.5 * innerScale;
-                const py = Math.sin(a) * gemSize * 0.5 * innerScale;
-                j === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-            }
-            ctx.closePath();
-            ctx.fillStyle = `hsla(${(gemHue + 40) % 360}, ${config.saturation}%, ${60 + energy * 25}%, ${alpha * 0.6})`;
-            ctx.fill();
-            ctx.strokeStyle = `hsla(${(gemHue + 40) % 360}, ${config.saturation * 0.8}%, 80%, ${alpha * 0.4})`;
-            ctx.lineWidth = thickness * 0.15;
-            ctx.stroke();
-
-            ctx.restore();
-        }
-
-        // --- Layer 2: Prismatic light rays from center ---
-        const numRays = 3 + Math.floor(brightness * 4);
-        for (let i = 0; i < numRays; i++) {
-            const seed = baseSeed + 700 + i * 17;
-            const rayAngle = this.seededRandom(seed) * wedgeAngle * 0.85;
-            const rayWidth = (0.01 + this.seededRandom(seed + 1) * 0.03) * (1 + energy * 0.5);
-            const rayHue = (hue + i * 25 + this.seededRandom(seed + 2) * 30) % 360;
-
-            ctx.beginPath();
-            ctx.moveTo(0, 0);
-            ctx.lineTo(
-                Math.cos(rayAngle - rayWidth) * maxRadius,
-                Math.sin(rayAngle - rayWidth) * maxRadius
-            );
-            ctx.lineTo(
-                Math.cos(rayAngle + rayWidth) * maxRadius,
-                Math.sin(rayAngle + rayWidth) * maxRadius
-            );
-            ctx.closePath();
-
-            const grad = ctx.createLinearGradient(0, 0,
-                Math.cos(rayAngle) * maxRadius, Math.sin(rayAngle) * maxRadius);
-            grad.addColorStop(0, `hsla(${rayHue}, ${config.saturation}%, 85%, ${0.15 + energy * 0.2})`);
-            grad.addColorStop(0.5, `hsla(${(rayHue + 30) % 360}, ${config.saturation}%, 70%, ${0.08 + energy * 0.12})`);
-            grad.addColorStop(1, `hsla(${(rayHue + 60) % 360}, ${config.saturation}%, 55%, 0)`);
-            ctx.fillStyle = grad;
-            ctx.fill();
-        }
-
-        // --- Layer 3: Scattered gem sparkles ---
-        const sparkleCount = config.glassSlices + Math.floor(brightness * 15);
-        for (let i = 0; i < sparkleCount; i++) {
-            const seed = baseSeed + 200 + i * 7.1;
-            const dist = maxRadius * (0.1 + this.seededRandom(seed + 1) * 0.85);
-            const angle = this.seededRandom(seed + 2) * wedgeAngle;
-            const x = Math.cos(angle) * dist;
-            const y = Math.sin(angle) * dist;
-
-            const sparkleSize = (3 + this.seededRandom(seed) * 8) * (0.6 + energy * 1.0 + brightness * 0.3);
-            const sparkleHue = (hue + this.seededRandom(seed + 3) * 70 + harmonic * 40) % 360;
-            const sparkleAlpha = (0.3 + energy * 0.6) * (1 - dist / maxRadius * 0.5);
-
-            // Diamond sparkle shape (4-pointed star)
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.rotate(this.seededRandom(seed + 4) * Math.PI + this.accumulatedRotation * this.seededRandom(seed + 5));
-
-            ctx.beginPath();
-            ctx.moveTo(0, -sparkleSize);
-            ctx.lineTo(sparkleSize * 0.25, 0);
-            ctx.lineTo(0, sparkleSize);
-            ctx.lineTo(-sparkleSize * 0.25, 0);
-            ctx.closePath();
-
-            ctx.fillStyle = `hsla(${sparkleHue}, ${config.saturation}%, ${65 + brightness * 25}%, ${sparkleAlpha})`;
-            ctx.fill();
-
-            ctx.restore();
-        }
-
-        // --- Layer 4: Bright crystal highlights (pulse with beats) ---
-        for (let i = 0; i < 4; i++) {
-            const seed = baseSeed + 300 + i * 31.3;
-            const baseSize = 20 + this.seededRandom(seed) * 35;
-            const size = baseSize * (0.6 + energy * 0.8);
-            const dist = maxRadius * (0.2 + this.seededRandom(seed + 1) * 0.45);
-            const angle = this.seededRandom(seed + 2) * wedgeAngle * 0.8;
-            const shapeHue = (hue + 20 + this.seededRandom(seed + 3) * 40) % 360;
-
-            const x = Math.cos(angle) * dist;
-            const y = Math.sin(angle) * dist;
-
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.rotate(this.seededRandom(seed + 4) * Math.PI + this.accumulatedRotation * 0.6);
-
-            // Elongated crystal shard
-            ctx.beginPath();
-            ctx.moveTo(0, -size * 1.2);
-            ctx.lineTo(size * 0.3, -size * 0.2);
-            ctx.lineTo(size * 0.15, size * 0.8);
-            ctx.lineTo(-size * 0.15, size * 0.8);
-            ctx.lineTo(-size * 0.3, -size * 0.2);
-            ctx.closePath();
-
-            const alpha = 0.35 + energy * 0.45;
-            // Gradient fill for glass depth
-            const crystalGrad = ctx.createLinearGradient(0, -size * 1.2, 0, size * 0.8);
-            crystalGrad.addColorStop(0, `hsla(${shapeHue}, ${config.saturation}%, ${80 + energy * 15}%, ${alpha})`);
-            crystalGrad.addColorStop(0.4, `hsla(${(shapeHue + 25) % 360}, ${config.saturation * 0.9}%, ${65 + energy * 20}%, ${alpha * 0.7})`);
-            crystalGrad.addColorStop(1, `hsla(${(shapeHue + 50) % 360}, ${config.saturation * 0.8}%, ${50 + energy * 10}%, ${alpha * 0.4})`);
-            ctx.fillStyle = crystalGrad;
-            ctx.fill();
-
-            ctx.strokeStyle = `hsla(${shapeHue}, ${config.saturation}%, 90%, ${alpha * 0.6})`;
-            ctx.lineWidth = thickness * (0.25 + energy * 0.15);
-            ctx.stroke();
-
-            // Internal facet line
-            ctx.beginPath();
-            ctx.moveTo(0, -size * 1.2);
-            ctx.lineTo(0, size * 0.8);
-            ctx.strokeStyle = `hsla(${shapeHue}, ${config.saturation * 0.5}%, 85%, ${alpha * 0.3})`;
-            ctx.lineWidth = thickness * 0.15;
-            ctx.stroke();
-
-            ctx.restore();
-        }
-
-        ctx.restore();
-    }
-
-    drawCentralJewel(ctx, centerX, centerY, radius, hue, energy, numSides, thickness) {
-        const config = this.config;
-        numSides = numSides || 6;
-        thickness = thickness || 3;
-
-        // Pulsing outer glow
-        const glowSize = radius * (1.8 + energy * 0.6);
-        const glowGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, glowSize);
-        glowGradient.addColorStop(0, `hsla(${hue}, ${config.saturation}%, ${85 + energy * 10}%, ${0.5 + energy * 0.3})`);
-        glowGradient.addColorStop(0.4, `hsla(${(hue + 20) % 360}, ${config.saturation}%, 65%, ${0.2 + energy * 0.15})`);
-        glowGradient.addColorStop(1, `hsla(${hue}, ${config.saturation}%, 40%, 0)`);
-        ctx.fillStyle = glowGradient;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, glowSize, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Faceted jewel - polygon with internal geometry
-        const sides = numSides;
-        const jewPoints = [];
-        for (let i = 0; i < sides; i++) {
-            const a = (Math.PI * 2 * i) / sides + this.accumulatedRotation * 0.3;
-            jewPoints.push({
-                x: centerX + Math.cos(a) * radius,
-                y: centerY + Math.sin(a) * radius
-            });
-        }
-
-        // Outer faceted shape
-        ctx.beginPath();
-        jewPoints.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-        ctx.closePath();
-
-        const jewelGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
-        jewelGrad.addColorStop(0, `hsla(${hue}, ${config.saturation}%, ${90 + energy * 10}%, ${0.9 + energy * 0.1})`);
-        jewelGrad.addColorStop(0.5, `hsla(${(hue + 30) % 360}, ${config.saturation}%, ${65 + energy * 20}%, ${0.65 + energy * 0.2})`);
-        jewelGrad.addColorStop(1, `hsla(${(hue + 60) % 360}, ${config.saturation}%, 45%, ${0.3 + energy * 0.15})`);
-        ctx.fillStyle = jewelGrad;
-        ctx.fill();
-
-        // Facet lines from center to vertices
-        for (let i = 0; i < sides; i++) {
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY);
-            ctx.lineTo(jewPoints[i].x, jewPoints[i].y);
-            ctx.strokeStyle = `hsla(${(hue + i * 20) % 360}, ${config.saturation * 0.6}%, 80%, ${0.25 + energy * 0.2})`;
-            ctx.lineWidth = thickness * (0.25 + energy * 0.15);
-            ctx.stroke();
-        }
-
-        // Inner rotated polygon
-        const innerRadius = radius * (0.55 + energy * 0.1);
-        ctx.beginPath();
-        for (let i = 0; i < sides; i++) {
-            const a = (Math.PI * 2 * i) / sides + this.accumulatedRotation * 0.3 + Math.PI / sides;
-            const px = centerX + Math.cos(a) * innerRadius;
-            const py = centerY + Math.sin(a) * innerRadius;
-            i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.strokeStyle = `hsla(${(hue + 40) % 360}, ${config.saturation}%, 80%, ${0.3 + energy * 0.3})`;
-        ctx.lineWidth = thickness * (0.3 + energy * 0.3);
-        ctx.stroke();
-
-        // Bright pulsing core
-        const coreRadius = radius * (0.3 + energy * 0.12);
-        const coreGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreRadius);
-        coreGradient.addColorStop(0, `hsla(${hue}, ${config.saturation * 0.4}%, ${97 + energy * 3}%, 1)`);
-        coreGradient.addColorStop(1, `hsla(${hue}, ${config.saturation}%, 75%, ${0.3 + energy * 0.4})`);
-        ctx.fillStyle = coreGradient;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, coreRadius, 0, Math.PI * 2);
-        ctx.fill();
-    }
 
     /**
      * Flower style - petal-like shapes radiating from center (uses shapeSeed for variation)
