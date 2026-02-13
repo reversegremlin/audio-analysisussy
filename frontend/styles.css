@@ -303,6 +303,22 @@ body {
     gap: var(--space-sm);
 }
 
+.style-category-label {
+    grid-column: 1 / -1;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    padding: var(--space-xs) 0 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    margin-bottom: 2px;
+}
+
+.style-category-label:first-child {
+    padding-top: 0;
+}
+
 .style-btn {
     display: flex;
     flex-direction: column;

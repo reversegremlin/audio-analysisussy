@@ -143,6 +143,18 @@
       "max_thickness": 9,
       "orbit_radius": 280.0,
       "rotation_speed": 2.2
+    },
+    "fractal": {
+      "num_mirrors": 18,
+      "trail_alpha": 72,
+      "base_radius": 160.0,
+      "max_scale": 2.4,
+      "min_sides": 5,
+      "max_sides": 22,
+      "base_thickness": 2,
+      "max_thickness": 10,
+      "orbit_radius": 290.0,
+      "rotation_speed": 2.3
     }
   }
 }

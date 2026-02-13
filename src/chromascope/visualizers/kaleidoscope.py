@@ -43,7 +43,7 @@ class KaleidoscopeConfig:
     bg_reactivity: float = 0.7  # Background reactivity to audio (0-1)
     bg_particles: bool = True  # Enable particle effects
     bg_pulse: bool = True  # Enable beat pulse rings
-    style: str = "geometric"  # Visualization style (geometric, glass, flower, spiral, circuit, fibonacci)
+    style: str = "geometric"  # Visualization style (geometric, glass, flower, spiral, circuit, fibonacci, fractal, dmt, sacred, mycelial, fluid, orrery, quark)
 
 
 class KaleidoscopeRenderer:
