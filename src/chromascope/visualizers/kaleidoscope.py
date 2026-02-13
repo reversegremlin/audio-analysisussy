@@ -356,6 +356,24 @@ class KaleidoscopeRenderer:
         secondary_hue = (hue + 0.5) % 1.0
         secondary_color = self._hue_to_rgb(secondary_hue, 0.7, 0.8)
 
+        if cfg.style == "glass":
+            self._draw_glass_kaleidoscope(
+                surface=surface,
+                center=center,
+                radius=radius,
+                orbit=orbit,
+                num_sides=num_sides,
+                thickness=thickness,
+                hue=hue,
+                percussive=percussive,
+                harmonic=harmonic,
+                brightness=brightness,
+                base_color=base_color,
+                secondary_color=secondary_color,
+                is_beat=is_beat,
+            )
+            return
+
         # Draw radial mirrors
         for i in range(cfg.num_mirrors):
             mirror_angle = (2 * math.pi * i / cfg.num_mirrors) + self.accumulated_rotation * 0.3
@@ -396,6 +414,96 @@ class KaleidoscopeRenderer:
             self._hue_to_rgb(hue, 0.9, 1.0),
             thickness + 2,
         )
+
+    def _draw_glass_kaleidoscope(
+        self,
+        surface: pygame.Surface,
+        center: tuple[float, float],
+        radius: float,
+        orbit: float,
+        num_sides: int,
+        thickness: int,
+        hue: float,
+        percussive: float,
+        harmonic: float,
+        brightness: float,
+        base_color: tuple[int, int, int],
+        secondary_color: tuple[int, int, int],
+        is_beat: bool,
+    ):
+        """Draw a prismatic glass-style kaleidoscope with multi-layered shards."""
+        cfg = self.config
+        mirror_count = max(3, cfg.num_mirrors)
+        wedge_angle = (2 * math.pi) / mirror_count
+
+        shimmer = 0.25 + harmonic * 0.5 + brightness * 0.25
+        beat_burst = 1.0 + (0.2 if is_beat else 0.0) + percussive * 0.15
+        ring_count = max(3, min(8, cfg.max_sides // 2))
+        shard_density = max(2, min(6, (num_sides - cfg.min_sides) // 2 + 2))
+
+        for ring in range(ring_count):
+            ring_progress = (ring + 1) / ring_count
+            ring_radius = radius * (0.35 + ring_progress * 0.9)
+            ring_orbit = orbit * (0.2 + ring_progress * 0.85)
+            spin = self.accumulated_rotation * (0.2 + ring_progress * 1.1)
+
+            for i in range(mirror_count):
+                base_angle = (i * wedge_angle) + spin
+                for shard in range(shard_density):
+                    shard_phase = (shard + 1) / (shard_density + 1)
+                    shard_angle = base_angle + (shard_phase - 0.5) * wedge_angle * 0.9
+                    mirror_sign = -1 if (i + shard) % 2 else 1
+                    reflection_angle = base_angle + mirror_sign * (shard_phase * wedge_angle * 0.55)
+
+                    core_x = center[0] + ring_orbit * math.cos(reflection_angle)
+                    core_y = center[1] + ring_orbit * math.sin(reflection_angle)
+
+                    shard_length = ring_radius * (0.25 + shard_phase * 0.9) * beat_burst
+                    shard_width = max(3.0, ring_radius * 0.09 * (1 - shard_phase * 0.45))
+
+                    tip = (
+                        core_x + shard_length * math.cos(shard_angle),
+                        core_y + shard_length * math.sin(shard_angle),
+                    )
+                    left = (
+                        core_x + shard_width * math.cos(shard_angle + math.pi / 2),
+                        core_y + shard_width * math.sin(shard_angle + math.pi / 2),
+                    )
+                    right = (
+                        core_x + shard_width * math.cos(shard_angle - math.pi / 2),
+                        core_y + shard_width * math.sin(shard_angle - math.pi / 2),
+                    )
+
+                    hue_shift = (hue + ring_progress * 0.18 + shard_phase * 0.08) % 1.0
+                    sat = min(1.0, 0.45 + shimmer * 0.5)
+                    val = min(1.0, 0.6 + shimmer * 0.45 + ring_progress * 0.2)
+                    shard_color = self._hue_to_rgb(hue_shift, sat, val)
+
+                    pygame.draw.polygon(surface, shard_color, [left, tip, right], 0)
+
+                    outline_thickness = max(1, int(thickness * (0.5 + ring_progress * 0.35)))
+                    outline_mix = 0.4 + shard_phase * 0.4
+                    outline_color = (
+                        int(base_color[0] * (1 - outline_mix) + secondary_color[0] * outline_mix),
+                        int(base_color[1] * (1 - outline_mix) + secondary_color[1] * outline_mix),
+                        int(base_color[2] * (1 - outline_mix) + secondary_color[2] * outline_mix),
+                    )
+                    pygame.draw.polygon(surface, outline_color, [left, tip, right], outline_thickness)
+
+        # Refractive halo rings for extra depth.
+        halo_count = max(2, min(5, cfg.min_sides - 1))
+        for i in range(halo_count):
+            halo_phase = (i + 1) / halo_count
+            halo_radius = int(radius * (0.35 + halo_phase * 0.9) * beat_burst)
+            halo_hue = (hue + 0.5 + halo_phase * 0.08) % 1.0
+            halo_color = self._hue_to_rgb(halo_hue, 0.35 + 0.2 * brightness, 0.5 + 0.35 * harmonic)
+            pygame.draw.circle(
+                surface,
+                halo_color,
+                (int(center[0]), int(center[1])),
+                max(2, halo_radius),
+                max(1, thickness // 2),
+            )
 
     def render_frame(
         self,
