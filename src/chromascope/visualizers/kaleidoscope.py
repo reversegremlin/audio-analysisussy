@@ -431,79 +431,186 @@ class KaleidoscopeRenderer:
         secondary_color: tuple[int, int, int],
         is_beat: bool,
     ):
-        """Draw a prismatic glass-style kaleidoscope with multi-layered shards."""
+        """Draw an ultra-dense psychedelic glass kaleidoscope scene."""
         cfg = self.config
-        mirror_count = max(3, cfg.num_mirrors)
+        width, height = cfg.width, cfg.height
+        mirror_count = max(6, cfg.num_mirrors)
         wedge_angle = (2 * math.pi) / mirror_count
 
-        shimmer = 0.25 + harmonic * 0.5 + brightness * 0.25
-        beat_burst = 1.0 + (0.2 if is_beat else 0.0) + percussive * 0.15
-        ring_count = max(3, min(8, cfg.max_sides // 2))
-        shard_density = max(2, min(6, (num_sides - cfg.min_sides) // 2 + 2))
+        beat_burst = 1.0 + (0.22 if is_beat else 0.0) + percussive * (cfg.max_scale - 1.0) * 0.12
+        harmonic_flow = 0.3 + harmonic * 1.4
+        detail_density = max(3, min(9, cfg.max_sides // 2))
+        spoke_density = max(4, min(14, cfg.max_sides))
 
-        for ring in range(ring_count):
-            ring_progress = (ring + 1) / ring_count
-            ring_radius = radius * (0.35 + ring_progress * 0.9)
-            ring_orbit = orbit * (0.2 + ring_progress * 0.85)
-            spin = self.accumulated_rotation * (0.2 + ring_progress * 1.1)
+        fx = pygame.Surface((width, height), pygame.SRCALPHA)
+
+        # Layer 1: mirrored neon ribbons to establish a rich, organic texture field.
+        ribbon_sets = detail_density + 2
+        for r in range(ribbon_sets):
+            ring_phase = (r + 1) / ribbon_sets
+            ring_orbit = orbit * (0.18 + ring_phase * 1.05)
+            ring_radius = radius * (0.35 + ring_phase * 1.25) * beat_burst
+            spin = self.accumulated_rotation * (0.25 + ring_phase * 1.35)
 
             for i in range(mirror_count):
-                base_angle = (i * wedge_angle) + spin
-                for shard in range(shard_density):
-                    shard_phase = (shard + 1) / (shard_density + 1)
-                    shard_angle = base_angle + (shard_phase - 0.5) * wedge_angle * 0.9
-                    mirror_sign = -1 if (i + shard) % 2 else 1
-                    reflection_angle = base_angle + mirror_sign * (shard_phase * wedge_angle * 0.55)
+                axis = i * wedge_angle + spin
+                mirror_flip = -1 if i % 2 else 1
 
-                    core_x = center[0] + ring_orbit * math.cos(reflection_angle)
-                    core_y = center[1] + ring_orbit * math.sin(reflection_angle)
-
-                    shard_length = ring_radius * (0.25 + shard_phase * 0.9) * beat_burst
-                    shard_width = max(3.0, ring_radius * 0.09 * (1 - shard_phase * 0.45))
-
-                    tip = (
-                        core_x + shard_length * math.cos(shard_angle),
-                        core_y + shard_length * math.sin(shard_angle),
+                points = []
+                segs = spoke_density
+                for s in range(segs + 1):
+                    t = s / segs
+                    wave = math.sin(
+                        self.accumulated_rotation * (1.2 + ring_phase)
+                        + t * math.pi * (2.5 + ring_phase * 3.5)
+                        + i * 0.9
                     )
+                    curl = math.cos(
+                        self.accumulated_rotation * (0.9 + harmonic_flow)
+                        + t * math.pi * (4.0 + ring_phase * 4.5)
+                        + r * 0.75
+                    )
+                    theta = axis + mirror_flip * (t - 0.5) * wedge_angle * (0.95 + 0.2 * ring_phase)
+                    radial = ring_orbit + ring_radius * (0.24 + t * 0.92 + wave * 0.16)
+                    px = center[0] + radial * math.cos(theta + curl * 0.18)
+                    py = center[1] + radial * math.sin(theta + wave * 0.22)
+                    points.append((px, py))
+
+                hue_shift = (hue + 0.54 + ring_phase * 0.33 + i * 0.017) % 1.0
+                sat = min(1.0, 0.62 + brightness * 0.28)
+                val = min(1.0, 0.68 + harmonic * 0.26 + ring_phase * 0.22)
+                neon = self._hue_to_rgb(hue_shift, sat, val)
+                alpha = int(110 + ring_phase * 110)
+                neon_rgba = (neon[0], neon[1], neon[2], alpha)
+                glow_rgba = (neon[0], neon[1], neon[2], max(45, alpha // 3))
+
+                if len(points) > 1:
+                    pygame.draw.lines(
+                        fx,
+                        glow_rgba,
+                        False,
+                        points,
+                        max(1, int(thickness * (0.8 + ring_phase * 0.7))),
+                    )
+                    pygame.draw.lines(
+                        fx,
+                        neon_rgba,
+                        False,
+                        points,
+                        max(1, int(thickness * (0.35 + ring_phase * 0.5))),
+                    )
+
+                # Sprinkle crystal nodes along each ribbon for glitter and micro-detail.
+                node_count = max(3, detail_density // 2 + 2)
+                for n in range(1, node_count + 1):
+                    idx = int((n / (node_count + 1)) * (len(points) - 1))
+                    nx, ny = points[idx]
+                    node_size = max(1, int(1 + ring_phase * 3 + percussive * 2))
+                    node_hue = (hue_shift + 0.1 + n * 0.03) % 1.0
+                    node_color = self._hue_to_rgb(node_hue, 0.55 + brightness * 0.35, 0.85)
+                    pygame.draw.circle(
+                        fx,
+                        (node_color[0], node_color[1], node_color[2], 140),
+                        (int(nx), int(ny)),
+                        node_size,
+                    )
+
+        # Layer 2: mirrored stained-glass shard fan.
+        shard_rings = max(3, min(8, (cfg.max_sides + cfg.min_sides) // 3))
+        for ring in range(shard_rings):
+            ring_phase = (ring + 1) / shard_rings
+            ring_orbit = orbit * (0.25 + ring_phase)
+            shard_radius = radius * (0.22 + ring_phase * 0.85) * beat_burst
+            spin = self.accumulated_rotation * (0.45 + ring_phase)
+
+            for i in range(mirror_count):
+                base_angle = i * wedge_angle + spin
+                shard_count = max(2, min(7, detail_density - 1 + ring // 2))
+
+                for shard in range(shard_count):
+                    shard_phase = (shard + 1) / (shard_count + 1)
+                    fan = (shard_phase - 0.5) * wedge_angle * 0.9
+                    reflect = -1 if (i + shard + ring) % 2 else 1
+                    core_theta = base_angle + reflect * fan * 0.55
+                    tip_theta = base_angle + fan
+
+                    cx = center[0] + ring_orbit * math.cos(core_theta)
+                    cy = center[1] + ring_orbit * math.sin(core_theta)
+                    shard_len = shard_radius * (0.5 + shard_phase * 1.15)
+                    shard_w = max(2.5, shard_radius * (0.09 - shard_phase * 0.04))
+
+                    tip = (cx + shard_len * math.cos(tip_theta), cy + shard_len * math.sin(tip_theta))
                     left = (
-                        core_x + shard_width * math.cos(shard_angle + math.pi / 2),
-                        core_y + shard_width * math.sin(shard_angle + math.pi / 2),
+                        cx + shard_w * math.cos(tip_theta + math.pi / 2),
+                        cy + shard_w * math.sin(tip_theta + math.pi / 2),
                     )
                     right = (
-                        core_x + shard_width * math.cos(shard_angle - math.pi / 2),
-                        core_y + shard_width * math.sin(shard_angle - math.pi / 2),
+                        cx + shard_w * math.cos(tip_theta - math.pi / 2),
+                        cy + shard_w * math.sin(tip_theta - math.pi / 2),
                     )
 
-                    hue_shift = (hue + ring_progress * 0.18 + shard_phase * 0.08) % 1.0
-                    sat = min(1.0, 0.45 + shimmer * 0.5)
-                    val = min(1.0, 0.6 + shimmer * 0.45 + ring_progress * 0.2)
-                    shard_color = self._hue_to_rgb(hue_shift, sat, val)
-
-                    pygame.draw.polygon(surface, shard_color, [left, tip, right], 0)
-
-                    outline_thickness = max(1, int(thickness * (0.5 + ring_progress * 0.35)))
-                    outline_mix = 0.4 + shard_phase * 0.4
-                    outline_color = (
-                        int(base_color[0] * (1 - outline_mix) + secondary_color[0] * outline_mix),
-                        int(base_color[1] * (1 - outline_mix) + secondary_color[1] * outline_mix),
-                        int(base_color[2] * (1 - outline_mix) + secondary_color[2] * outline_mix),
+                    fill_hue = (hue + ring_phase * 0.21 + shard_phase * 0.14 + 0.05) % 1.0
+                    fill = self._hue_to_rgb(fill_hue, 0.58 + brightness * 0.32, 0.74 + ring_phase * 0.2)
+                    edge_mix = 0.35 + shard_phase * 0.45
+                    edge = (
+                        int(base_color[0] * (1 - edge_mix) + secondary_color[0] * edge_mix),
+                        int(base_color[1] * (1 - edge_mix) + secondary_color[1] * edge_mix),
+                        int(base_color[2] * (1 - edge_mix) + secondary_color[2] * edge_mix),
                     )
-                    pygame.draw.polygon(surface, outline_color, [left, tip, right], outline_thickness)
 
-        # Refractive halo rings for extra depth.
-        halo_count = max(2, min(5, cfg.min_sides - 1))
-        for i in range(halo_count):
-            halo_phase = (i + 1) / halo_count
-            halo_radius = int(radius * (0.35 + halo_phase * 0.9) * beat_burst)
-            halo_hue = (hue + 0.5 + halo_phase * 0.08) % 1.0
-            halo_color = self._hue_to_rgb(halo_hue, 0.35 + 0.2 * brightness, 0.5 + 0.35 * harmonic)
-            pygame.draw.circle(
-                surface,
-                halo_color,
-                (int(center[0]), int(center[1])),
-                max(2, halo_radius),
-                max(1, thickness // 2),
-            )
+                    pygame.draw.polygon(fx, (fill[0], fill[1], fill[2], 100), [left, tip, right], 0)
+                    pygame.draw.polygon(
+                        fx,
+                        (edge[0], edge[1], edge[2], 150),
+                        [left, tip, right],
+                        max(1, int(thickness * (0.2 + ring_phase * 0.5))),
+                    )
+
+        # Layer 3: central mandala rosette with nested petals and pulse core.
+        rosette_sides = max(6, min(24, num_sides + mirror_count // 2))
+        for layer in range(detail_density):
+            phase = (layer + 1) / detail_density
+            layer_radius = radius * (0.22 + phase * 0.55) * beat_burst
+            petals = rosette_sides + layer * 2
+            petal_hue = (hue + 0.08 + phase * 0.17) % 1.0
+            petal_color = self._hue_to_rgb(petal_hue, 0.75, min(1.0, 0.72 + phase * 0.22))
+            points = []
+            for p in range(petals):
+                ang = (
+                    (2 * math.pi * p / petals)
+                    + self.accumulated_rotation * (0.18 + phase * 0.45)
+                )
+                pulse = 1.0 + math.sin(ang * (2 + layer % 3) + self.accumulated_rotation * 2.2) * (0.08 + 0.12 * phase)
+                rr = layer_radius * pulse
+                points.append((center[0] + rr * math.cos(ang), center[1] + rr * math.sin(ang)))
+
+            if len(points) >= 3:
+                pygame.draw.polygon(
+                    fx,
+                    (petal_color[0], petal_color[1], petal_color[2], int(55 + phase * 70)),
+                    points,
+                    0,
+                )
+                pygame.draw.polygon(
+                    fx,
+                    (255, 255, 255, int(30 + phase * 35)),
+                    points,
+                    max(1, int(thickness * 0.18)),
+                )
+
+        core_hue = (hue + 0.58) % 1.0
+        core = self._hue_to_rgb(core_hue, 0.82, 0.98)
+        core_radius = int(max(8, radius * (0.12 + 0.08 * percussive) * beat_burst))
+        pygame.draw.circle(fx, (core[0], core[1], core[2], 185), (int(center[0]), int(center[1])), core_radius)
+        pygame.draw.circle(
+            fx,
+            (255, 255, 255, 140),
+            (int(center[0]), int(center[1])),
+            max(2, int(core_radius * 0.42)),
+            0,
+        )
+
+        surface.blit(fx, (0, 0))
 
     def render_frame(
         self,
