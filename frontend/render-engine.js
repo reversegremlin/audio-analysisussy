@@ -192,6 +192,9 @@
             case 'quark':
                 this.renderQuarkBackground(ctx, width, height, centerX, centerY, reactivity);
                 break;
+            case 'fractal':
+                this.renderFractalBackground(ctx, width, height, centerX, centerY, reactivity);
+                break;
             default:
                 this.renderGeometricBackground(ctx, width, height, centerX, centerY, reactivity);
                 break;
@@ -1542,7 +1545,7 @@
 
         // Per-style size normalization — keeps visual footprint consistent across styles
         const sizeScale = {
-            circuit: 0.75, fibonacci: 1.15, dmt: 1.1, fluid: 1.5, quark: 1.3
+            circuit: 0.75, fibonacci: 1.15, dmt: 1.1, fluid: 1.5, quark: 1.3, fractal: 1.2
         }[config.style] || 1.0;
         const scaledRadius = radius * sizeScale;
 
@@ -1580,6 +1583,9 @@
                 break;
             case 'quark':
                 this.renderQuarkStyle(ctx, centerX, centerY, scaledRadius, numSides, hue, thickness);
+                break;
+            case 'fractal':
+                this.renderFractalStyle(ctx, centerX, centerY, scaledRadius, numSides, hue, thickness);
                 break;
             case 'geometric':
             default:
@@ -5599,6 +5605,255 @@
         ctx.fillStyle = haze2;
         ctx.fill();
 
+        ctx.restore();
+    }
+
+    /**
+     * Fractal style — Recursive self-similar geometry with prismatic color shifts.
+     * Nested polygon layers at decreasing scales, each rotated and hue-shifted,
+     * creating a dense kaleidoscopic mandala that pulses with audio energy.
+     */
+    renderFractalStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
+        const config = this.config;
+        const seed = config.shapeSeed;
+        const energy = this.smoothedValues.percussiveImpact;
+        const harmonic = this.smoothedValues.harmonicEnergy;
+        const brightness = this.smoothedValues.spectralBrightness;
+        const mirrors = config.mirrors;
+        const rot = this.accumulatedRotation;
+        const orbitFactor = config.orbitRadius / 200;
+        const sat = config.saturation;
+
+        // Seed-based variation
+        const rotDir = this.seededRandom(seed) > 0.5 ? 1 : -1;
+        const hueSpread = 40 + this.seededRandom(seed + 1) * 60;
+        const depthLevels = 4 + Math.floor(this.seededRandom(seed + 2) * 2);
+        const spiralTwist = (this.seededRandom(seed + 3) - 0.5) * 0.4;
+        const hasStarBurst = this.seededRandom(seed + 4) > 0.35;
+
+        // === LAYER 1: Recursive nested polygon rings ===
+        // Each level draws a polygon ring at a smaller scale, rotated and hue-shifted
+        for (let depth = 0; depth < depthLevels; depth++) {
+            const scale = 1.0 - depth * (0.18 - energy * 0.02);
+            if (scale <= 0.1) break;
+            const layerRadius = radius * scale * (0.8 + energy * 0.25);
+            const layerSides = Math.max(3, numSides + depth - Math.floor(depth / 2));
+            const layerHue = (hue + depth * hueSpread / depthLevels) % 360;
+            const layerRot = rot * (0.5 + depth * 0.2) * rotDir + depth * spiralTwist;
+            const layerAlpha = 0.4 + energy * 0.35 - depth * 0.05;
+
+            for (let m = 0; m < mirrors; m++) {
+                const mirrorAngle = (Math.PI * 2 * m) / mirrors + layerRot;
+                const orbitDist = layerRadius * orbitFactor * 0.4 * (0.6 + harmonic * 0.4);
+                const mx = centerX + Math.cos(mirrorAngle) * orbitDist;
+                const my = centerY + Math.sin(mirrorAngle) * orbitDist;
+                const shapeSize = layerRadius * (0.3 - depth * 0.03) * (0.9 + energy * 0.2);
+
+                // Outer polygon
+                this.drawPolygon(
+                    ctx, mx, my, shapeSize, layerSides,
+                    layerRot + mirrorAngle * 0.5,
+                    `hsla(${layerHue}, ${Math.min(100, sat * 1.1)}%, ${55 + energy * 20}%, ${layerAlpha})`,
+                    thickness * (0.6 + energy * 0.3 - depth * 0.05)
+                );
+
+                // Inner counter-rotating polygon
+                if (depth < depthLevels - 1) {
+                    const innerHue = (layerHue + 180) % 360;
+                    const innerSides = Math.max(3, layerSides - 1);
+                    this.drawPolygon(
+                        ctx, mx, my, shapeSize * 0.55, innerSides,
+                        -layerRot * 1.3 + mirrorAngle,
+                        `hsla(${innerHue}, ${sat * 0.9}%, ${50 + energy * 20}%, ${layerAlpha * 0.7})`,
+                        Math.max(1, thickness * (0.35 - depth * 0.03))
+                    );
+                }
+            }
+        }
+
+        // === LAYER 2: Prismatic connecting web ===
+        // Radial lines between recursive layers create the lattice structure
+        const webMirrors = Math.min(mirrors, 24);
+        for (let m = 0; m < webMirrors; m++) {
+            const baseAngle = (Math.PI * 2 * m) / webMirrors + rot * 0.15 * rotDir;
+            const webHue = (hue + m * (360 / webMirrors)) % 360;
+            const innerR = radius * 0.08 * orbitFactor;
+            const outerR = radius * 0.65 * orbitFactor * (0.8 + harmonic * 0.3);
+            const bendAmount = Math.sin(rot * 2 + m * 0.7) * radius * 0.06 * harmonic;
+
+            ctx.beginPath();
+            ctx.moveTo(
+                centerX + Math.cos(baseAngle) * innerR,
+                centerY + Math.sin(baseAngle) * innerR
+            );
+            ctx.quadraticCurveTo(
+                centerX + Math.cos(baseAngle + 0.1) * (innerR + outerR) * 0.5 + bendAmount,
+                centerY + Math.sin(baseAngle + 0.1) * (innerR + outerR) * 0.5 + bendAmount,
+                centerX + Math.cos(baseAngle) * outerR,
+                centerY + Math.sin(baseAngle) * outerR
+            );
+            ctx.strokeStyle = `hsla(${webHue}, ${sat * 0.7}%, ${50 + brightness * 20}%, ${0.15 + energy * 0.2})`;
+            ctx.lineWidth = thickness * (0.25 + energy * 0.2);
+            ctx.stroke();
+        }
+
+        // === LAYER 3: Starburst spikes on beats ===
+        if (hasStarBurst && energy > 0.3) {
+            const spikeCount = mirrors * 2;
+            const spikeIntensity = (energy - 0.3) * 1.4;
+            for (let s = 0; s < spikeCount; s++) {
+                const sAngle = (Math.PI * 2 * s) / spikeCount + rot * 0.4 * rotDir;
+                const spikeHue = (hue + s * (360 / spikeCount) + 90) % 360;
+                const spikeLen = radius * 0.5 * spikeIntensity * orbitFactor;
+                const spikeInner = radius * 0.05 * orbitFactor;
+
+                ctx.beginPath();
+                ctx.moveTo(
+                    centerX + Math.cos(sAngle) * spikeInner,
+                    centerY + Math.sin(sAngle) * spikeInner
+                );
+                ctx.lineTo(
+                    centerX + Math.cos(sAngle) * spikeLen,
+                    centerY + Math.sin(sAngle) * spikeLen
+                );
+                ctx.strokeStyle = `hsla(${spikeHue}, ${Math.min(100, sat * 1.2)}%, ${65 + spikeIntensity * 25}%, ${spikeIntensity * 0.5})`;
+                ctx.lineWidth = thickness * (0.2 + spikeIntensity * 0.4);
+                ctx.lineCap = 'round';
+                ctx.stroke();
+            }
+        }
+
+        // === LAYER 4: Concentric fractal rings ===
+        const ringCount = 5 + Math.floor(energy * 3);
+        for (let r = 0; r < ringCount; r++) {
+            const ringR = radius * (0.12 + r * 0.1) * orbitFactor * (0.9 + energy * 0.15);
+            const ringSides = Math.max(3, numSides + r * 2);
+            const ringHue = (hue + r * hueSpread / ringCount + brightness * 30) % 360;
+            const wobble = Math.sin(rot * 1.5 + r * 1.2) * radius * 0.008 * energy;
+
+            ctx.beginPath();
+            for (let i = 0; i <= ringSides; i++) {
+                const angle = (Math.PI * 2 * i) / ringSides + rot * 0.1 * (r % 2 === 0 ? 1 : -1) * rotDir;
+                const px = centerX + Math.cos(angle) * (ringR + wobble);
+                const py = centerY + Math.sin(angle) * (ringR + wobble);
+                i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+            }
+            ctx.strokeStyle = `hsla(${ringHue}, ${sat * 0.8}%, ${50 + energy * 15}%, ${0.2 + energy * 0.2 - r * 0.02})`;
+            ctx.lineWidth = thickness * (0.3 + energy * 0.2);
+            ctx.stroke();
+        }
+
+        // === Central prismatic core ===
+        const coreR = radius * 0.1 * (0.8 + energy * 0.5);
+        const coreGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreR);
+        coreGrad.addColorStop(0, `hsla(${(hue + rot * 30) % 360}, ${Math.min(100, sat * 1.3)}%, 80%, ${0.6 + energy * 0.4})`);
+        coreGrad.addColorStop(0.4, `hsla(${(hue + 120 + rot * 30) % 360}, ${sat}%, 60%, ${0.3 + energy * 0.3})`);
+        coreGrad.addColorStop(1, `hsla(${(hue + 240 + rot * 30) % 360}, ${sat * 0.5}%, 40%, 0)`);
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, coreR, 0, Math.PI * 2);
+        ctx.fillStyle = coreGrad;
+        ctx.fill();
+    }
+
+    /**
+     * Fractal background — Self-similar polygon lattice with prismatic color cycling.
+     * 3 parallax layers: nested polygon rings (far), radial web (mid), floating shards (near)
+     */
+    renderFractalBackground(ctx, width, height, centerX, centerY, reactivity) {
+        const config = this.config;
+        const energy = this.smoothedValues.percussiveImpact;
+        const harmonic = this.smoothedValues.harmonicEnergy;
+        const brightness = this.smoothedValues.spectralBrightness;
+        const maxDim = Math.max(width, height) * 0.75;
+        const rot = this._bgFractalRotation;
+        const accentHsl = this.hexToHsl(config.accentColor);
+        const bgHue = accentHsl.h;
+        const mirrors = config.mirrors;
+        const baseAlpha = 0.05 + reactivity * 0.08 + energy * reactivity * 0.06;
+
+        // --- FAR LAYER (0.2x): Nested concentric polygon rings at decreasing scale ---
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(rot * 0.2);
+
+        const nestDepth = 6;
+        for (let d = 0; d < nestDepth; d++) {
+            const ringR = maxDim * (0.15 + d * 0.16) * (0.92 + energy * reactivity * 0.08);
+            const sides = mirrors + d * 2;
+            const ringHue = (bgHue + d * 35 + brightness * 15) % 360;
+            const depthRot = d * 0.08 * (d % 2 === 0 ? 1 : -1);
+
+            ctx.beginPath();
+            for (let i = 0; i <= sides; i++) {
+                const angle = (Math.PI * 2 * i) / sides + depthRot;
+                const wobble = Math.sin(angle * 4 + rot * 3 + d) * maxDim * 0.005 * energy * reactivity;
+                const px = Math.cos(angle) * (ringR + wobble);
+                const py = Math.sin(angle) * (ringR + wobble);
+                i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+            }
+            ctx.strokeStyle = `hsla(${ringHue}, ${config.saturation * 0.4}%, 50%, ${baseAlpha * (1 - d * 0.1)})`;
+            ctx.lineWidth = 0.7 + energy * reactivity;
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // --- MID LAYER (0.6x): Radial web lines with curvature ---
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(-rot * 0.6);
+
+        const webLines = mirrors * 2;
+        for (let i = 0; i < webLines; i++) {
+            const angle = (Math.PI * 2 * i) / webLines;
+            const webHue = (bgHue + i * (360 / webLines)) % 360;
+            const innerR = maxDim * 0.05;
+            const outerR = maxDim * 0.7 * (0.85 + harmonic * reactivity * 0.15);
+            const bend = Math.sin(rot * 2 + i * 0.5) * maxDim * 0.03 * harmonic * reactivity;
+
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(angle) * innerR, Math.sin(angle) * innerR);
+            ctx.quadraticCurveTo(
+                Math.cos(angle + 0.05) * (innerR + outerR) * 0.5 + bend,
+                Math.sin(angle + 0.05) * (innerR + outerR) * 0.5 + bend,
+                Math.cos(angle) * outerR,
+                Math.sin(angle) * outerR
+            );
+            ctx.strokeStyle = `hsla(${webHue}, ${config.saturation * 0.3}%, 45%, ${baseAlpha * 0.6})`;
+            ctx.lineWidth = 0.5 + energy * reactivity * 0.8;
+            ctx.stroke();
+        }
+        ctx.restore();
+
+        // --- NEAR LAYER (1.2x): Floating self-similar polygon shards ---
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(rot * 1.2);
+
+        const shardCount = 12 + Math.floor(energy * reactivity * 6);
+        const seed = 42;
+        for (let s = 0; s < shardCount; s++) {
+            const sSeed = seed + s * 137;
+            const dist = maxDim * (0.15 + this.seededRandom(sSeed) * 0.6);
+            const angle = this.seededRandom(sSeed + 1) * Math.PI * 2;
+            const shardR = maxDim * (0.015 + this.seededRandom(sSeed + 2) * 0.03) * (1 + energy * reactivity * 0.5);
+            const shardSides = 3 + Math.floor(this.seededRandom(sSeed + 3) * 5);
+            const shardHue = (bgHue + this.seededRandom(sSeed + 4) * 120) % 360;
+            const sx = Math.cos(angle + rot * 0.3) * dist;
+            const sy = Math.sin(angle + rot * 0.3) * dist;
+            const shardRot = rot * (1 + this.seededRandom(sSeed + 5) * 2);
+
+            ctx.beginPath();
+            for (let i = 0; i < shardSides; i++) {
+                const a = shardRot + (Math.PI * 2 * i) / shardSides;
+                const px = sx + Math.cos(a) * shardR;
+                const py = sy + Math.sin(a) * shardR;
+                i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.strokeStyle = `hsla(${shardHue}, ${config.saturation * 0.5}%, 55%, ${baseAlpha * 0.8})`;
+            ctx.lineWidth = 0.6 + energy * reactivity * 0.5;
+            ctx.stroke();
+        }
         ctx.restore();
     }
 
