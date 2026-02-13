@@ -26,8 +26,35 @@ const { createCanvas } = require('canvas');
 const ChromascopeRenderer = require(path.join(__dirname, '..', 'frontend', 'render-engine.js'));
 
 // ---------------------------------------------------------------------------
-// Argument parsing
+// Encoding quality profiles & argument parsing
 // ---------------------------------------------------------------------------
+const QUALITY_PROFILES = {
+    high: {
+        preset: 'slow',
+        crf: '16',
+        pixFmt: 'yuv444p',
+        profile: 'high444',
+        tune: 'animation',
+        audioBitrate: '256k',
+    },
+    medium: {
+        preset: 'medium',
+        crf: '18',
+        pixFmt: 'yuv420p',
+        profile: 'high',
+        tune: 'animation',
+        audioBitrate: '192k',
+    },
+    fast: {
+        preset: 'fast',
+        crf: '22',
+        pixFmt: 'yuv420p',
+        profile: 'high',
+        tune: null,
+        audioBitrate: '128k',
+    },
+};
+
 function parseArgs() {
     const args = process.argv.slice(2);
     const opts = {
@@ -38,6 +65,7 @@ function parseArgs() {
         width: 1920,
         height: 1080,
         fps: 60,
+        quality: 'high',
     };
     for (let i = 0; i < args.length; i++) {
         switch (args[i]) {
@@ -48,16 +76,25 @@ function parseArgs() {
             case '--width':    opts.width    = parseInt(args[++i], 10); break;
             case '--height':   opts.height   = parseInt(args[++i], 10); break;
             case '--fps':      opts.fps      = parseInt(args[++i], 10); break;
+            case '--quality':  opts.quality  = args[++i]; break;
         }
     }
 
     if (!opts.manifest || !opts.config || !opts.audio || !opts.output) {
         process.stderr.write(
             'Usage: node cli.js --manifest FILE --config FILE --audio FILE --output FILE\n' +
-            '       [--width 1920] [--height 1080] [--fps 60]\n'
+            '       [--width 1920] [--height 1080] [--fps 60] [--quality high|medium|fast]\n'
         );
         process.exit(1);
     }
+
+    if (!QUALITY_PROFILES[opts.quality]) {
+        process.stderr.write(
+            `Unknown quality "${opts.quality}". Choose from: ${Object.keys(QUALITY_PROFILES).join(', ')}\n`
+        );
+        process.exit(1);
+    }
+
     return opts;
 }
 
@@ -97,6 +134,7 @@ async function main() {
     const renderer = new ChromascopeRenderer(config, canvas);
 
     // Spawn ffmpeg — raw RGBA on stdin, MP4 on disk
+    const qp = QUALITY_PROFILES[opts.quality];
     const ffmpegArgs = [
         '-y',
         '-f', 'rawvideo',
@@ -106,11 +144,18 @@ async function main() {
         '-i', 'pipe:0',
         '-i', opts.audio,
         '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '18',
-        '-pix_fmt', 'yuv420p',
+        '-profile:v', qp.profile,
+        '-preset', qp.preset,
+        '-crf', qp.crf,
+        ...(qp.tune ? ['-tune', qp.tune] : []),
+        '-pix_fmt', qp.pixFmt,
+        // Tag color space so players interpret colors correctly
+        '-colorspace', 'bt709',
+        '-color_primaries', 'bt709',
+        '-color_trc', 'bt709',
         '-c:a', 'aac',
-        '-b:a', '192k',
+        '-b:a', qp.audioBitrate,
+        '-movflags', '+faststart',
         '-shortest',
         opts.output,
     ];
@@ -146,6 +191,8 @@ async function main() {
 
     // Render loop
     const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     const reportInterval = Math.max(1, Math.floor(totalFrames / 100)); // ~1% steps
 
     for (let i = 0; i < totalFrames; i++) {

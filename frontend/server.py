@@ -226,11 +226,16 @@ class KaleidoscopeHandler(SimpleHTTPRequestHandler):
             width = config.get("width", config.get("exportWidth", 1920))
             height = config.get("height", config.get("exportHeight", 1080))
             fps = config.get("fps", config.get("exportFps", 60))
+            quality = config.get("quality", "high")
 
             # Map resolution strings to dimensions
             if isinstance(width, str):
                 res_map = {"720p": (1280, 720), "1080p": (1920, 1080), "4k": (3840, 2160)}
                 width, height = res_map.get(width, (1920, 1080))
+
+            # Validate quality value
+            if quality not in ("high", "medium", "fast"):
+                quality = "high"
 
             render_video(
                 audio_path=Path(audio_path),
@@ -240,6 +245,7 @@ class KaleidoscopeHandler(SimpleHTTPRequestHandler):
                 fps=fps,
                 progress_callback=progress_callback,
                 config=config,
+                quality=quality,
             )
 
             with render_tasks_lock:

@@ -41,6 +41,7 @@ def render_video(
     min_sides: int = 3,
     max_sides: int = 12,
     config: dict = None,
+    quality: str = "high",
 ):
     """
     Render kaleidoscope video from audio file.
@@ -68,6 +69,7 @@ def render_video(
         min_sides: Minimum polygon sides.
         max_sides: Maximum polygon sides.
         config: Full frontend config dict (overrides individual params).
+        quality: Encoding quality profile ("high", "medium", or "fast").
     """
     from chromascope.pipeline import AudioPipeline
 
@@ -163,6 +165,7 @@ def render_video(
             "--width", str(width),
             "--height", str(height),
             "--fps", str(fps),
+            "--quality", quality,
         ]
 
         proc = subprocess.Popen(
@@ -265,6 +268,15 @@ def main():
         help="Visualization style (default: geometric)",
     )
 
+    parser.add_argument(
+        "-q", "--quality",
+        type=str,
+        choices=["high", "medium", "fast"],
+        default="high",
+        help="Encoding quality: high (yuv444p, slow preset — crispest), "
+             "medium (yuv420p, medium preset), fast (quick preview) (default: high)",
+    )
+
     args = parser.parse_args()
 
     if not args.audio.exists():
@@ -284,6 +296,7 @@ def main():
         num_mirrors=args.mirrors,
         trail_alpha=args.trail,
         style=args.style,
+        quality=args.quality,
     )
 
 
