@@ -1,0 +1,9 @@
+{
+  "name": "chromascope-renderer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Server-side renderer for Chromascope visualizations",
+  "dependencies": {
+    "canvas": "^3.2.1"
+  }
+}

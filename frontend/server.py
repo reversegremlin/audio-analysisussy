@@ -238,18 +238,8 @@ class KaleidoscopeHandler(SimpleHTTPRequestHandler):
                 width=width,
                 height=height,
                 fps=fps,
-                num_mirrors=config.get("mirrors", 8),
-                trail_alpha=config.get("trailAlpha", 40),
-                base_radius=config.get("baseRadius", 150.0),
-                max_scale=config.get("maxScale", 1.8),
-                base_thickness=config.get("baseThickness", 3),
-                max_thickness=config.get("maxThickness", 12),
-                orbit_radius=config.get("orbitRadius", 200.0),
-                rotation_speed=config.get("rotationSpeed", 2.0),
-                min_sides=config.get("minSides", 3),
-                max_sides=config.get("maxSides", 12),
                 progress_callback=progress_callback,
-                style=config.get("style", "geometric"),
+                config=config,
             )
 
             with render_tasks_lock:
