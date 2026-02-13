@@ -184,7 +184,8 @@ class KaleidoscopeStudio {
             // Export
             width: 1920,
             height: 1080,
-            fps: 60
+            fps: 60,
+            quality: 'high'
         };
 
         // Shared style presets loaded from the backend (styles.json)
@@ -414,6 +415,15 @@ class KaleidoscopeStudio {
                 e.target.classList.add('active');
                 this.config.fps = parseInt(e.target.dataset.fps);
                 document.getElementById('fpsBadge').textContent = `${this.config.fps} FPS`;
+            });
+        });
+
+        // Quality buttons
+        document.querySelectorAll('[data-quality]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('[data-quality]').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.config.quality = e.target.dataset.quality;
             });
         });
 
