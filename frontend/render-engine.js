@@ -205,8 +205,7 @@
     }
 
     /**
-     * Universe background — stained-glass cells + quantum dust + deep tunnel
-     * Experimental style that pushes density while preserving radial symmetry.
+     * Universe background — high-contrast stained-glass lattice + quantum dust + wormhole depth.
      */
     renderUniverseBackground(ctx, width, height, centerX, centerY, reactivity) {
         const config = this.config;
@@ -217,66 +216,84 @@
         const maxDim = Math.max(width, height);
         const accentHue = this.hexToHsl(config.accentColor).h;
 
-        // Deep tunnel: many dim layers with parallax slowdown.
+        // 1) Infinite tunnel lattice (rear layers dimmer/slower = parallax depth)
         ctx.save();
         ctx.translate(centerX, centerY);
-        const depthLayers = 34;
-        for (let l = depthLayers - 1; l >= 0; l--) {
-            const depth = l / depthLayers;
-            const layerRot = rot * (0.22 + depth * 0.6);
-            const radius = maxDim * (0.10 + depth * 0.75);
-            const hue = (accentHue + depth * 130 + brightness * 60) % 360;
-            const alpha = 0.012 + (1 - depth) * 0.04 + harmonic * 0.02;
+        const layers = 48;
+        const mirrors = Math.max(14, config.mirrors * 2);
+        for (let layer = layers - 1; layer >= 0; layer--) {
+            const depth = layer / layers;
+            const radius = maxDim * (0.08 + depth * 0.88);
+            const layerRot = rot * (0.12 + depth * 0.52) + Math.sin(rot * 1.7 + layer * 0.3) * 0.03;
+            const alpha = 0.01 + (1 - depth) * 0.045 + harmonic * 0.015;
 
             ctx.save();
             ctx.rotate(layerRot);
-            const slices = Math.max(10, config.mirrors * 3);
-            for (let i = 0; i < slices; i++) {
-                const a0 = (Math.PI * 2 * i) / slices;
-                const a1 = (Math.PI * 2 * (i + 1)) / slices;
-                const wobble = Math.sin(a0 * 5 + rot * 9 + l * 0.25) * maxDim * 0.015 * reactivity;
-                const innerR = radius * (0.12 + depth * 0.35);
-                const outerR = radius + wobble;
+
+            for (let i = 0; i < mirrors; i++) {
+                const a0 = (Math.PI * 2 * i) / mirrors;
+                const a1 = (Math.PI * 2 * (i + 1)) / mirrors;
+                const mid = (a0 + a1) * 0.5;
+
+                const rip = Math.sin(mid * 7 + rot * 8 + depth * 10) * maxDim * 0.009 * reactivity;
+                const inR = radius * (0.08 + depth * 0.38);
+                const outR = radius + rip;
+                const ctrlR = outR * (0.75 + Math.sin(rot * 2.6 + i) * 0.1);
+                const hue = (accentHue + depth * 180 + i * (140 / mirrors) + brightness * 90) % 360;
 
                 ctx.beginPath();
-                ctx.moveTo(Math.cos(a0) * innerR, Math.sin(a0) * innerR);
-                ctx.lineTo(Math.cos(a0) * outerR, Math.sin(a0) * outerR);
-                ctx.lineTo(Math.cos(a1) * outerR, Math.sin(a1) * outerR);
-                ctx.lineTo(Math.cos(a1) * innerR, Math.sin(a1) * innerR);
+                ctx.moveTo(Math.cos(a0) * inR, Math.sin(a0) * inR);
+                ctx.lineTo(Math.cos(a0) * outR, Math.sin(a0) * outR);
+                ctx.quadraticCurveTo(Math.cos(mid) * ctrlR, Math.sin(mid) * ctrlR, Math.cos(a1) * outR, Math.sin(a1) * outR);
+                ctx.lineTo(Math.cos(a1) * inR, Math.sin(a1) * inR);
                 ctx.closePath();
-                ctx.fillStyle = `hsla(${hue + i * 2.2}, ${config.saturation * 0.6}%, ${40 + depth * 25}%, ${alpha})`;
+
+                const grad = ctx.createLinearGradient(
+                    Math.cos(a0) * inR,
+                    Math.sin(a0) * inR,
+                    Math.cos(mid) * outR,
+                    Math.sin(mid) * outR
+                );
+                grad.addColorStop(0, `hsla(${(hue + 18) % 360}, ${config.saturation * 0.72}%, ${25 + depth * 16}%, ${alpha * 0.75})`);
+                grad.addColorStop(0.5, `hsla(${hue}, ${config.saturation * 0.95}%, ${45 + brightness * 25}%, ${alpha * 1.2})`);
+                grad.addColorStop(1, `hsla(${(hue + 42) % 360}, ${config.saturation * 0.85}%, ${30 + depth * 18}%, ${alpha})`);
+                ctx.fillStyle = grad;
                 ctx.fill();
-                ctx.strokeStyle = `hsla(${hue + 40}, ${config.saturation * 0.45}%, ${28 + depth * 15}%, ${alpha * 2.8})`;
-                ctx.lineWidth = 0.45 + (1 - depth) * 1.1;
+
+                // dark lead-like line for stained-glass framing
+                ctx.strokeStyle = `hsla(${(hue + 210) % 360}, ${config.saturation * 0.3}%, 8%, ${Math.min(0.28, alpha * 3.8)})`;
+                ctx.lineWidth = 0.5 + (1 - depth) * 1.35;
                 ctx.stroke();
             }
             ctx.restore();
         }
         ctx.restore();
 
-        // Quantum grain: high-density cosmic dust swarms.
+        // 2) Quantum grain cloud (dense star-dust with swarm motion)
         ctx.save();
-        const dustCount = 850;
+        const dustCount = 1800;
         for (let i = 0; i < dustCount; i++) {
-            const seed = i * 17 + 991;
-            const radial = maxDim * (0.03 + this.seededRandom(seed) * 0.52);
-            const baseAngle = this.seededRandom(seed + 1) * Math.PI * 2;
-            const swarm = Math.sin(rot * 1.2 + radial * 0.004 + this.seededRandom(seed + 2) * Math.PI * 2);
-            const angle = baseAngle + rot * (0.18 + this.seededRandom(seed + 3) * 0.42) + swarm * 0.15;
-            const jitter = (this.seededRandom(seed + 4) - 0.5) * maxDim * 0.015;
-            const x = centerX + Math.cos(angle) * radial + jitter;
-            const y = centerY + Math.sin(angle) * radial - jitter;
-            const dot = 0.4 + this.seededRandom(seed + 5) * (1.2 + brightness * 1.5);
-            const alpha = Math.min(0.46, 0.08 + energy * 0.22 + this.seededRandom(seed + 6) * 0.14);
-            const hue = (accentHue + 180 + this.seededRandom(seed + 7) * 90 + swarm * 20) % 360;
+            const seed = i * 19 + 1777;
+            const radial = maxDim * (0.02 + this.seededRandom(seed) * 0.66);
+            const ringBias = Math.pow(this.seededRandom(seed + 1), 1.6);
+            const baseAngle = this.seededRandom(seed + 2) * Math.PI * 2;
+            const swirl = Math.sin(rot * (1.5 + ringBias) + radial * 0.003 + this.seededRandom(seed + 3) * 6.28);
+            const angle = baseAngle + swirl * 0.22 + rot * (0.12 + ringBias * 0.4);
+            const flock = Math.sin(rot * 2.0 + baseAngle * 4) * maxDim * 0.008;
+            const x = centerX + Math.cos(angle) * radial + flock;
+            const y = centerY + Math.sin(angle) * radial - flock;
+            const size = 0.28 + this.seededRandom(seed + 4) * (1.1 + brightness * 1.5);
+            const alpha = Math.min(0.58, 0.05 + energy * 0.25 + this.seededRandom(seed + 5) * 0.2);
+            const hue = (accentHue + 155 + swirl * 24 + this.seededRandom(seed + 6) * 80) % 360;
 
             ctx.beginPath();
-            ctx.arc(x, y, dot, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(${hue}, ${config.saturation * 0.55}%, ${58 + brightness * 28}%, ${alpha})`;
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${hue}, ${config.saturation * 0.6}%, ${55 + brightness * 30}%, ${alpha})`;
             ctx.fill();
         }
         ctx.restore();
     }
+
 
     /**
      * Geometric background — Concentric polygon rings with radial guides
@@ -1675,67 +1692,89 @@
     }
 
     /**
-     * Universe style — Voronoi-like panes + mirrored tunnel stack + entropy wobble.
+     * Universe style — stained-glass fractal shards with deep mirrored tunnel and entropy wobble.
      */
     renderUniverseStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
-        const mirrors = Math.max(10, config.mirrors);
+        const mirrors = Math.max(14, config.mirrors);
         const energy = this.smoothedValues.percussiveImpact;
         const harmonic = this.smoothedValues.harmonicEnergy;
         const brightness = this.smoothedValues.spectralBrightness;
-        const wobble = Math.sin(this.accumulatedRotation * 2.3) * 0.16 * (0.3 + harmonic);
-        const glitchGate = Math.sin(this.accumulatedRotation * 1.8 + energy * 8) > 0.95;
 
-        // Infinite-depth card stack with parallax.
-        const layers = 22;
+        const wobble = Math.sin(this.accumulatedRotation * 2.1) * (0.08 + harmonic * 0.1);
+        const glitchPulse = Math.sin(this.accumulatedRotation * 2.6 + energy * 11) > 0.93;
+        const layers = 56;
+
         for (let layer = layers - 1; layer >= 0; layer--) {
             const depth = layer / layers;
-            const layerScale = 0.22 + depth * 0.95;
-            const layerAlpha = 0.05 + (1 - depth) * 0.2;
-            const layerRot = this.accumulatedRotation * (0.25 + depth * 0.75) + wobble * (1 - depth);
+            const layerAlpha = 0.02 + (1 - depth) * 0.22;
+            const layerScale = 0.12 + depth * 1.05;
+            const layerRot = this.accumulatedRotation * (0.1 + depth * 0.95) + wobble * (1 - depth);
 
-            for (let i = 0; i < mirrors; i++) {
-                const mirrorAngle = (Math.PI * 2 * i) / mirrors + layerRot;
-                const lag = glitchGate && i === (layer % mirrors) ? -0.22 : 0;
-                const glassRot = mirrorAngle + lag;
-                const orbit = radius * layerScale * (0.45 + harmonic * 0.4);
-                const x = centerX + Math.cos(glassRot) * orbit;
-                const y = centerY + Math.sin(glassRot) * orbit;
+            for (let m = 0; m < mirrors; m++) {
+                const base = (Math.PI * 2 * m) / mirrors + layerRot;
+                const lag = glitchPulse && m === (layer % mirrors) ? -0.18 : 0;
+                const ang = base + lag;
 
-                // Stained-glass panes: irregular petals with thick outlines.
-                const paneSides = Math.max(5, numSides + (i % 3));
-                const paneHue = (hue + depth * 180 + i * (120 / mirrors)) % 360;
-                const paneRadius = radius * (0.12 + (1 - depth) * 0.26) * (1 + energy * 0.25);
-                this.drawFlowerPetal(
-                    ctx,
-                    x,
-                    y,
-                    paneRadius,
-                    paneSides,
-                    glassRot * (1.2 + depth * 0.4),
-                    `hsla(${paneHue}, ${config.saturation}%, ${48 + brightness * 28}%, ${layerAlpha})`,
-                    `hsla(${(paneHue + 28) % 360}, ${config.saturation * 0.5}%, 22%, ${Math.min(0.52, layerAlpha * 1.8)})`,
-                    Math.max(1, thickness * 0.22)
-                );
+                const orbit = radius * layerScale * (0.34 + harmonic * 0.58);
+                const px = centerX + Math.cos(ang) * orbit;
+                const py = centerY + Math.sin(ang) * orbit;
+
+                // Voronoi-ish crystalline cells from clustered shard polygons.
+                const cellCount = 3;
+                for (let c = 0; c < cellCount; c++) {
+                    const seed = layer * 97 + m * 17 + c * 13;
+                    const localR = radius * (0.05 + (1 - depth) * (0.13 + this.seededRandom(seed) * 0.06));
+                    const jx = (this.seededRandom(seed + 1) - 0.5) * localR * 0.9;
+                    const jy = (this.seededRandom(seed + 2) - 0.5) * localR * 0.9;
+                    const shards = Math.max(5, numSides + (c % 3) - 1);
+                    const spin = ang * (1.1 + this.seededRandom(seed + 3) * 0.7) + wobble;
+                    const paneHue = (hue + depth * 210 + m * (160 / mirrors) + c * 18 + brightness * 60) % 360;
+
+                    const grad = ctx.createRadialGradient(
+                        px + jx * 0.2,
+                        py + jy * 0.2,
+                        localR * 0.1,
+                        px + jx,
+                        py + jy,
+                        localR * 1.3
+                    );
+                    grad.addColorStop(0, `hsla(${(paneHue + 20) % 360}, ${config.saturation}%, ${64 + brightness * 20}%, ${layerAlpha * 0.95})`);
+                    grad.addColorStop(1, `hsla(${(paneHue + 80) % 360}, ${config.saturation * 0.82}%, ${28 + depth * 18}%, ${layerAlpha * 0.7})`);
+
+                    this.drawFlowerPetal(
+                        ctx,
+                        px + jx,
+                        py + jy,
+                        localR,
+                        shards,
+                        spin,
+                        grad,
+                        `hsla(${(paneHue + 220) % 360}, ${config.saturation * 0.35}%, 8%, ${Math.min(0.7, layerAlpha * 2.6)})`,
+                        Math.max(0.8, thickness * (0.12 + (1 - depth) * 0.16))
+                    );
+                }
             }
         }
 
-        // Core singularity ring.
-        const coreSides = Math.max(8, numSides + 4);
-        for (let k = 0; k < 3; k++) {
-            const coreHue = (hue + 200 + k * 35) % 360;
+        // Core singularity (bright jewel + nested outlines)
+        const coreSides = Math.max(10, numSides + 5);
+        for (let i = 0; i < 4; i++) {
+            const r = radius * (0.085 + i * 0.06) * (1 + energy * 0.4);
+            const coreHue = (hue + 200 + i * 24) % 360;
             this.drawPolygon(
                 ctx,
                 centerX,
                 centerY,
-                radius * (0.17 + k * 0.085) * (1 + energy * 0.3),
-                coreSides + k,
-                -this.accumulatedRotation * (0.6 + k * 0.25) + wobble,
-                `hsla(${coreHue}, ${config.saturation}%, ${65 + brightness * 20}%, ${0.75 - k * 0.18})`,
-                Math.max(1.4, thickness * (0.3 - k * 0.05))
+                r,
+                coreSides + i,
+                -this.accumulatedRotation * (0.5 + i * 0.2) + wobble,
+                `hsla(${coreHue}, ${config.saturation}%, ${74 - i * 8}%, ${0.85 - i * 0.15})`,
+                Math.max(1.1, thickness * (0.21 - i * 0.03))
             );
         }
     }
+
 
     /**
      * Geometric style - orbiting polygons with radial symmetry (uses shapeSeed for variation)
