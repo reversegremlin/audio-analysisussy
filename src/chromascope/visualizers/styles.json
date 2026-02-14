@@ -145,16 +145,16 @@
       "rotation_speed": 2.2
     },
     "fractal": {
-      "num_mirrors": 18,
-      "trail_alpha": 72,
-      "base_radius": 160.0,
-      "max_scale": 2.4,
+      "num_mirrors": 8,
+      "trail_alpha": 68,
+      "base_radius": 155.0,
+      "max_scale": 2.0,
       "min_sides": 5,
-      "max_sides": 22,
-      "base_thickness": 2,
+      "max_sides": 16,
+      "base_thickness": 3,
       "max_thickness": 10,
-      "orbit_radius": 290.0,
-      "rotation_speed": 2.3
+      "orbit_radius": 260.0,
+      "rotation_speed": 1.4
     }
   }
 }

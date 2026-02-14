@@ -1545,7 +1545,7 @@
 
         // Per-style size normalization — keeps visual footprint consistent across styles
         const sizeScale = {
-            circuit: 0.75, fibonacci: 1.15, dmt: 1.1, fluid: 1.5, quark: 1.3, fractal: 1.2
+            circuit: 0.75, fibonacci: 1.15, dmt: 1.1, fluid: 1.5, quark: 1.3, fractal: 1.0
         }[config.style] || 1.0;
         const scaledRadius = radius * sizeScale;
 
@@ -5660,6 +5660,15 @@
      *   - 3 density layers per band: colour field, texture, sparkle
      *   - Trail persistence accumulates to full opacity over ~1 second
      */
+    /**
+     * Fractal style — Stained-glass kaleidoscope mandala.
+     *
+     * Concentric rings of luminous petal shapes with mirror symmetry,
+     * bright leading borders, and fine lace tracery.  Warm gold core
+     * radiates through turquoise, magenta, electric blue, to fiery
+     * outer edges.  Counter-rotating rings slide like gears of light;
+     * the motion is slow, rhythmic, hypnotic — like breathing.
+     */
     renderFractalStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
         const seed = config.shapeSeed;
@@ -5670,398 +5679,455 @@
         const rot = this.accumulatedRotation;
         const sat = config.saturation;
 
-        // Full-field: use canvas diagonal so pattern extends past all edges
-        const maxDim = Math.max(this.canvas.width, this.canvas.height) * 0.78;
-
-        const wedgeAngle = Math.PI * 2 / mirrors;
-        const halfWedge = wedgeAngle * 0.5;
+        const maxDim = Math.max(this.canvas.width, this.canvas.height) * 0.75;
+        const wedge = Math.PI * 2 / mirrors;
+        const halfWedge = wedge * 0.5;
 
         ctx.save();
         ctx.translate(centerX, centerY);
-        const prevComposite = ctx.globalCompositeOperation;
+        const prevComp = ctx.globalCompositeOperation;
 
-        // --- Mirror helpers ---
-        const mirrorFill = (r, theta, size, color, bandRot) => {
+        // Breathing pulse — gentle organic bloom
+        const breathe = 1.0 + Math.sin(rot * 0.35) * 0.018 + energy * 0.06;
+
+        // ── Ring definitions ──
+        // Colour temperature: warm gold → turquoise → magenta → blue-green → fiery orange
+        const rings = [
+            { inner: 0.00, outer: 0.11, hOff: 35,  spd:  0.9,  nPetals: 1, lum: 68 },
+            { inner: 0.11, outer: 0.26, hOff: 175, spd: -0.55, nPetals: 1, lum: 55 },
+            { inner: 0.26, outer: 0.46, hOff: 290, spd:  0.35, nPetals: 2, lum: 48 },
+            { inner: 0.46, outer: 0.70, hOff: 160, spd: -0.22, nPetals: 2, lum: 45 },
+            { inner: 0.70, outer: 1.00, hOff: 45,  spd:  0.12, nPetals: 3, lum: 52 },
+        ];
+
+        // ── Helper: draw radial petal path (mandorla / eye shape) ──
+        const petalPath = (r1, r2, angle, halfW) => {
+            const midR = (r1 + r2) * 0.5;
+            const bulge = (r2 - r1) * 0.35;
+            const ix = Math.cos(angle) * r1;
+            const iy = Math.sin(angle) * r1;
+            const ox = Math.cos(angle) * r2;
+            const oy = Math.sin(angle) * r2;
+            ctx.beginPath();
+            ctx.moveTo(ix, iy);
+            ctx.bezierCurveTo(
+                Math.cos(angle - halfW) * (midR - bulge),
+                Math.sin(angle - halfW) * (midR - bulge),
+                Math.cos(angle - halfW * 0.85) * (midR + bulge),
+                Math.sin(angle - halfW * 0.85) * (midR + bulge),
+                ox, oy);
+            ctx.bezierCurveTo(
+                Math.cos(angle + halfW * 0.85) * (midR + bulge),
+                Math.sin(angle + halfW * 0.85) * (midR + bulge),
+                Math.cos(angle + halfW) * (midR - bulge),
+                Math.sin(angle + halfW) * (midR - bulge),
+                ix, iy);
+            ctx.closePath();
+        };
+
+        // ── Helper: mirror across all wedges ──
+        const mirrorOp = (theta, ringRot, fn) => {
             for (let m = 0; m < mirrors; m++) {
-                const base = wedgeAngle * m + bandRot;
-                for (let flip = 0; flip < 2; flip++) {
-                    const a = base + (flip === 0 ? theta : -theta);
-                    ctx.beginPath();
-                    ctx.arc(Math.cos(a) * r, Math.sin(a) * r,
-                        Math.max(0.5, size), 0, Math.PI * 2);
-                    ctx.fill();
-                }
+                const base = wedge * m + ringRot;
+                fn(base + theta);
+                fn(base - theta);
             }
         };
 
-        const mirrorGrad = (r, theta, size, c1, c2, bandRot) => {
-            for (let m = 0; m < mirrors; m++) {
-                const base = wedgeAngle * m + bandRot;
-                for (let flip = 0; flip < 2; flip++) {
-                    const a = base + (flip === 0 ? theta : -theta);
-                    const x = Math.cos(a) * r;
-                    const y = Math.sin(a) * r;
-                    const g = ctx.createRadialGradient(x, y, 0, x, y, size);
-                    g.addColorStop(0, c1);
-                    g.addColorStop(0.55, c2);
-                    g.addColorStop(1, 'hsla(0,0%,0%,0)');
-                    ctx.beginPath();
-                    ctx.arc(x, y, size, 0, Math.PI * 2);
-                    ctx.fillStyle = g;
-                    ctx.fill();
-                }
-            }
-        };
-
-        // ==============================================================
-        // RECURSIVE DEPTH BANDS — 5 rings, outer → centre
-        // ==============================================================
-        const bandCount = 5;
-        const scaleF = 0.52;
-        const rotSpeeds = [0.2, -0.38, 0.6, -0.85, 1.3];
-        const hueShifts = [0, 35, 75, 120, 170];
-
-        // ============= PASS 1: SCREEN blending — saturated colour =====
+        // =============================================================
+        //  PASS 1: Filled glass petals  (screen — luminous colour)
+        // =============================================================
         ctx.globalCompositeOperation = 'screen';
 
-        for (let band = 0; band < bandCount; band++) {
-            const bScale = Math.pow(scaleF, band);
-            const fieldR = maxDim * bScale;
-            const innerR = band < bandCount - 1
-                ? maxDim * Math.pow(scaleF, band + 1) : 0;
-            const bRot = rot * rotSpeeds[band];
-            const bHue = (hue + hueShifts[band]) % 360;
-            const area = bScale * bScale;
-            const bSeed = seed + band * 10000;
-            // Inner bands are more vivid
-            const aBoost = 1.0 + band * 0.25;
-            const range = fieldR - innerR;
+        for (let ri = rings.length - 1; ri >= 0; ri--) {
+            const ring = rings[ri];
+            const iR = maxDim * ring.inner * breathe;
+            const oR = maxDim * ring.outer * breathe;
+            const ringRot = rot * ring.spd;
+            const rHue = (hue + ring.hOff) % 360;
 
-            // ------ COLOUR FIELD: Large overlapping gradient blobs ------
-            // These create the continuous painted base.  Enough overlap
-            // that every point in the wedge is hit by at least 2-3 blobs.
-            const washN = Math.max(5, Math.round((14 + harmonic * 5) * area));
-            for (let i = 0; i < washN; i++) {
-                const ws = bSeed + i * 97;
-                const bR = innerR + this.seededRandom(ws) * range * 0.92 + range * 0.04;
-                const bT = this.seededRandom(ws + 1) * halfWedge;
-                const drift = Math.sin(rot * 0.25 + i * 1.3 + band * 2.1) * range * 0.04;
-                const r = Math.max(innerR, bR + drift);
-                const theta = bT + Math.sin(rot * 0.18 + i * 0.7) * 0.04;
-                // BIG blobs — fieldR * 0.12-0.28
-                const sz = fieldR * (0.13 + this.seededRandom(ws + 2) * 0.16)
-                    * (1 + energy * 0.25);
-                const wH = (bHue + 180 + this.seededRandom(ws + 3) * 120) % 360;
-                const wL = 22 + this.seededRandom(ws + 4) * 20 + energy * 8;
-                const wA = (0.045 + energy * 0.04 + harmonic * 0.025) * aBoost;
+            for (let p = 0; p < ring.nPetals; p++) {
+                const pTheta = halfWedge * (p + 0.5) / ring.nPetals;
+                const halfW = halfWedge / ring.nPetals * (0.45 + energy * 0.1);
+                const pSeed = seed + ri * 1000 + p * 137;
+                const pH = (rHue + this.seededRandom(pSeed) * 30 - 15 + harmonic * 15) % 360;
+                const pL = ring.lum + brightness * 10 + energy * 8;
+                const pSat = Math.min(100, sat);
+                const pA = 0.22 + energy * 0.12 + harmonic * 0.08;
 
-                mirrorGrad(r, theta, sz,
-                    `hsla(${wH}, ${Math.min(100, sat * 0.85)}%, ${wL}%, ${wA})`,
-                    `hsla(${wH}, ${sat * 0.55}%, ${wL * 0.65}%, ${wA * 0.4})`,
-                    bRot
-                );
+                mirrorOp(pTheta, ringRot, (angle) => {
+                    petalPath(iR, oR, angle, halfW);
+                    const midR = (iR + oR) * 0.5;
+                    const gx = Math.cos(angle) * midR;
+                    const gy = Math.sin(angle) * midR;
+                    const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, (oR - iR) * 0.7);
+                    grad.addColorStop(0, `hsla(${pH}, ${pSat}%, ${Math.min(90, pL + 15)}%, ${pA * 1.2})`);
+                    grad.addColorStop(0.6, `hsla(${pH}, ${pSat}%, ${pL}%, ${pA})`);
+                    grad.addColorStop(1, `hsla(${(pH + 20) % 360}, ${pSat * 0.8}%, ${pL * 0.7}%, ${pA * 0.5})`);
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                });
+            }
+        }
+
+        // =============================================================
+        //  PASS 2: Stained-glass leading  (lighter — luminous borders)
+        // =============================================================
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+
+        for (let ri = rings.length - 1; ri >= 0; ri--) {
+            const ring = rings[ri];
+            const iR = maxDim * ring.inner * breathe;
+            const oR = maxDim * ring.outer * breathe;
+            const ringRot = rot * ring.spd;
+            const rHue = (hue + ring.hOff) % 360;
+            const leadA = 0.10 + energy * 0.08 + brightness * 0.05;
+            const leadW = thickness * (0.12 + energy * 0.12);
+
+            for (let p = 0; p < ring.nPetals; p++) {
+                const pTheta = halfWedge * (p + 0.5) / ring.nPetals;
+                const halfW = halfWedge / ring.nPetals * (0.45 + energy * 0.1);
+                const lH = (rHue + 30) % 360;
+
+                mirrorOp(pTheta, ringRot, (angle) => {
+                    petalPath(iR, oR, angle, halfW);
+                    ctx.strokeStyle = `hsla(${lH}, ${Math.min(100, sat * 0.85)}%, 82%, ${leadA})`;
+                    ctx.lineWidth = leadW;
+                    ctx.stroke();
+                });
             }
 
-            // ------ TEXTURE: Medium noise-displaced blobs ------
-            // Organic, irregular shapes that add colour variation.
-            const blobN = Math.max(6, Math.round((28 + energy * 14) * area));
-            for (let i = 0; i < blobN; i++) {
-                const bs = bSeed + 500 + i * 73;
-                const baseR = innerR + this.seededRandom(bs) * range * 0.85 + range * 0.05;
-                const baseT = this.seededRandom(bs + 1) * halfWedge;
-                const bx = baseR * Math.cos(baseT);
-                const by = baseR * Math.sin(baseT);
-                const nx = this._fractalNoise(bx * 0.006 + rot * 0.12, by * 0.006 + band * 3.7);
-                const ny = this._fractalNoise(bx * 0.006 + band * 3.7, by * 0.006 + rot * 0.12);
-                const r = Math.max(innerR, baseR + (nx - 0.5) * range * 0.1);
-                const theta = Math.max(0, Math.min(halfWedge,
-                    baseT + (ny - 0.5) * 0.1));
-                // Medium blobs — fieldR * 0.025-0.06
-                const sz = fieldR * (0.025 + this.seededRandom(bs + 2) * 0.04)
-                    * (1 + energy * 0.5);
-                const blobH = (bHue + this.seededRandom(bs + 3) * 90) % 360;
-                const blobL = 40 + brightness * 20 + energy * 10;
-                const blobA = (0.08 + energy * 0.08 + harmonic * 0.04) * aBoost;
-
-                ctx.fillStyle = `hsla(${blobH}, ${Math.min(100, sat * 1.15)}%, ${blobL}%, ${blobA})`;
-                mirrorFill(r, theta, sz, null, bRot);
-            }
-
-            // ------ TENDRILS: Thick noise-following strokes ------
-            if (band < bandCount - 1) {
-                const tendN = Math.max(3, Math.round(
-                    (7 + harmonic * 3) * Math.sqrt(area)));
-                for (let i = 0; i < tendN; i++) {
-                    const ts = bSeed + 2000 + i * 53;
-                    const steps = 14 + Math.floor(energy * 7);
-                    const pts = [];
-                    let cr = innerR + this.seededRandom(ts) * range * 0.6 + range * 0.15;
-                    let ct = this.seededRandom(ts + 1) * halfWedge;
-                    for (let s = 0; s <= steps; s++) {
-                        const fnx = this._fractalNoise(
-                            cr * 0.004 + rot * 0.1, ct * 10 + i + band * 5);
-                        const fny = this._fractalNoise(
-                            ct * 10 + i + band * 5, cr * 0.004 + rot * 0.1);
-                        cr = Math.max(innerR, Math.min(fieldR,
-                            cr + (fnx - 0.5) * range * 0.06));
-                        ct = Math.max(0, Math.min(halfWedge,
-                            ct + (fny - 0.5) * 0.035));
-                        pts.push({ r: cr, theta: ct });
-                    }
-                    const tH = (bHue + 100 + this.seededRandom(ts + 2) * 90) % 360;
-                    const tA = (0.06 + harmonic * 0.06 + energy * 0.05) * aBoost;
-                    const tW = thickness * (0.3 + energy * 0.5)
-                        * (0.5 + bScale * 0.5);
-
-                    for (let m = 0; m < mirrors; m++) {
-                        const base = wedgeAngle * m + bRot;
-                        for (let flip = 0; flip < 2; flip++) {
-                            ctx.beginPath();
-                            for (let s = 0; s < pts.length; s++) {
-                                const p = pts[s];
-                                const a = base + (flip === 0 ? p.theta : -p.theta);
-                                const px = Math.cos(a) * p.r;
-                                const py = Math.sin(a) * p.r;
-                                s === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-                            }
-                            ctx.strokeStyle = `hsla(${tH}, ${sat * 0.8}%, ${48 + energy * 18}%, ${tA})`;
-                            ctx.lineWidth = tW;
-                            ctx.lineCap = 'round';
-                            ctx.lineJoin = 'round';
-                            ctx.stroke();
-                        }
-                    }
-                }
-            }
-
-            // ------ BOUNDARY RING between recursive bands ------
-            if (band > 0) {
-                const rH = (bHue + 60) % 360;
-                const rA = 0.06 + energy * 0.08 + harmonic * 0.04;
+            // Ring boundary arc
+            if (ri > 0) {
                 ctx.beginPath();
-                ctx.arc(0, 0, fieldR, 0, Math.PI * 2);
-                ctx.strokeStyle = `hsla(${rH}, ${sat * 0.7}%, 58%, ${rA})`;
-                ctx.lineWidth = 0.8 + energy * 1.0;
+                ctx.arc(0, 0, iR, 0, Math.PI * 2);
+                ctx.strokeStyle = `hsla(${rHue}, ${sat * 0.6}%, 72%, ${leadA * 0.7})`;
+                ctx.lineWidth = leadW * 0.6;
                 ctx.stroke();
             }
         }
 
-        // ============= PASS 2: LIGHTER blending — sparkle/highlights ==
-        ctx.globalCompositeOperation = 'lighter';
+        // =============================================================
+        //  PASS 3: Lace tracery — fine geometric filigree
+        // =============================================================
+        const traceA = 0.06 + harmonic * 0.05 + energy * 0.04;
+        const traceW = Math.max(0.3, thickness * 0.08);
 
-        for (let band = 0; band < bandCount; band++) {
-            const bScale = Math.pow(scaleF, band);
-            const fieldR = maxDim * bScale;
-            const innerR = band < bandCount - 1
-                ? maxDim * Math.pow(scaleF, band + 1) : 0;
-            const bRot = rot * rotSpeeds[band];
-            const bHue = (hue + hueShifts[band]) % 360;
-            const area = bScale * bScale;
-            const bSeed = seed + band * 10000;
-            const aBoost = 1.0 + band * 0.3;
-            const range = fieldR - innerR;
+        // Radial dividers along mirror boundaries
+        const innerEdge = maxDim * rings[1].inner * breathe;
+        for (let m = 0; m < mirrors; m++) {
+            const a = wedge * m;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * innerEdge, Math.sin(a) * innerEdge);
+            ctx.lineTo(Math.cos(a) * maxDim * breathe, Math.sin(a) * maxDim * breathe);
+            ctx.strokeStyle = `hsla(${hue}, ${sat * 0.5}%, 78%, ${traceA})`;
+            ctx.lineWidth = traceW;
+            ctx.stroke();
+        }
 
-            // ------ STARDUST: Dense bright specks ------
-            const dustN = Math.max(10, Math.round((55 + energy * 40) * area));
-            for (let i = 0; i < dustN; i++) {
-                const ds = bSeed + 1000 + i * 37;
-                const r = innerR + this.seededRandom(ds) * range;
-                const theta = this.seededRandom(ds + 1) * halfWedge;
-                const sz = (0.6 + this.seededRandom(ds + 2) * 3.0
-                    * (1 + energy * 1.5)) * (0.5 + bScale * 0.5);
-                const dH = (bHue + 30 + this.seededRandom(ds + 3) * 90) % 360;
-                const dL = 60 + energy * 25 + brightness * 12;
-                const dA = (0.12 + energy * 0.2 + brightness * 0.1) * aBoost;
-
-                ctx.fillStyle = `hsla(${dH}, ${Math.min(100, sat * 1.3)}%, ${dL}%, ${dA})`;
-                mirrorFill(r, theta, sz, null, bRot);
+        // Fine concentric lace circles within each ring
+        for (let ri = 1; ri < rings.length; ri++) {
+            const ring = rings[ri];
+            const range = ring.outer - ring.inner;
+            const laceCount = ri <= 2 ? 2 : 3;
+            for (let l = 1; l <= laceCount; l++) {
+                const r = maxDim * (ring.inner + range * l / (laceCount + 1)) * breathe;
+                const lH = (hue + ring.hOff + 60) % 360;
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.strokeStyle = `hsla(${lH}, ${sat * 0.4}%, 70%, ${traceA * 0.5})`;
+                ctx.lineWidth = traceW * 0.6;
+                ctx.stroke();
             }
         }
 
-        // Restore blending
-        ctx.globalCompositeOperation = prevComposite;
+        // Coral-lace threads: noise-displaced radial filaments
+        for (let ri = 1; ri < rings.length; ri++) {
+            const ring = rings[ri];
+            const iR = maxDim * ring.inner * breathe;
+            const oR = maxDim * ring.outer * breathe;
+            const ringRot = rot * ring.spd;
+            const rHue = (hue + ring.hOff + 80) % 360;
+            const laceN = 3 + Math.round(energy * 2);
 
-        // ------ CENTRAL CORE: Bright warm prismatic glow ------
-        const innermost = maxDim * Math.pow(scaleF, bandCount);
-        const coreR = innermost * 2.0 * (0.8 + energy * 0.6);
+            for (let l = 0; l < laceN; l++) {
+                const ls = seed + ri * 5000 + l * 113;
+                const baseTheta = this.seededRandom(ls) * halfWedge;
+                const steps = 12;
+                const pts = [];
+                for (let s = 0; s <= steps; s++) {
+                    const t = s / steps;
+                    const r = iR + (oR - iR) * t;
+                    const noise = this._fractalNoise(
+                        r * 0.005 + rot * 0.08 + l * 3.1,
+                        baseTheta * 8 + ri * 4.2);
+                    pts.push({
+                        r,
+                        theta: Math.max(0, Math.min(halfWedge,
+                            baseTheta + (noise - 0.5) * 0.06))
+                    });
+                }
+                const lA = 0.05 + harmonic * 0.04 + energy * 0.03;
+                for (let m = 0; m < mirrors; m++) {
+                    const base = wedge * m + ringRot;
+                    for (let flip = 0; flip < 2; flip++) {
+                        ctx.beginPath();
+                        for (let s = 0; s < pts.length; s++) {
+                            const pt = pts[s];
+                            const a = base + (flip === 0 ? pt.theta : -pt.theta);
+                            const px = Math.cos(a) * pt.r;
+                            const py = Math.sin(a) * pt.r;
+                            s === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+                        }
+                        ctx.strokeStyle = `hsla(${rHue}, ${sat * 0.6}%, 72%, ${lA})`;
+                        ctx.lineWidth = traceW;
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        // Diamond accents at petal-root intersections
+        for (let ri = 1; ri < rings.length; ri++) {
+            const ring = rings[ri];
+            const ringRot = rot * ring.spd;
+            const rHue = (hue + ring.hOff) % 360;
+            const r = maxDim * ring.inner * breathe;
+            const dSz = thickness * (0.3 + energy * 0.3);
+            const dA = 0.12 + energy * 0.12 + brightness * 0.06;
+
+            for (let p = 0; p < ring.nPetals; p++) {
+                const pTheta = halfWedge * (p + 0.5) / ring.nPetals;
+                mirrorOp(pTheta, ringRot, (angle) => {
+                    const dx = Math.cos(angle) * r;
+                    const dy = Math.sin(angle) * r;
+                    ctx.beginPath();
+                    ctx.moveTo(dx, dy - dSz);
+                    ctx.lineTo(dx + dSz * 0.6, dy);
+                    ctx.lineTo(dx, dy + dSz);
+                    ctx.lineTo(dx - dSz * 0.6, dy);
+                    ctx.closePath();
+                    ctx.fillStyle = `hsla(${rHue}, ${sat}%, 88%, ${dA})`;
+                    ctx.fill();
+                });
+            }
+        }
+
+        // =============================================================
+        //  PASS 4: Stardust — bright specks scattered along petals
+        // =============================================================
+        const dustN = 40 + Math.round(energy * 30);
+        for (let i = 0; i < dustN; i++) {
+            const ds = seed + 50000 + i * 67;
+            const ri = Math.floor(this.seededRandom(ds) * rings.length);
+            const ring = rings[ri];
+            const r = maxDim * (ring.inner + this.seededRandom(ds + 1)
+                * (ring.outer - ring.inner)) * breathe;
+            const theta = this.seededRandom(ds + 2) * halfWedge;
+            const ringRot = rot * ring.spd;
+            const sz = 0.5 + this.seededRandom(ds + 3) * 2.0 * (1 + energy);
+            const dH = (hue + ring.hOff + this.seededRandom(ds + 4) * 40) % 360;
+            const dA = 0.10 + energy * 0.18 + brightness * 0.08;
+
+            for (let m = 0; m < mirrors; m++) {
+                const base = wedge * m + ringRot;
+                for (let flip = 0; flip < 2; flip++) {
+                    const a = base + (flip === 0 ? theta : -theta);
+                    ctx.beginPath();
+                    ctx.arc(Math.cos(a) * r, Math.sin(a) * r, sz, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${dH}, ${Math.min(100, sat)}%, 85%, ${dA})`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        // =============================================================
+        //  CENTRAL FLOWER STAR — warm gold core, turquoise halo
+        // =============================================================
+        ctx.globalCompositeOperation = 'screen';
+
+        // Turquoise halo
+        const coreR = maxDim * 0.11 * breathe;
+        const haloR = coreR * 1.8;
+        const haloHue = (hue + 175) % 360;
+        const haloGrad = ctx.createRadialGradient(0, 0, coreR * 0.6, 0, 0, haloR);
+        haloGrad.addColorStop(0, `hsla(${haloHue}, ${sat}%, 55%, ${0.3 + energy * 0.2})`);
+        haloGrad.addColorStop(0.5, `hsla(${haloHue}, ${sat * 0.8}%, 45%, ${0.15 + energy * 0.1})`);
+        haloGrad.addColorStop(1, 'hsla(0,0%,0%,0)');
+        ctx.beginPath();
+        ctx.arc(0, 0, haloR, 0, Math.PI * 2);
+        ctx.fillStyle = haloGrad;
+        ctx.fill();
+
+        // Warm gold core
+        const coreH1 = (hue + 35) % 360;
+        const coreH2 = (hue + 20) % 360;
         const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR);
-        const coreHue1 = (hue + 170 + rot * 20) % 360; // cyan-ish
-        const coreHue2 = (hue + 50) % 360;              // gold-ish
-        coreGrad.addColorStop(0, `hsla(${coreHue1}, ${Math.min(100, sat)}%, 88%, ${0.6 + energy * 0.4})`);
-        coreGrad.addColorStop(0.25, `hsla(${coreHue2}, ${sat}%, 70%, ${0.35 + energy * 0.3})`);
-        coreGrad.addColorStop(0.6, `hsla(${(hue + 240) % 360}, ${sat * 0.7}%, 40%, ${0.1 + energy * 0.1})`);
-        coreGrad.addColorStop(1, 'hsla(0, 0%, 0%, 0)');
+        coreGrad.addColorStop(0, `hsla(${coreH1}, ${Math.min(100, sat)}%, 88%, ${0.7 + energy * 0.3})`);
+        coreGrad.addColorStop(0.35, `hsla(${coreH2}, ${sat}%, 70%, ${0.5 + energy * 0.25})`);
+        coreGrad.addColorStop(0.7, `hsla(${(hue + 45) % 360}, ${sat * 0.9}%, 55%, ${0.25 + energy * 0.15})`);
+        coreGrad.addColorStop(1, 'hsla(0,0%,0%,0)');
         ctx.beginPath();
         ctx.arc(0, 0, coreR, 0, Math.PI * 2);
         ctx.fillStyle = coreGrad;
         ctx.fill();
 
+        // Radiating star points from core
+        ctx.globalCompositeOperation = 'lighter';
+        const starN = mirrors * 2;
+        const starA = 0.20 + energy * 0.18;
+        for (let i = 0; i < starN; i++) {
+            const a = (Math.PI * 2 / starN) * i + rot * 0.5;
+            const tipR = coreR * (1.4 + energy * 0.4 + Math.sin(rot * 0.8 + i * 0.5) * 0.15);
+            const baseW = Math.PI / starN * 0.4;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(a - baseW) * coreR * 0.4,
+                       Math.sin(a - baseW) * coreR * 0.4);
+            ctx.lineTo(Math.cos(a) * tipR, Math.sin(a) * tipR);
+            ctx.lineTo(Math.cos(a + baseW) * coreR * 0.4,
+                       Math.sin(a + baseW) * coreR * 0.4);
+            ctx.closePath();
+            const sH = (coreH1 + i * 5) % 360;
+            ctx.fillStyle = `hsla(${sH}, ${sat}%, 78%, ${starA})`;
+            ctx.fill();
+        }
+
+        ctx.globalCompositeOperation = prevComp;
         ctx.restore();
     }
 
     /**
-     * Fractal background — Dense recursive colour field with polar mirroring.
+     * Fractal background — Deep stained-glass colour wash.
      *
-     * Establishes the saturated base that ensures no black pixels remain.
-     * Uses `screen` blending for colour richness.  4 recursive bands
-     * with large overlapping nebulae, structural arcs, and dense motes.
+     * Radial colour zones matching the foreground ring palette give the
+     * sense of light streaming through from behind.  Ghost petal outlines
+     * and scattered motes add depth without competing with the foreground.
      */
     renderFractalBackground(ctx, width, height, centerX, centerY, reactivity) {
         const config = this.config;
         const energy = this.smoothedValues.percussiveImpact;
         const harmonic = this.smoothedValues.harmonicEnergy;
-        const brightness = this.smoothedValues.spectralBrightness;
         const maxDim = Math.max(width, height) * 0.9;
         const rot = this._bgFractalRotation;
         const accentHsl = this.hexToHsl(config.accentColor);
         const bgHue = accentHsl.h;
         const mirrors = config.mirrors;
         const sat = config.saturation;
-
-        const wedgeAngle = Math.PI * 2 / mirrors;
-        const halfWedge = wedgeAngle * 0.5;
+        const wedge = Math.PI * 2 / mirrors;
+        const halfWedge = wedge * 0.5;
 
         ctx.save();
         ctx.translate(centerX, centerY);
-
-        const prevComposite = ctx.globalCompositeOperation;
+        const prevComp = ctx.globalCompositeOperation;
         ctx.globalCompositeOperation = 'screen';
 
-        // 4 recursive background depth bands
-        const bandCount = 4;
-        const scaleF = 0.48;
-        const rotSpeeds = [0.1, -0.22, 0.38, -0.55];
-        const hueShifts = [0, 45, 95, 145];
+        // ── Deep radial colour zones (matching foreground ring palette) ──
+        const zones = [
+            { r: 0.12, hOff: 35,  l: 12 },
+            { r: 0.28, hOff: 175, l: 10 },
+            { r: 0.48, hOff: 290, l: 8 },
+            { r: 0.72, hOff: 160, l: 7 },
+            { r: 1.00, hOff: 45,  l: 9 },
+        ];
 
-        for (let band = 0; band < bandCount; band++) {
-            const bScale = Math.pow(scaleF, band);
-            const fieldR = maxDim * bScale;
-            const innerR = band < bandCount - 1
-                ? maxDim * Math.pow(scaleF, band + 1) : 0;
-            const bRot = rot * rotSpeeds[band];
-            const bHue = (bgHue + hueShifts[band]) % 360;
-            const area = bScale * bScale;
-            const range = fieldR - innerR;
-            const aBoost = 1.0 + band * 0.2;
+        for (let i = zones.length - 1; i >= 0; i--) {
+            const z = zones[i];
+            const r = maxDim * z.r;
+            const zH = (bgHue + z.hOff) % 360;
+            const zA = 0.035 + energy * reactivity * 0.02 + harmonic * 0.01;
+            const grad = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r);
+            grad.addColorStop(0, `hsla(${zH}, ${sat * 0.5}%, ${z.l + 5}%, ${zA * 1.3})`);
+            grad.addColorStop(0.6, `hsla(${zH}, ${sat * 0.35}%, ${z.l}%, ${zA})`);
+            grad.addColorStop(1, 'hsla(0,0%,0%,0)');
+            ctx.beginPath();
+            ctx.arc(0, 0, r, 0, Math.PI * 2);
+            ctx.fillStyle = grad;
+            ctx.fill();
+        }
 
-            // --- Large nebula washes ---
-            const nebN = Math.max(4, Math.round(
-                (10 + harmonic * reactivity * 4) * area));
-            for (let i = 0; i < nebN; i++) {
-                const ns = 7777 + band * 3000 + i * 131;
-                const r = innerR + this.seededRandom(ns) * range * 0.85 + range * 0.08;
-                const theta = this.seededRandom(ns + 1) * halfWedge;
-                const drift = Math.sin(rot * 0.12 + i * 1.7 + band * 2.3) * range * 0.03;
-                const nr = r + drift;
-                // BIG nebulae — fieldR * 0.12-0.28
-                const sz = fieldR * (0.13 + this.seededRandom(ns + 2) * 0.16)
-                    * (1 + energy * reactivity * 0.15);
-                const nH = (bHue + 180 + this.seededRandom(ns + 3) * 100) % 360;
-                const nL = 15 + this.seededRandom(ns + 4) * 16;
-                const nA = (0.03 + energy * reactivity * 0.025 + harmonic * 0.015) * aBoost;
+        // ── Ghost rosette: faint petal outlines ──
+        const roseA = 0.02 + harmonic * reactivity * 0.015;
+        const rotSpeeds = [0.06, -0.04, 0.025, -0.015, 0.008];
+        const petalCounts = [1, 1, 2, 2, 3];
 
-                for (let m = 0; m < mirrors; m++) {
-                    const base = wedgeAngle * m + bRot;
-                    for (let flip = 0; flip < 2; flip++) {
-                        const a = base + (flip === 0 ? theta : -theta);
-                        const x = Math.cos(a) * nr;
-                        const y = Math.sin(a) * nr;
-                        const g = ctx.createRadialGradient(x, y, 0, x, y, sz);
-                        g.addColorStop(0, `hsla(${nH}, ${sat * 0.55}%, ${nL}%, ${nA})`);
-                        g.addColorStop(0.5, `hsla(${nH}, ${sat * 0.35}%, ${nL * 0.6}%, ${nA * 0.4})`);
-                        g.addColorStop(1, 'hsla(0,0%,0%,0)');
-                        ctx.beginPath();
-                        ctx.arc(x, y, sz, 0, Math.PI * 2);
-                        ctx.fillStyle = g;
-                        ctx.fill();
-                    }
-                }
-            }
+        for (let ri = 0; ri < zones.length; ri++) {
+            const oR = maxDim * zones[ri].r;
+            const iR = ri > 0 ? maxDim * zones[ri - 1].r : 0;
+            const ringRot = rot * rotSpeeds[ri];
+            const zH = (bgHue + zones[ri].hOff + 60) % 360;
+            const nP = petalCounts[ri];
 
-            // --- Structural noise-contour arcs ---
-            const arcN = Math.max(3, Math.round(
-                (6 + energy * reactivity * 3) * Math.sqrt(area)));
-            for (let i = 0; i < arcN; i++) {
-                const as = 5555 + band * 3000 + i * 89;
-                const arcSteps = 18;
-                const startR = innerR + this.seededRandom(as) * range * 0.6 + range * 0.15;
-                const startT = this.seededRandom(as + 1) * halfWedge;
-                const pts = [];
-                let cr = startR, ct = startT;
-                for (let s = 0; s <= arcSteps; s++) {
-                    const fnx = this._fractalNoise(
-                        cr * 0.003 + rot * 0.07, ct * 8 + i + band * 7);
-                    const fny = this._fractalNoise(
-                        ct * 8 + i + band * 7, cr * 0.003 + rot * 0.07);
-                    cr = Math.max(innerR, Math.min(fieldR,
-                        cr + (fnx - 0.5) * range * 0.05));
-                    ct = Math.max(0, Math.min(halfWedge,
-                        ct + (fny - 0.5) * 0.025));
-                    pts.push({ r: cr, theta: ct });
-                }
-
-                const aH = (bHue + 130 + this.seededRandom(as + 2) * 70) % 360;
-                const aA = (0.035 + harmonic * reactivity * 0.04) * aBoost;
+            for (let p = 0; p < nP; p++) {
+                const pTheta = halfWedge * (p + 0.5) / nP;
+                const halfW = halfWedge / nP * 0.35;
 
                 for (let m = 0; m < mirrors; m++) {
-                    const base = wedgeAngle * m + bRot;
+                    const base = wedge * m + ringRot;
                     for (let flip = 0; flip < 2; flip++) {
+                        const angle = base + (flip === 0 ? pTheta : -pTheta);
+                        const midR = (iR + oR) * 0.5;
+                        const bulge = (oR - iR) * 0.3;
                         ctx.beginPath();
-                        for (let s = 0; s < pts.length; s++) {
-                            const p = pts[s];
-                            const pa = base + (flip === 0 ? p.theta : -p.theta);
-                            const x = Math.cos(pa) * p.r;
-                            const y = Math.sin(pa) * p.r;
-                            s === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-                        }
-                        ctx.strokeStyle = `hsla(${aH}, ${sat * 0.45}%, 42%, ${aA})`;
-                        ctx.lineWidth = (1.0 + energy * reactivity * 1.2)
-                            * (0.5 + bScale * 0.5);
-                        ctx.lineCap = 'round';
+                        ctx.moveTo(Math.cos(angle) * iR, Math.sin(angle) * iR);
+                        ctx.bezierCurveTo(
+                            Math.cos(angle - halfW) * (midR - bulge),
+                            Math.sin(angle - halfW) * (midR - bulge),
+                            Math.cos(angle - halfW * 0.85) * (midR + bulge),
+                            Math.sin(angle - halfW * 0.85) * (midR + bulge),
+                            Math.cos(angle) * oR, Math.sin(angle) * oR);
+                        ctx.bezierCurveTo(
+                            Math.cos(angle + halfW * 0.85) * (midR + bulge),
+                            Math.sin(angle + halfW * 0.85) * (midR + bulge),
+                            Math.cos(angle + halfW) * (midR - bulge),
+                            Math.sin(angle + halfW) * (midR - bulge),
+                            Math.cos(angle) * iR, Math.sin(angle) * iR);
+                        ctx.closePath();
+                        ctx.strokeStyle = `hsla(${zH}, ${sat * 0.4}%, 45%, ${roseA})`;
+                        ctx.lineWidth = 0.5 + energy * reactivity * 0.3;
                         ctx.stroke();
                     }
                 }
             }
 
-            // --- Dense texture motes ---
-            const moteN = Math.max(6, Math.round(
-                (18 + energy * reactivity * 10) * area));
-            for (let i = 0; i < moteN; i++) {
-                const ms = 3333 + band * 3000 + i * 47;
-                const r = innerR + this.seededRandom(ms) * range;
-                const theta = this.seededRandom(ms + 1) * halfWedge;
-                const sz = (0.5 + this.seededRandom(ms + 2) * 2.5
-                    * (1 + energy * reactivity)) * (0.5 + bScale * 0.5);
-                const mH = (bHue + this.seededRandom(ms + 3) * 130) % 360;
-                const mA = (0.04 + energy * reactivity * 0.06 + brightness * 0.02) * aBoost;
-
-                for (let m = 0; m < mirrors; m++) {
-                    const base = wedgeAngle * m + bRot;
-                    for (let flip = 0; flip < 2; flip++) {
-                        const ma = base + (flip === 0 ? theta : -theta);
-                        const x = Math.cos(ma) * r;
-                        const y = Math.sin(ma) * r;
-                        ctx.beginPath();
-                        ctx.arc(x, y, sz, 0, Math.PI * 2);
-                        ctx.fillStyle = `hsla(${mH}, ${sat * 0.5}%, 48%, ${mA})`;
-                        ctx.fill();
-                    }
-                }
-            }
-
-            // Band boundary ring
-            if (band > 0) {
-                const rH = (bHue + 90) % 360;
-                const rA = 0.03 + energy * reactivity * 0.04;
+            // Ring boundary
+            if (ri > 0) {
                 ctx.beginPath();
-                ctx.arc(0, 0, fieldR, 0, Math.PI * 2);
-                ctx.strokeStyle = `hsla(${rH}, ${sat * 0.4}%, 42%, ${rA})`;
-                ctx.lineWidth = 0.5 + energy * reactivity * 0.4;
+                ctx.arc(0, 0, iR, 0, Math.PI * 2);
+                ctx.strokeStyle = `hsla(${zH}, ${sat * 0.3}%, 40%, ${roseA * 0.7})`;
+                ctx.lineWidth = 0.4;
                 ctx.stroke();
             }
         }
 
-        ctx.globalCompositeOperation = prevComposite;
+        // ── Scatter motes ──
+        const moteN = 15 + Math.round(energy * reactivity * 10);
+        for (let i = 0; i < moteN; i++) {
+            const ms = 9999 + i * 53;
+            const ri = Math.floor(this.seededRandom(ms) * zones.length);
+            const prevR = ri > 0 ? zones[ri - 1].r : 0;
+            const r = maxDim * (prevR + this.seededRandom(ms + 1) * (zones[ri].r - prevR));
+            const theta = this.seededRandom(ms + 2) * halfWedge;
+            const ringRot = rot * rotSpeeds[ri];
+            const sz = 0.4 + this.seededRandom(ms + 3) * 1.5;
+            const mH = (bgHue + zones[ri].hOff + this.seededRandom(ms + 4) * 40) % 360;
+            const mA = 0.03 + energy * reactivity * 0.03;
+
+            for (let m = 0; m < mirrors; m++) {
+                const base = wedge * m + ringRot;
+                for (let flip = 0; flip < 2; flip++) {
+                    const a = base + (flip === 0 ? theta : -theta);
+                    ctx.beginPath();
+                    ctx.arc(Math.cos(a) * r, Math.sin(a) * r, sz, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${mH}, ${sat * 0.4}%, 42%, ${mA})`;
+                    ctx.fill();
+                }
+            }
+        }
+
+        ctx.globalCompositeOperation = prevComp;
         ctx.restore();
     }
 

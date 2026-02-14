@@ -18,7 +18,7 @@ const KNOB_TOOLTIPS = {
         fluid: "Flow symmetry axes",
         orrery: "Decorative rings and tick marks",
         quark: "Mirror segments for fields",
-        fractal: "Recursive symmetry axes",
+        fractal: "Kaleidoscope mirror segments",
     },
     baseRadius: {
         geometric: "Overall pattern size",
@@ -33,7 +33,7 @@ const KNOB_TOOLTIPS = {
         fluid: "Fluid field extent",
         orrery: "Planet count and detail level",
         quark: "Quantum field extent",
-        fractal: "Fractal iteration radius",
+        fractal: "Rose window size",
     },
     orbitRadius: {
         geometric: "Ring spacing and reach",
@@ -48,7 +48,7 @@ const KNOB_TOOLTIPS = {
         fluid: "Flow vortex reach",
         orrery: "Zoom level of the orrery",
         quark: "Field interaction range",
-        fractal: "Self-similar layer depth",
+        fractal: "Petal ring depth",
     },
     rotationSpeed: {
         geometric: "Rotation speed",
@@ -63,7 +63,7 @@ const KNOB_TOOLTIPS = {
         fluid: "Flow rotation rate",
         orrery: "Orbital animation speed",
         quark: "Field phase velocity",
-        fractal: "Iteration cycle speed",
+        fractal: "Kaleidoscope turn speed",
     },
     maxScale: {
         geometric: "Beat punch intensity",
@@ -78,7 +78,7 @@ const KNOB_TOOLTIPS = {
         fluid: "Beat splash intensity",
         orrery: "Beat flare intensity",
         quark: "Beat field disruption",
-        fractal: "Beat recursion depth",
+        fractal: "Beat bloom intensity",
     },
     trailAlpha: {
         geometric: "Motion trail persistence",
@@ -93,7 +93,7 @@ const KNOB_TOOLTIPS = {
         fluid: "Flow trail smear",
         orrery: "Orbital motion trails",
         quark: "Field trail persistence",
-        fractal: "Iteration trail layering",
+        fractal: "Stained glass afterglow",
     },
     minSides: {
         geometric: "Minimum polygon sides",
@@ -108,7 +108,7 @@ const KNOB_TOOLTIPS = {
         fluid: "Min vortex facets",
         orrery: "Min tick mark complexity",
         quark: "Min quark count",
-        fractal: "Min fractal detail level",
+        fractal: "Min petal complexity",
     },
     maxSides: {
         geometric: "Maximum polygon sides",
@@ -123,7 +123,7 @@ const KNOB_TOOLTIPS = {
         fluid: "Max vortex facets",
         orrery: "Max tick mark complexity",
         quark: "Max quark count",
-        fractal: "Max fractal detail level",
+        fractal: "Max petal complexity",
     },
     baseThickness: {
         geometric: "Base line thickness",
@@ -138,7 +138,7 @@ const KNOB_TOOLTIPS = {
         fluid: "Base flow line weight",
         orrery: "Base brass line weight",
         quark: "Base field line thickness",
-        fractal: "Base fractal line weight",
+        fractal: "Base leading width",
     },
     maxThickness: {
         geometric: "Max line thickness on beats",
@@ -153,7 +153,7 @@ const KNOB_TOOLTIPS = {
         fluid: "Max flow width on beats",
         orrery: "Max brass width on beats",
         quark: "Max field width on beats",
-        fractal: "Max fractal width on beats",
+        fractal: "Max leading on beats",
     },
 };
 
