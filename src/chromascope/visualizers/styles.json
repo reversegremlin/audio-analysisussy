@@ -157,16 +157,16 @@
       "rotation_speed": 2.3
     },
     "universe": {
-      "num_mirrors": 20,
-      "trail_alpha": 86,
-      "base_radius": 260.0,
-      "max_scale": 3.1,
+      "num_mirrors": 24,
+      "trail_alpha": 26,
+      "base_radius": 210.0,
+      "max_scale": 2.6,
       "min_sides": 6,
-      "max_sides": 28,
+      "max_sides": 22,
       "base_thickness": 2,
-      "max_thickness": 13,
-      "orbit_radius": 420.0,
-      "rotation_speed": 2.9
+      "max_thickness": 10,
+      "orbit_radius": 360.0,
+      "rotation_speed": 2.3
     }
   }
 }

@@ -205,7 +205,7 @@
     }
 
     /**
-     * Universe background — high-contrast stained-glass lattice + quantum dust + wormhole depth.
+     * Universe background — geometric stained-glass field, quantum dust, and deep tunnel parallax.
      */
     renderUniverseBackground(ctx, width, height, centerX, centerY, reactivity) {
         const config = this.config;
@@ -216,82 +216,105 @@
         const maxDim = Math.max(width, height);
         const accentHue = this.hexToHsl(config.accentColor).h;
 
-        // 1) Infinite tunnel lattice (rear layers dimmer/slower = parallax depth)
-        ctx.save();
-        ctx.translate(centerX, centerY);
-        const layers = 48;
-        const mirrors = Math.max(14, config.mirrors * 2);
-        for (let layer = layers - 1; layer >= 0; layer--) {
-            const depth = layer / layers;
-            const radius = maxDim * (0.08 + depth * 0.88);
-            const layerRot = rot * (0.12 + depth * 0.52) + Math.sin(rot * 1.7 + layer * 0.3) * 0.03;
-            const alpha = 0.01 + (1 - depth) * 0.045 + harmonic * 0.015;
+        // Layer A: stained-glass structural field across full frame.
+        const cell = Math.max(90, maxDim * 0.075);
+        const cols = Math.ceil(width / cell) + 3;
+        const rows = Math.ceil(height / cell) + 3;
+        const ox = -cell;
+        const oy = -cell;
 
-            ctx.save();
-            ctx.rotate(layerRot);
+        for (let gy = 0; gy < rows - 1; gy++) {
+            for (let gx = 0; gx < cols - 1; gx++) {
+                const px = ox + gx * cell;
+                const py = oy + gy * cell;
+                const noisePhase = rot * 0.9 + gx * 0.23 + gy * 0.19;
 
-            for (let i = 0; i < mirrors; i++) {
-                const a0 = (Math.PI * 2 * i) / mirrors;
-                const a1 = (Math.PI * 2 * (i + 1)) / mirrors;
-                const mid = (a0 + a1) * 0.5;
+                const p0 = this._jitterPoint(px, py, cell * 0.23, noisePhase);
+                const p1 = this._jitterPoint(px + cell, py, cell * 0.23, noisePhase + 1.5);
+                const p2 = this._jitterPoint(px + cell, py + cell, cell * 0.23, noisePhase + 3.1);
+                const p3 = this._jitterPoint(px, py + cell, cell * 0.23, noisePhase + 4.3);
 
-                const rip = Math.sin(mid * 7 + rot * 8 + depth * 10) * maxDim * 0.009 * reactivity;
-                const inR = radius * (0.08 + depth * 0.38);
-                const outR = radius + rip;
-                const ctrlR = outR * (0.75 + Math.sin(rot * 2.6 + i) * 0.1);
-                const hue = (accentHue + depth * 180 + i * (140 / mirrors) + brightness * 90) % 360;
+                const tileHue = (accentHue + gx * 9 + gy * 7 + brightness * 95 + Math.sin(noisePhase) * 35) % 360;
+                const tileAlpha = 0.06 + harmonic * 0.05;
 
                 ctx.beginPath();
-                ctx.moveTo(Math.cos(a0) * inR, Math.sin(a0) * inR);
-                ctx.lineTo(Math.cos(a0) * outR, Math.sin(a0) * outR);
-                ctx.quadraticCurveTo(Math.cos(mid) * ctrlR, Math.sin(mid) * ctrlR, Math.cos(a1) * outR, Math.sin(a1) * outR);
-                ctx.lineTo(Math.cos(a1) * inR, Math.sin(a1) * inR);
+                ctx.moveTo(p0.x, p0.y);
+                ctx.lineTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.lineTo(p3.x, p3.y);
                 ctx.closePath();
 
-                const grad = ctx.createLinearGradient(
-                    Math.cos(a0) * inR,
-                    Math.sin(a0) * inR,
-                    Math.cos(mid) * outR,
-                    Math.sin(mid) * outR
-                );
-                grad.addColorStop(0, `hsla(${(hue + 18) % 360}, ${config.saturation * 0.72}%, ${25 + depth * 16}%, ${alpha * 0.75})`);
-                grad.addColorStop(0.5, `hsla(${hue}, ${config.saturation * 0.95}%, ${45 + brightness * 25}%, ${alpha * 1.2})`);
-                grad.addColorStop(1, `hsla(${(hue + 42) % 360}, ${config.saturation * 0.85}%, ${30 + depth * 18}%, ${alpha})`);
+                const grad = ctx.createLinearGradient(p0.x, p0.y, p2.x, p2.y);
+                grad.addColorStop(0, `hsla(${tileHue}, ${config.saturation * 0.88}%, ${24 + brightness * 18}%, ${tileAlpha})`);
+                grad.addColorStop(1, `hsla(${(tileHue + 42) % 360}, ${config.saturation * 0.78}%, ${14 + harmonic * 16}%, ${tileAlpha * 1.1})`);
                 ctx.fillStyle = grad;
                 ctx.fill();
 
-                // dark lead-like line for stained-glass framing
-                ctx.strokeStyle = `hsla(${(hue + 210) % 360}, ${config.saturation * 0.3}%, 8%, ${Math.min(0.28, alpha * 3.8)})`;
-                ctx.lineWidth = 0.5 + (1 - depth) * 1.35;
+                // leaded-glass edge
+                ctx.strokeStyle = `hsla(${(tileHue + 200) % 360}, 22%, 5%, ${0.18 + energy * 0.18})`;
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+            }
+        }
+
+        // Layer B: deep mirrored tunnel (sharp triangular wedges).
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        const tunnelLayers = 60;
+        const wedges = Math.max(24, config.mirrors * 2);
+        for (let l = tunnelLayers - 1; l >= 0; l--) {
+            const depth = l / tunnelLayers;
+            const z = 1 - depth;
+            const layerRot = rot * (0.18 + z * 0.85) + this._fractalFbm(depth * 4 + rot * 0.25, rot * 0.4, 3) * 0.32;
+            const inner = maxDim * (0.025 + depth * 0.08);
+            const outer = maxDim * (0.18 + depth * 0.65);
+            const alpha = 0.015 + z * 0.09;
+
+            ctx.save();
+            ctx.rotate(layerRot);
+            for (let i = 0; i < wedges; i++) {
+                const a0 = (Math.PI * 2 * i) / wedges;
+                const a1 = (Math.PI * 2 * (i + 1)) / wedges;
+                const mid = (a0 + a1) * 0.5;
+                const wob = (this._fractalFbm(i * 0.08 + rot * 0.6, depth * 3.2, 2) - 0.5) * maxDim * 0.03 * reactivity;
+                const rOut = outer + wob;
+                const hue = (accentHue + i * (220 / wedges) + depth * 170 + brightness * 80) % 360;
+
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(a0) * inner, Math.sin(a0) * inner);
+                ctx.lineTo(Math.cos(mid) * rOut, Math.sin(mid) * rOut);
+                ctx.lineTo(Math.cos(a1) * inner, Math.sin(a1) * inner);
+                ctx.closePath();
+
+                ctx.fillStyle = `hsla(${hue}, ${config.saturation * 0.9}%, ${22 + z * 34}%, ${alpha})`;
+                ctx.fill();
+                ctx.strokeStyle = `hsla(${(hue + 210) % 360}, 30%, 6%, ${Math.min(0.46, alpha * 3.8)})`;
+                ctx.lineWidth = 0.55 + z * 1.25;
                 ctx.stroke();
             }
             ctx.restore();
         }
         ctx.restore();
 
-        // 2) Quantum grain cloud (dense star-dust with swarm motion)
-        ctx.save();
-        const dustCount = 1800;
-        for (let i = 0; i < dustCount; i++) {
-            const seed = i * 19 + 1777;
-            const radial = maxDim * (0.02 + this.seededRandom(seed) * 0.66);
-            const ringBias = Math.pow(this.seededRandom(seed + 1), 1.6);
-            const baseAngle = this.seededRandom(seed + 2) * Math.PI * 2;
-            const swirl = Math.sin(rot * (1.5 + ringBias) + radial * 0.003 + this.seededRandom(seed + 3) * 6.28);
-            const angle = baseAngle + swirl * 0.22 + rot * (0.12 + ringBias * 0.4);
-            const flock = Math.sin(rot * 2.0 + baseAngle * 4) * maxDim * 0.008;
-            const x = centerX + Math.cos(angle) * radial + flock;
-            const y = centerY + Math.sin(angle) * radial - flock;
-            const size = 0.28 + this.seededRandom(seed + 4) * (1.1 + brightness * 1.5);
-            const alpha = Math.min(0.58, 0.05 + energy * 0.25 + this.seededRandom(seed + 5) * 0.2);
-            const hue = (accentHue + 155 + swirl * 24 + this.seededRandom(seed + 6) * 80) % 360;
+        // Layer C: quantum dust cloud.
+        const dust = 2200;
+        for (let i = 0; i < dust; i++) {
+            const seed = i * 23 + 313;
+            const r = maxDim * Math.pow(this.seededRandom(seed), 1.45) * 0.85;
+            const a = this.seededRandom(seed + 1) * Math.PI * 2 + rot * (0.14 + this.seededRandom(seed + 2) * 0.38);
+            const fbm = this._fractalFbm(Math.cos(a) * 2 + rot * 0.35, Math.sin(a) * 2 + seed * 0.003, 3);
+            const drift = (fbm - 0.5) * maxDim * 0.02;
+            const x = centerX + Math.cos(a) * r + drift;
+            const y = centerY + Math.sin(a) * r - drift;
+            const size = 0.25 + this.seededRandom(seed + 3) * (0.9 + brightness * 1.2);
+            const alpha = Math.min(0.72, 0.04 + energy * 0.32 + this.seededRandom(seed + 4) * 0.16);
+            const hue = (accentHue + 150 + this.seededRandom(seed + 5) * 120 + fbm * 35) % 360;
 
             ctx.beginPath();
             ctx.arc(x, y, size, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(${hue}, ${config.saturation * 0.6}%, ${55 + brightness * 30}%, ${alpha})`;
+            ctx.fillStyle = `hsla(${hue}, ${config.saturation * 0.58}%, ${56 + brightness * 26}%, ${alpha})`;
             ctx.fill();
         }
-        ctx.restore();
     }
 
 
@@ -1692,85 +1715,97 @@
     }
 
     /**
-     * Universe style — stained-glass fractal shards with deep mirrored tunnel and entropy wobble.
+     * Universe style — sharp kaleidoscopic crystal engine with depth-stack parallax.
      */
     renderUniverseStyle(ctx, centerX, centerY, radius, numSides, hue, thickness) {
         const config = this.config;
-        const mirrors = Math.max(14, config.mirrors);
+        const mirrors = Math.max(18, config.mirrors);
         const energy = this.smoothedValues.percussiveImpact;
         const harmonic = this.smoothedValues.harmonicEnergy;
         const brightness = this.smoothedValues.spectralBrightness;
 
-        const wobble = Math.sin(this.accumulatedRotation * 2.1) * (0.08 + harmonic * 0.1);
-        const glitchPulse = Math.sin(this.accumulatedRotation * 2.6 + energy * 11) > 0.93;
-        const layers = 56;
+        const layers = 52;
+        const wobble = (this._fractalFbm(this.accumulatedRotation * 0.6, harmonic * 8, 3) - 0.5) * 0.26;
+        const glitch = Math.sin(this.accumulatedRotation * 3.0 + energy * 14) > 0.92;
 
-        for (let layer = layers - 1; layer >= 0; layer--) {
-            const depth = layer / layers;
-            const layerAlpha = 0.02 + (1 - depth) * 0.22;
-            const layerScale = 0.12 + depth * 1.05;
-            const layerRot = this.accumulatedRotation * (0.1 + depth * 0.95) + wobble * (1 - depth);
+        for (let l = layers - 1; l >= 0; l--) {
+            const depth = l / layers;
+            const z = 1 - depth;
+            const layerScale = 0.09 + depth * 1.12;
+            const baseRot = this.accumulatedRotation * (0.22 + depth * 1.1) + wobble * (1 - depth);
+            const layerAlpha = 0.02 + z * 0.24;
 
             for (let m = 0; m < mirrors; m++) {
-                const base = (Math.PI * 2 * m) / mirrors + layerRot;
-                const lag = glitchPulse && m === (layer % mirrors) ? -0.18 : 0;
-                const ang = base + lag;
+                const sector = (Math.PI * 2 * m) / mirrors;
+                const lag = glitch && m === (l % mirrors) ? -0.2 : 0;
+                const ang = sector + baseRot + lag;
+                const orbit = radius * layerScale * (0.33 + harmonic * 0.66);
+                const cx = centerX + Math.cos(ang) * orbit;
+                const cy = centerY + Math.sin(ang) * orbit;
 
-                const orbit = radius * layerScale * (0.34 + harmonic * 0.58);
-                const px = centerX + Math.cos(ang) * orbit;
-                const py = centerY + Math.sin(ang) * orbit;
+                // Crystal cell: central polygon with triangular shards.
+                const cellSides = Math.max(5, numSides + ((m + l) % 4) - 1);
+                const cellR = radius * (0.032 + z * (0.15 + this.seededRandom(l * 79 + m * 17) * 0.08)) * (1 + energy * 0.18);
+                const cellHue = (hue + depth * 240 + m * (180 / mirrors) + brightness * 80) % 360;
 
-                // Voronoi-ish crystalline cells from clustered shard polygons.
-                const cellCount = 3;
-                for (let c = 0; c < cellCount; c++) {
-                    const seed = layer * 97 + m * 17 + c * 13;
-                    const localR = radius * (0.05 + (1 - depth) * (0.13 + this.seededRandom(seed) * 0.06));
-                    const jx = (this.seededRandom(seed + 1) - 0.5) * localR * 0.9;
-                    const jy = (this.seededRandom(seed + 2) - 0.5) * localR * 0.9;
-                    const shards = Math.max(5, numSides + (c % 3) - 1);
-                    const spin = ang * (1.1 + this.seededRandom(seed + 3) * 0.7) + wobble;
-                    const paneHue = (hue + depth * 210 + m * (160 / mirrors) + c * 18 + brightness * 60) % 360;
+                const corePoints = [];
+                for (let i = 0; i < cellSides; i++) {
+                    const t = (Math.PI * 2 * i) / cellSides + ang * (1.2 + i * 0.02);
+                    const n = this._fractalFbm(i * 0.2 + l * 0.06, this.accumulatedRotation * 0.8, 2);
+                    const rr = cellR * (0.8 + n * 0.45);
+                    corePoints.push({ x: cx + Math.cos(t) * rr, y: cy + Math.sin(t) * rr });
+                }
 
-                    const grad = ctx.createRadialGradient(
-                        px + jx * 0.2,
-                        py + jy * 0.2,
-                        localR * 0.1,
-                        px + jx,
-                        py + jy,
-                        localR * 1.3
-                    );
-                    grad.addColorStop(0, `hsla(${(paneHue + 20) % 360}, ${config.saturation}%, ${64 + brightness * 20}%, ${layerAlpha * 0.95})`);
-                    grad.addColorStop(1, `hsla(${(paneHue + 80) % 360}, ${config.saturation * 0.82}%, ${28 + depth * 18}%, ${layerAlpha * 0.7})`);
+                const grad = ctx.createRadialGradient(cx, cy, cellR * 0.08, cx, cy, cellR * 1.3);
+                grad.addColorStop(0, `hsla(${(cellHue + 16) % 360}, ${config.saturation}%, ${66 + brightness * 18}%, ${layerAlpha})`);
+                grad.addColorStop(1, `hsla(${(cellHue + 74) % 360}, ${config.saturation * 0.82}%, ${26 + z * 18}%, ${layerAlpha * 0.88})`);
+                this.drawFilledPolygon(
+                    ctx,
+                    corePoints,
+                    grad,
+                    `hsla(${(cellHue + 210) % 360}, 25%, 6%, ${Math.min(0.72, layerAlpha * 2.7)})`,
+                    Math.max(0.9, thickness * (0.12 + z * 0.19))
+                );
 
-                    this.drawFlowerPetal(
+                // Outer shards for hard-edged kaleidoscope geometry.
+                for (let i = 0; i < cellSides; i++) {
+                    const a = corePoints[i];
+                    const b = corePoints[(i + 1) % cellSides];
+                    const mx = (a.x + b.x) * 0.5;
+                    const my = (a.y + b.y) * 0.5;
+                    const dx = mx - cx;
+                    const dy = my - cy;
+                    const len = Math.hypot(dx, dy) || 1;
+                    const ext = cellR * (0.35 + this.seededRandom((l + 1) * 101 + i * 13 + m) * 0.5);
+                    const tipX = mx + (dx / len) * ext;
+                    const tipY = my + (dy / len) * ext;
+                    const shardHue = (cellHue + i * 8 + 24) % 360;
+
+                    this.drawFilledPolygon(
                         ctx,
-                        px + jx,
-                        py + jy,
-                        localR,
-                        shards,
-                        spin,
-                        grad,
-                        `hsla(${(paneHue + 220) % 360}, ${config.saturation * 0.35}%, 8%, ${Math.min(0.7, layerAlpha * 2.6)})`,
-                        Math.max(0.8, thickness * (0.12 + (1 - depth) * 0.16))
+                        [a, { x: tipX, y: tipY }, b],
+                        `hsla(${shardHue}, ${config.saturation * 0.92}%, ${36 + z * 28}%, ${layerAlpha * 0.78})`,
+                        `hsla(${(shardHue + 210) % 360}, 22%, 5%, ${Math.min(0.6, layerAlpha * 2.0)})`,
+                        Math.max(0.7, thickness * 0.08)
                     );
                 }
             }
         }
 
-        // Core singularity (bright jewel + nested outlines)
-        const coreSides = Math.max(10, numSides + 5);
-        for (let i = 0; i < 4; i++) {
-            const r = radius * (0.085 + i * 0.06) * (1 + energy * 0.4);
-            const coreHue = (hue + 200 + i * 24) % 360;
+        // Central jewel star.
+        const coreSides = Math.max(10, numSides + 6);
+        for (let k = 0; k < 5; k++) {
+            const r = radius * (0.06 + k * 0.045) * (1 + energy * 0.35);
+            const coreHue = (hue + 180 + k * 28) % 360;
             this.drawPolygon(
                 ctx,
                 centerX,
                 centerY,
                 r,
-                coreSides + i,
-                -this.accumulatedRotation * (0.5 + i * 0.2) + wobble,
-                `hsla(${coreHue}, ${config.saturation}%, ${74 - i * 8}%, ${0.85 - i * 0.15})`,
-                Math.max(1.1, thickness * (0.21 - i * 0.03))
+                coreSides + k,
+                -this.accumulatedRotation * (0.55 + k * 0.19) + wobble,
+                `hsla(${coreHue}, ${config.saturation}%, ${76 - k * 9}%, ${0.9 - k * 0.14})`,
+                Math.max(1.0, thickness * (0.19 - k * 0.025))
             );
         }
     }
@@ -6245,6 +6280,34 @@
 
         ctx.globalCompositeOperation = prevComposite;
         ctx.restore();
+    }
+
+
+    _jitterPoint(x, y, amount, phase) {
+        const n1 = this._fractalFbm(x * 0.012 + phase, y * 0.012 - phase, 3) - 0.5;
+        const n2 = this._fractalFbm(x * 0.016 - phase * 0.7, y * 0.016 + phase * 0.4, 3) - 0.5;
+        return {
+            x: x + n1 * amount * 2,
+            y: y + n2 * amount * 2,
+        };
+    }
+
+    drawFilledPolygon(ctx, points, fillStyle, strokeStyle, strokeWidth) {
+        if (!points || points.length < 3) return;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = fillStyle;
+        ctx.fill();
+        if (strokeStyle && strokeWidth > 0) {
+            ctx.strokeStyle = strokeStyle;
+            ctx.lineWidth = strokeWidth;
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+        }
     }
 
 
