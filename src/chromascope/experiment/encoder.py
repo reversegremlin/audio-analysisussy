@@ -88,7 +88,6 @@ def encode_video(
         cmd,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
     )
 
     frame_count = 0
@@ -111,15 +110,8 @@ def encode_video(
     proc.wait()
 
     if proc.returncode != 0:
-        stderr = proc.stderr.read().decode("utf-8", errors="replace")
-        # Filter out common non-error ffmpeg messages
-        error_lines = [
-            line for line in stderr.split("\n")
-            if "error" in line.lower() or "invalid" in line.lower()
-        ]
-        error_msg = "\n".join(error_lines[-5:]) if error_lines else stderr[-500:]
         raise RuntimeError(
-            f"ffmpeg exited with code {proc.returncode}: {error_msg}"
+            f"ffmpeg exited with code {proc.returncode}. See above for details."
         )
 
     return output_path

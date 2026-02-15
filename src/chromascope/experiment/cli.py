@@ -125,6 +125,13 @@ def main():
 
     # Step 2: Render
     print(f"\nRendering {total_frames} frames at {args.width}x{args.height} @ {args.fps}fps")
+    quality_map = {
+        "high": (200, 400),
+        "medium": (100, 250),
+        "fast": (60, 120),
+    }
+    base_iter, max_iter = quality_map.get(args.quality, (200, 400))
+
     print(f"  Fractal: {args.fractal}, Segments: {args.segments}, Quality: {args.quality}")
 
     config = RenderConfig(
@@ -135,6 +142,8 @@ def main():
         fractal_mode=args.fractal,
         base_zoom_speed=args.zoom_speed,
         base_rotation_speed=args.rotation_speed,
+        base_max_iter=base_iter,
+        max_max_iter=max_iter,
         glow_enabled=not args.no_glow,
         aberration_enabled=not args.no_aberration,
         vignette_strength=0.0 if args.no_vignette else 0.3,
