@@ -143,7 +143,7 @@ class TestFractalKaleidoscopeRenderer:
             f"Detail lost: std={last_frame.std():.1f}"
         )
 
-    def test_fractal_zoom_cap_preserves_detail(self):
+    def test_sustained_beats_preserve_detail(self):
         """After many beat-heavy frames, fractal should still have texture."""
         config = RenderConfig(
             width=80, height=60, fps=30,
@@ -152,7 +152,6 @@ class TestFractalKaleidoscopeRenderer:
         )
         renderer = FractalKaleidoscopeRenderer(config)
 
-        # Drive zoom_level very high via repeated beats
         for i in range(200):
             frame_data = {
                 "frame_index": i, "time": i / 30,
@@ -171,9 +170,7 @@ class TestFractalKaleidoscopeRenderer:
             }
             frame = renderer.render_frame(frame_data, i)
 
-        # zoom_level should be very high, but fractal zoom is capped
-        assert renderer.zoom_level > 100, "zoom_level should have grown"
         # Last frame should still have contrast (not flat washed out)
         assert frame.std() > 8, (
-            f"Fractal detail lost despite zoom cap: std={frame.std():.1f}"
+            f"Fractal detail lost under sustained beats: std={frame.std():.1f}"
         )

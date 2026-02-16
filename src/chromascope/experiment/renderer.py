@@ -92,7 +92,6 @@ class FractalKaleidoscopeRenderer:
         # State
         self.feedback_buffer: np.ndarray | None = None
         self.accumulated_rotation = 0.0
-        self.zoom_level = 1.0
         self.julia_t = 0.0  # parameter along the c-value path
         self.time = 0.0
 
@@ -102,6 +101,7 @@ class FractalKaleidoscopeRenderer:
         self._smooth_brightness = 0.5
         self._smooth_energy = 0.3
         self._smooth_low = 0.3
+        self._smooth_high = 0.3
 
         # Lissajous drift state
         self._drift_phase = 0.0
@@ -140,7 +140,10 @@ class FractalKaleidoscopeRenderer:
     def _smooth_audio(self, frame_data: dict[str, Any]):
         """Update smoothed audio values from frame data."""
         is_beat = frame_data.get("is_beat", False)
-        fast = 0.5 if is_beat else 0.15
+        # Fast attack on beats, but not so fast that it feels jerky.
+        # 0.3 reaches ~87% of target in 6 frames (100ms) — punchy
+        # but fluid.  Non-beat frames use 0.12 for gentle drift.
+        fast = 0.3 if is_beat else 0.12
         slow = 0.08
 
         self._smooth_percussive = self._lerp(
@@ -166,6 +169,11 @@ class FractalKaleidoscopeRenderer:
         self._smooth_low = self._lerp(
             self._smooth_low,
             frame_data.get("low_energy", 0.3),
+            slow,
+        )
+        self._smooth_high = self._lerp(
+            self._smooth_high,
+            frame_data.get("high_energy", 0.3),
             slow,
         )
 
@@ -202,16 +210,6 @@ class FractalKaleidoscopeRenderer:
             * (1.0 + self._smooth_harmonic * 2.0)
         )
         self.accumulated_rotation += rotation_delta
-
-        # Zoom level (continuous inward zoom, energy-modulated)
-        zoom_speed = (
-            cfg.base_zoom_speed * (1.0 + self._smooth_energy * 1.5)
-        )
-        self.zoom_level *= 1.0 + 0.002 * zoom_speed
-
-        # Beat punch
-        if is_beat:
-            self.zoom_level *= cfg.zoom_beat_punch
 
         # Julia c-parameter drift
         c_speed = 0.0003 * (1.0 + self._smooth_harmonic)
@@ -307,9 +305,10 @@ class FractalKaleidoscopeRenderer:
 
         # --- Kaleidoscope mirror ---
 
-        # Segment count: base ± high energy modulation
-        high_energy = frame_data.get("high_energy", 0.5)
-        seg_mod = int(high_energy * 4)
+        # Segment count: base ± smoothed high energy modulation.
+        # Using the smoothed value prevents frame-to-frame jitter
+        # that makes the kaleidoscope pattern jump.
+        seg_mod = int(self._smooth_high * 4)
         num_seg = max(4, cfg.num_segments + seg_mod - 2)
 
         texture = polar_mirror(
@@ -391,7 +390,6 @@ class FractalKaleidoscopeRenderer:
         # Reset state
         self.feedback_buffer = None
         self.accumulated_rotation = 0.0
-        self.zoom_level = 1.0
         self.julia_t = 0.0
         self.time = 0.0
         self._drift_phase = 0.0
@@ -400,6 +398,7 @@ class FractalKaleidoscopeRenderer:
         self._smooth_brightness = 0.5
         self._smooth_energy = 0.3
         self._smooth_low = 0.3
+        self._smooth_high = 0.3
 
         for i, frame_data in enumerate(frames):
             frame = self.render_frame(frame_data, i)
