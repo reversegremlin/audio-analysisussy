@@ -36,11 +36,11 @@ COLORMAPS = {
         (1.0, (255, 255, 255)),
     ],
     "solar_flare": [ # A colormap designed for flares, with more white and intense yellows
-        (0, (20, 0, 0)),
-        (0.2, (200, 50, 0)),
-        (0.5, (255, 150, 0)),
-        (0.7, (255, 255, 100)),
-        (1.0, (255, 255, 255)),
+        (0, (30, 0, 0)),
+        (0.3, (220, 60, 0)),
+        (0.6, (255, 180, 0)),
+        (0.8, (255, 255, 50)),
+        (1.0, (255, 255, 200)),
     ]
 }
 
@@ -87,15 +87,27 @@ class SolarRenderer:
         base_zoom = 1.0 + math.sin(frame_index * self.config.zoom_speed * (math.pi / 180)) * 0.5
         self.camera_zoom = base_zoom + (global_energy * 0.8) + (high_energy * 1.5) # Global and high energy add more zoom
 
-    def _generate_noise_layer(self, t, scale, octaves, persistence, lacunarity, offset_x=0, offset_y=0):
-        """Generates a single Perlin noise layer."""
+    def _generate_noise_layer(self, t, scale, octaves, persistence, lacunarity, offset_x=0, offset_y=0, angle=0.0):
+        """Generates a single Perlin noise layer with optional rotation."""
         shape = (self.height, self.width)
         layer = np.zeros(shape)
+        cos_angle = math.cos(angle)
+        sin_angle = math.sin(angle)
+
+        center_x, center_y = self.width / 2, self.height / 2
+
         for i in range(shape[0]):
             for j in range(shape[1]):
+                # Translate to origin, rotate, then translate back
+                translated_x = j - center_x
+                translated_y = i - center_y
+
+                rotated_x = translated_x * cos_angle - translated_y * sin_angle
+                rotated_y = translated_x * sin_angle + translated_y * cos_angle
+
                 # Apply camera zoom to the coordinates
-                nx = ((j + offset_x) * scale / self.width) * self.camera_zoom
-                ny = ((i + offset_y) * scale / self.height) * self.camera_zoom
+                nx = ((rotated_x + center_x + offset_x) * scale / self.width) * self.camera_zoom
+                ny = ((rotated_y + center_y + offset_y) * scale / self.height) * self.camera_zoom
                 
                 layer[i][j] = noise.pnoise3(
                     ny,
@@ -112,7 +124,7 @@ class SolarRenderer:
 
     def _generate_hot_spot(self):
         """Generates a localized radial gradient for a hot spot."""
-        hot_spot_img = np.zeros((self.width, self.height)) # Changed shape to (W,H) to match PIL
+        hot_spot_img = np.zeros((self.height, self.width))
         if self.hot_spot_intensity > 0.01: # Only generate if visible
             cx, cy = self.hot_spot_center # Use cx, cy for consistency with PIL
             y, x = np.ogrid[-cy:self.height-cy, -cx:self.width-cx]
@@ -153,26 +165,46 @@ class SolarRenderer:
             y = self._quadratic_bezier(start_point[1], control_point[1], end_point[1], t)
             points.append((x, y))
 
-        # Draw the flare with varying width and opacity
+        # Create glow layer
+        glow_image = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
+        draw_glow = ImageDraw.Draw(glow_image)
+
+        for i in range(len(points) - 1):
+            p1 = points[i]
+            p2 = points[i+1]
+            
+            width_interp = 1 - (i / (len(points) - 1))
+            
+            # Glow is wider and more transparent
+            glow_width = max(1, int(max_width * width_interp * 2.0)) # Double the width for glow
+            glow_alpha = int(255 * current_intensity * width_interp * 0.4) # Lower opacity for glow
+
+            segment_color_glow = color + (glow_alpha,)
+            draw_glow.line([p1, p2], fill=segment_color_glow, width=glow_width, joint="curve")
+        
+        # Apply blur to the glow layer
+        glow_image = glow_image.filter(ImageFilter.GaussianBlur(radius=max_width * 1.5))
+
+        # Draw the main flare with varying width and opacity
         for i in range(len(points) - 1):
             p1 = points[i]
             p2 = points[i+1]
 
-            # Linearly decrease width along the flare
             width_interp = 1 - (i / (len(points) - 1))
             segment_width = max(1, int(max_width * width_interp))
             
-            # Linearly decrease opacity along the flare
-            alpha_interp = width_interp # Use same interpolation for alpha
-            segment_alpha = int(255 * current_intensity * alpha_interp)
+            segment_alpha = int(255 * current_intensity * width_interp)
 
-            # Draw segment
             segment_color = color + (segment_alpha,)
             draw.line([p1, p2], fill=segment_color, width=segment_width, joint="curve")
         
-        # Apply blur to the flare
-        # The radius should be related to the max_width of the flare for a softer look
-        return flare_image.filter(ImageFilter.GaussianBlur(radius=max_width * 0.5))
+        # Apply blur to the main flare (less than glow)
+        flare_image = flare_image.filter(ImageFilter.GaussianBlur(radius=max_width * 0.5))
+
+        # Composite glow and main flare
+        final_flare_image = Image.alpha_composite(glow_image, flare_image)
+        
+        return final_flare_image
 
 
     def _get_sun_params(self, low_energy, percussive_impact):
@@ -188,13 +220,18 @@ class SolarRenderer:
         Generates a dynamic sun texture using multiple Perlin noise layers,
         influenced by various audio features, and adds localized hot spots/flares.
         """
+        # Determine a general swirling angle for the main noise layers
+        # This angle will slowly rotate and be influenced by global_energy
+        swirl_angle = t * 0.01 + global_energy * math.pi * 0.5
+
         # Layer 1: Large-scale turbulence, influenced by global energy
         scale1 = 0.5 + global_energy * 2.5 # Increased sensitivity
         octaves1 = 6
         persistence1 = 0.5
         lacunarity1 = 2.0
         layer1 = self._generate_noise_layer(t, scale1, octaves1, persistence1, lacunarity1,
-                                            offset_x=self.camera_x, offset_y=self.camera_y)
+                                            offset_x=self.camera_x, offset_y=self.camera_y,
+                                            angle=swirl_angle) # Apply swirl to layer 1
 
         # Layer 2: Medium-scale plasma flow, influenced by harmonic energy
         # Offset time or coordinates to simulate flow direction based on harmonic energy
@@ -209,7 +246,8 @@ class SolarRenderer:
         layer2_time = t * flow_speed 
         layer2 = self._generate_noise_layer(layer2_time, scale2, octaves2, persistence2, lacunarity2,
                                             offset_x=self.camera_x * 0.5 + flow_offset_x,
-                                            offset_y=self.camera_y * 0.5 + flow_offset_y)
+                                            offset_y=self.camera_y * 0.5 + flow_offset_y,
+                                            angle=swirl_angle * 1.5) # Apply a slightly faster swirl to layer 2
 
         # Layer 3: Small-scale flickering hot spots, influenced by percussive impact
         scale3 = 0.1 + percussive_impact * 3.0 # Smaller scale, more reactive
@@ -220,9 +258,27 @@ class SolarRenderer:
         layer3 = self._generate_noise_layer(layer3_time, scale3, octaves3, persistence3, lacunarity3,
                                             offset_x=self.camera_x * 0.2, offset_y=self.camera_y * 0.2)
 
+        # Layer 4: Plasma streamers, influenced by high_energy
+        # This layer will be more directional, emanating from the center, and its intensity will depend on high_energy
+        streamer_scale = 0.1 + high_energy * 0.2
+        streamer_octaves = 2
+        streamer_persistence = 0.5
+        streamer_lacunarity = 1.0
+        # The angle can change over time to give a swirling effect to the streamers
+        streamer_angle = t * 0.05 + high_energy * math.pi * 2 # Rotate slowly and add more rotation with high_energy
+        
+        layer4 = self._generate_noise_layer(t * 1.5, # Faster time evolution for streamers
+                                            streamer_scale,
+                                            streamer_octaves,
+                                            streamer_persistence,
+                                            streamer_lacunarity,
+                                            offset_x=self.camera_x * 0.1,
+                                            offset_y=self.camera_y * 0.1,
+                                            angle=streamer_angle)
+
         # Combine layers with some weighting
         # Increased influence of smaller layers for more detail and reactivity
-        combined_noise = (layer1 * 0.5) + (layer2 * 0.4) + (layer3 * percussive_impact * 0.8)
+        combined_noise = (layer1 * 0.5) + (layer2 * 0.4) + (layer3 * percussive_impact * 0.8) + (layer4 * high_energy * 0.7)
         
         # Add localized hot spots
         if is_beat or is_onset:
@@ -359,10 +415,10 @@ class SolarRenderer:
                     "start_point": (fx_start, fy_start),
                     "control_point": (fcx, fcy),
                     "end_point": (fx_end, fy_end),
-                    "max_width": max(1, int(percussive_impact * self.sun_radius * 0.1)),
-                    "current_intensity": 1.0,
+                    "max_width": max(1, int(percussive_impact * self.sun_radius * (0.1 + high_energy * 0.15))),
+                    "current_intensity": min(1.0, 0.5 + percussive_impact * 0.5 + high_energy * 0.3),
                     "color": (255, 200, 0), # Bright yellow/orange for flares
-                    "decay_rate": 0.85
+                    "decay_rate": 0.85 + (1 - 0.85) * global_energy * 0.5 # Slower decay for higher global energy
                 })
             
             # Render existing flares and update their state
