@@ -43,8 +43,11 @@ def apply_palette(
     sat = np.full_like(vals, saturation)
     sat = sat * (0.7 + 0.3 * vals)  # desaturate near-zero areas slightly
 
-    # Value: driven by escape-time — dark core, bright edges
-    value = np.clip(vals * 1.2, 0, 1)
+    # Value: driven by escape-time — dark core, bright edges.
+    # Soft curve naturally reaches 0 at interior (pure black) which
+    # creates sharp boundary transitions.  Glow bloom fills dark areas
+    # with soft light from nearby boundary pixels.
+    value = (1.0 - (1.0 - vals) ** 1.3)
 
     # HSV to RGB (vectorized)
     rgb = _hsv_to_rgb_array(hue, sat, value)
@@ -93,6 +96,38 @@ def _hsv_to_rgb_array(
     rgb[mask5, 0] = v[mask5]; rgb[mask5, 1] = p[mask5]; rgb[mask5, 2] = q[mask5]
 
     return rgb
+
+
+def tone_map_soft(
+    frame: np.ndarray,
+    shoulder: float = 0.78,
+) -> np.ndarray:
+    """
+    Soft-knee tone mapping to compress highlights without hard clipping.
+
+    Pixels below ``shoulder`` (as a fraction of 255) pass through unchanged.
+    Highlights above the shoulder are compressed via a Reinhard-style curve
+    so they asymptotically approach 255 instead of slamming to it.
+
+    Args:
+        frame: (H, W, 3) uint8 RGB array.
+        shoulder: Brightness fraction (0-1) where compression begins.
+
+    Returns:
+        (H, W, 3) uint8 RGB array with compressed highlights.
+    """
+    threshold = shoulder * 255.0
+    headroom = 255.0 - threshold
+
+    f = frame.astype(np.float32)
+    above = np.maximum(f - threshold, 0.0)
+    compressed = threshold + above * headroom / (above + headroom)
+
+    # Only apply to pixels that exceeded the threshold
+    mask = f > threshold
+    result = np.where(mask, compressed, f)
+
+    return result.astype(np.uint8)
 
 
 def add_glow(

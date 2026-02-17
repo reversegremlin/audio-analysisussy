@@ -67,10 +67,20 @@ def julia_set(
             output[escaped] = smooth_val
         mask &= ~escaped
 
-    # Normalize to [0, 1]
+    # Normalize escape-time values to [0, 1]
     max_val = output.max()
     if max_val > 0:
         output /= max_val
+
+    # Color interior points by their final orbit magnitude.
+    # This gives the Julia set interior natural fractal-derived
+    # structure instead of uniform black, keeping it dimmer than
+    # the bright escape-time boundary.
+    if np.any(mask):
+        interior_z = np.abs(z[mask])
+        iz_max = interior_z.max()
+        if iz_max > 0:
+            output[mask] = (interior_z / iz_max) * 0.35
 
     return output
 
@@ -131,6 +141,13 @@ def mandelbrot_zoom(
     max_val = output.max()
     if max_val > 0:
         output /= max_val
+
+    # Interior coloring via final orbit magnitude
+    if np.any(mask):
+        interior_z = np.abs(z[mask])
+        iz_max = interior_z.max()
+        if iz_max > 0:
+            output[mask] = (interior_z / iz_max) * 0.35
 
     return output
 

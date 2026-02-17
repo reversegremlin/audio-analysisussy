@@ -94,3 +94,83 @@ class TestFractalKaleidoscopeRenderer:
             pass
         assert len(progress) == 3
         assert progress[-1] == (3, 3)
+
+    def test_sustained_bass_no_washout(self):
+        """Regression: sustained heavy bass should not wash out to white."""
+        config = RenderConfig(
+            width=80, height=60, fps=30,
+            glow_enabled=True,
+            aberration_enabled=False,
+        )
+        renderer = FractalKaleidoscopeRenderer(config)
+
+        # Simulate 120 frames (4s) of sustained heavy bass — enough for
+        # zoom to escalate and potentially produce featureless fractals
+        n_frames = 120
+        frames_data = []
+        for i in range(n_frames):
+            frames_data.append({
+                "frame_index": i,
+                "time": i / 30,
+                "is_beat": i % 4 == 0,  # frequent beats
+                "is_onset": i % 2 == 0,
+                "percussive_impact": 0.9,  # sustained heavy percussion
+                "harmonic_energy": 0.7,
+                "global_energy": 0.8,
+                "low_energy": 0.9,  # heavy bass
+                "mid_energy": 0.5,
+                "high_energy": 0.6,
+                "spectral_brightness": 0.7,
+                "dominant_chroma": "C",
+                "pitch_hue": 0.0,
+                "texture": 0.5,
+            })
+        manifest = {
+            "metadata": {"bpm": 140, "duration": n_frames / 30, "fps": 30},
+            "frames": frames_data,
+        }
+
+        rendered = list(renderer.render_manifest(manifest))
+        last_frame = rendered[-1]
+        mean_brightness = last_frame.mean()
+
+        # The last frame should NOT be washed out (near-white = mean > 200)
+        assert mean_brightness < 200, (
+            f"Brightness washout detected: mean={mean_brightness:.1f}"
+        )
+        # Should still have spatial contrast (std > 10 = visible detail)
+        assert last_frame.std() > 10, (
+            f"Detail lost: std={last_frame.std():.1f}"
+        )
+
+    def test_sustained_beats_preserve_detail(self):
+        """After many beat-heavy frames, fractal should still have texture."""
+        config = RenderConfig(
+            width=80, height=60, fps=30,
+            glow_enabled=False, aberration_enabled=False,
+            vignette_strength=0.0,
+        )
+        renderer = FractalKaleidoscopeRenderer(config)
+
+        for i in range(200):
+            frame_data = {
+                "frame_index": i, "time": i / 30,
+                "is_beat": True,  # every frame is a beat
+                "is_onset": True,
+                "percussive_impact": 1.0,
+                "harmonic_energy": 0.5,
+                "global_energy": 0.9,
+                "low_energy": 0.8,
+                "mid_energy": 0.5,
+                "high_energy": 0.5,
+                "spectral_brightness": 0.5,
+                "dominant_chroma": "C",
+                "pitch_hue": 0.0,
+                "texture": 0.5,
+            }
+            frame = renderer.render_frame(frame_data, i)
+
+        # Last frame should still have contrast (not flat washed out)
+        assert frame.std() > 8, (
+            f"Fractal detail lost under sustained beats: std={frame.std():.1f}"
+        )
