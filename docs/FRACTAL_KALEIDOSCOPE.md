@@ -177,9 +177,10 @@ chromascope-fractal <audio> [options]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--width` | `1920` | Video width in pixels. |
-| `--height` | `1080` | Video height in pixels. |
-| `-f`, `--fps` | `60` | Frames per second. 60 for smooth motion, 30 for faster renders. |
+| `-p`, `--profile` | `medium` | Target profile: `low` (720p 30fps), `medium` (1080p 60fps), or `high` (4k 60fps). |
+| `--width` | *(profile)* | Video width in pixels (overrides profile). |
+| `--height` | *(profile)* | Video height in pixels (overrides profile). |
+| `-f`, `--fps` | *(profile)* | Frames per second (overrides profile). |
 
 ### Visual Parameters
 
@@ -203,101 +204,47 @@ chromascope-fractal <audio> [options]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--max-duration` | *(full track)* | Limit output to the first N seconds of the audio. |
-| `-q`, `--quality` | `high` | Encoding quality preset. See [Quality Profiles](#quality-profiles). |
+| `-q`, `--quality` | *(profile)* | Encoding quality preset (`high`, `medium`, `fast`). Defaults to profile's recommended quality. |
 
 ---
 
-## Resolution Presets
+## Resolution Profiles
 
-Some common resolution setups:
+Profiles provide a one-flag setup for common targets. They set width, height, FPS, and encoding quality in one go.
 
-| Name | Command | Use Case |
-|------|---------|----------|
-| Preview | `--width 640 --height 360 -f 30` | Quick visual check. ~4x faster than HD. |
-| 720p | `--width 1280 --height 720` | Good balance of speed and quality. |
-| 1080p (default) | *(no flags needed)* | YouTube HD. The sweet spot. |
-| 1440p | `--width 2560 --height 1440` | YouTube 2K. |
-| 4K UHD | `--width 3840 --height 2160` | Maximum detail. Expect longer renders. |
+| Profile | Resolution | FPS | Quality | Use Case |
+|---------|------------|-----|---------|----------|
+| `low` | 1280x720 | 30 | `fast` | Quick previews, mobile-friendly. |
+| `medium` | 1920x1080 | 60 | `medium` | Standard YouTube HD (default). |
+| `high` | 3840x2160 | 60 | `high` | YouTube 4K Ultra HD. |
 
-The aspect ratio is always determined by your width/height values.
-16:9 is standard, but you can use any ratio — 1:1 squares work
-great for Instagram, 9:16 vertical for phone wallpapers.
-
+You can override any profile setting by providing the specific flag afterward:
 ```bash
-# Instagram square
-chromascope-fractal song.mp3 --width 1080 --height 1080
-
-# Phone wallpaper vertical
-chromascope-fractal song.mp3 --width 1080 --height 1920
+# 1080p but with high encoding quality
+chromascope-fractal song.mp3 --profile medium --quality high
 ```
-
----
-
-## Fractal Modes
-
-### `julia` — Julia Set
-
-The Julia set produces organic, flowing shapes that respond
-beautifully to harmonic content. The `c` parameter (which
-determines the shape's geometry) drifts smoothly through a
-curated path of visually interesting values, driven by the
-harmonic energy of the music.
-
-```bash
-chromascope-fractal song.mp3 --fractal julia
-```
-
-Best for: melodic tracks, ambient, classical, vocal-heavy music.
-
-### `mandelbrot` — Mandelbrot Zoom
-
-The Mandelbrot set offers more geometric, crystalline structures.
-The renderer continuously zooms into a visually rich spiral region,
-with the zoom speed modulated by the music's energy.
-
-```bash
-chromascope-fractal song.mp3 --fractal mandelbrot
-```
-
-Best for: electronic, minimal, repetitive patterns, drone music.
-
-### `blend` — Adaptive Blend (Default)
-
-In blend mode, the renderer switches between Julia and Mandelbrot
-based on the percussive intensity of the audio:
-
-- **Low percussion** (most of the time): Julia set — fluid, organic shapes.
-- **High percussion** (heavy drums, drops): Mandelbrot — sharper, more complex geometry.
-
-This creates a natural visual contrast that mirrors the tension
-and release in the music. An organic noise layer is also blended
-in at low opacity for added texture.
-
-```bash
-chromascope-fractal song.mp3 --fractal blend
-```
-
-Best for: most music. This is the default for a reason.
 
 ---
 
 ## Quality Profiles
 
-| Profile | Preset | CRF | Pixel Format | Description |
+Quality profiles control the FFmpeg encoding parameters (CRF, bitrate caps, and presets). All profiles use `yuv420p` for maximum compatibility with YouTube and hardware decoders.
+
+| Quality | Preset | CRF | Max Bitrate | Description |
 |---------|--------|-----|-------------|-------------|
-| `high` | slow | 18 | yuv444p | Maximum visual fidelity. Full chroma resolution. Best for final exports. Slower encode. |
-| `medium` | medium | 23 | yuv420p | Good quality at smaller file sizes. Standard YouTube compatibility. |
-| `fast` | ultrafast | 28 | yuv420p | Quick previews. Larger files per quality, but encoding is near-instant. |
+| `high` | slow | 22 | 50 Mbps | High fidelity, YouTube 4K compatible. |
+| `medium` | medium | 24 | 15 Mbps | Balanced, YouTube 1080p compatible. |
+| `fast` | ultrafast | 28 | 8 Mbps | Fast preview, YouTube 720p compatible. |
 
 The render time is dominated by fractal computation, not encoding.
 The quality flag mostly affects file size and encoding speed.
 
 ```bash
 # Preview render (fastest possible)
-chromascope-fractal song.mp3 -q fast --max-duration 15 --width 640 --height 360 -f 30
+chromascope-fractal song.mp3 -p low --max-duration 15
 
-# Production render
-chromascope-fractal song.mp3 -q high
+# Production render (4K)
+chromascope-fractal song.mp3 -p high
 ```
 
 ---
@@ -593,16 +540,12 @@ ffprobe your-audio.mp3
 
 ### Colors look washed out
 
-The `high` quality profile uses `yuv444p` pixel format which
-preserves full chroma resolution. Some players may not support
-this — try `medium` quality (`yuv420p`) for maximum compatibility:
-```bash
-chromascope-fractal song.mp3 -q medium
-```
+All quality profiles now use `yuv420p` by default, which is the standard for web and consumer video. This ensures consistent color across YouTube and all media players.
 
 ### Video stutters on playback
 
-At 60fps with complex fractals, some players struggle. Try:
-- Reducing to 30fps: `-f 30`
-- Using hardware-accelerated playback (VLC, mpv)
-- Re-encoding with `-q medium` for better player compatibility
+If you encounter stuttering, it's likely due to the extreme complexity of fractal motion at 4K.
+- **Try the `medium` profile**: 1080p is much easier for hardware to decode.
+- **Bitrate Caps**: The renderer now applies bitrate caps (e.g., 50Mbps for 4K) to stay within YouTube's recommended ranges and prevent massive file spikes that choke players.
+- **Player**: Use a hardware-accelerated player like VLC or mpv.
+- **Framerate**: Consider `-f 30` if 60fps is too heavy for your device.

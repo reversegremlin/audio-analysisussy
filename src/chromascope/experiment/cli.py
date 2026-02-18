@@ -49,10 +49,15 @@ def main():
         help="Output MP4 path (default: <audio>_fractal.mp4)",
     )
 
-    # Resolution
-    parser.add_argument("--width", type=int, default=1920, help="Video width (default: 1920)")
-    parser.add_argument("--height", type=int, default=1080, help="Video height (default: 1080)")
-    parser.add_argument("-f", "--fps", type=int, default=60, help="Frames per second (default: 60)")
+    # Resolution & Profile
+    parser.add_argument(
+        "-p", "--profile", type=str, default="medium",
+        choices=["low", "medium", "high"],
+        help="Target profile (low: 720p 30fps, medium: 1080p 60fps, high: 4k 60fps)",
+    )
+    parser.add_argument("--width", type=int, default=None, help="Video width (overrides profile)")
+    parser.add_argument("--height", type=int, default=None, help="Video height (overrides profile)")
+    parser.add_argument("-f", "--fps", type=int, default=None, help="Frames per second (overrides profile)")
 
     # Visual
     parser.add_argument(
@@ -90,9 +95,9 @@ def main():
 
     # Quality
     parser.add_argument(
-        "-q", "--quality", type=str, default="high",
+        "-q", "--quality", type=str, default=None,
         choices=["high", "medium", "fast"],
-        help="Encoding quality (default: high)",
+        help="Encoding quality (defaults to profile quality)",
     )
 
     args = parser.parse_args()
@@ -100,6 +105,19 @@ def main():
     if not args.audio.exists():
         print(f"Error: Audio file not found: {args.audio}", file=sys.stderr)
         sys.exit(1)
+
+    # Map profile to defaults
+    PROFILES = {
+        "low": {"width": 1280, "height": 720, "fps": 30, "quality": "fast"},
+        "medium": {"width": 1920, "height": 1080, "fps": 60, "quality": "medium"},
+        "high": {"width": 3840, "height": 2160, "fps": 60, "quality": "high"},
+    }
+    p_cfg = PROFILES[args.profile]
+
+    width = args.width or p_cfg["width"]
+    height = args.height or p_cfg["height"]
+    fps = args.fps or p_cfg["fps"]
+    quality = args.quality or p_cfg["quality"]
 
     output = args.output
     if output is None:
@@ -125,7 +143,7 @@ def main():
 
     # Trim if needed
     if args.max_duration is not None:
-        max_frames = int(args.max_duration * args.fps)
+        max_frames = int(args.max_duration * fps)
         if max_frames < len(manifest["frames"]):
             manifest["frames"] = manifest["frames"][:max_frames]
             print(f"  Limiting to {args.max_duration}s ({max_frames} frames)")
@@ -133,20 +151,20 @@ def main():
     total_frames = len(manifest["frames"])
 
     # Step 2: Render
-    print(f"\nRendering {total_frames} frames at {args.width}x{args.height} @ {args.fps}fps")
+    print(f"\nRendering {total_frames} frames at {width}x{height} @ {fps}fps")
     quality_map = {
         "high": (200, 400),
         "medium": (100, 250),
         "fast": (60, 120),
     }
-    base_iter, max_iter = quality_map.get(args.quality, (200, 400))
+    base_iter, max_iter = quality_map.get(quality, (100, 250))
 
-    print(f"  Fractal: {args.fractal}, Segments: {args.segments}, Quality: {args.quality}")
+    print(f"  Profile: {args.profile}, Fractal: {args.fractal}, Quality: {quality}")
 
     config = RenderConfig(
-        width=args.width,
-        height=args.height,
-        fps=args.fps,
+        width=width,
+        height=height,
+        fps=fps,
         num_segments=args.segments,
         fractal_mode=args.fractal,
         base_zoom_speed=args.zoom_speed,
@@ -170,10 +188,10 @@ def main():
         frame_iterator=frame_gen,
         audio_path=args.audio,
         output_path=output,
-        width=args.width,
-        height=args.height,
-        fps=args.fps,
-        quality=args.quality,
+        width=width,
+        height=height,
+        fps=fps,
+        quality=quality,
         duration=duration,
         total_frames=total_frames,
     )

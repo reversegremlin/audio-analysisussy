@@ -1,0 +1,1 @@
+1. I test a lot of the same audio over and over, let's smartly add an audio extract cache, it will speed things up. add a mechanism for storing the output of the audio extract file in a folder, and to check that folder if it has already been done with that audio file. do not just rely on filename, audio file versions may have changed.

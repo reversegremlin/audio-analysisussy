@@ -16,6 +16,7 @@ from chromascope.experiment.colorgrade import (
     add_glow,
     apply_palette,
     chromatic_aberration,
+    tone_map_soft,
     vignette,
 )
 from chromascope.experiment.fractal import (
@@ -55,13 +56,13 @@ class RenderConfig:
     # Post-processing
     glow_enabled: bool = True
     glow_intensity: float = 0.35
-    glow_radius: int = 12
+    glow_radius: int = 15
     aberration_enabled: bool = True
     aberration_offset: int = 3
     vignette_strength: float = 0.3
 
     # Feedback / infinite zoom
-    feedback_alpha: float = 0.82
+    feedback_alpha: float = 0.20
     base_zoom_factor: float = 1.015
 
     # Warp
@@ -91,7 +92,6 @@ class FractalKaleidoscopeRenderer:
         # State
         self.feedback_buffer: np.ndarray | None = None
         self.accumulated_rotation = 0.0
-        self.zoom_level = 1.0
         self.julia_t = 0.0  # parameter along the c-value path
         self.time = 0.0
 
@@ -101,17 +101,49 @@ class FractalKaleidoscopeRenderer:
         self._smooth_brightness = 0.5
         self._smooth_energy = 0.3
         self._smooth_low = 0.3
+        self._smooth_high = 0.3
 
         # Lissajous drift state
         self._drift_phase = 0.0
 
+    # Default fallback c — always produces rich boundary detail
+    _DEFAULT_GOOD_C = complex(-0.7269, 0.1889)
+
     def _lerp(self, current: float, target: float, factor: float) -> float:
         return current + (target - current) * factor
+
+    @staticmethod
+    def _probe_c(c: complex, zoom: float, probe_iter: int) -> bool:
+        """Return True if *c* produces a detailed Julia set at *zoom*."""
+        probe = julia_set(32, 24, c=c, center=complex(0, 0),
+                          zoom=zoom, max_iter=probe_iter)
+        boundary_frac = float((probe > 0.4).mean())
+        return 0.10 < boundary_frac < 0.85
+
+    def _pick_best_c(
+        self, julia_c: complex, zoom: float, probe_iter: int,
+    ) -> complex:
+        """Choose the best c-value, falling back if the primary is flat."""
+        # 1. Try the current interpolated c
+        if self._probe_c(julia_c, zoom, probe_iter):
+            self._last_good_c = julia_c
+            return julia_c
+
+        # 2. Try the cached last-good c (may be stale at new zoom)
+        cached = getattr(self, '_last_good_c', None)
+        if cached is not None and self._probe_c(cached, zoom, probe_iter):
+            return cached
+
+        # 3. Guaranteed-good default
+        return self._DEFAULT_GOOD_C
 
     def _smooth_audio(self, frame_data: dict[str, Any]):
         """Update smoothed audio values from frame data."""
         is_beat = frame_data.get("is_beat", False)
-        fast = 0.5 if is_beat else 0.15
+        # Fast attack on beats, but not so fast that it feels jerky.
+        # 0.3 reaches ~87% of target in 6 frames (100ms) — punchy
+        # but fluid.  Non-beat frames use 0.12 for gentle drift.
+        fast = 0.3 if is_beat else 0.12
         slow = 0.08
 
         self._smooth_percussive = self._lerp(
@@ -137,6 +169,11 @@ class FractalKaleidoscopeRenderer:
         self._smooth_low = self._lerp(
             self._smooth_low,
             frame_data.get("low_energy", 0.3),
+            slow,
+        )
+        self._smooth_high = self._lerp(
+            self._smooth_high,
+            frame_data.get("high_energy", 0.3),
             slow,
         )
 
@@ -174,25 +211,10 @@ class FractalKaleidoscopeRenderer:
         )
         self.accumulated_rotation += rotation_delta
 
-        # Zoom level (continuous inward zoom, energy-modulated)
-        zoom_speed = (
-            cfg.base_zoom_speed * (1.0 + self._smooth_energy * 1.5)
-        )
-        self.zoom_level *= 1.0 + 0.002 * zoom_speed
-
-        # Beat punch
-        if is_beat:
-            self.zoom_level *= cfg.zoom_beat_punch
-
         # Julia c-parameter drift
         c_speed = 0.0003 * (1.0 + self._smooth_harmonic)
         self.julia_t += c_speed
         julia_c = interpolate_c(self.julia_t)
-
-        # Lissajous drift for viewport center
-        self._drift_phase += dt * 0.3
-        drift_x = math.sin(self._drift_phase * 1.3) * 0.15 / max(self.zoom_level, 1)
-        drift_y = math.cos(self._drift_phase * 0.9) * 0.1 / max(self.zoom_level, 1)
 
         # Max iterations from brightness
         max_iter = int(
@@ -207,47 +229,67 @@ class FractalKaleidoscopeRenderer:
 
         # --- Generate fractal texture ---
 
-        if cfg.fractal_mode == "julia" or (
-            cfg.fractal_mode == "blend" and self._smooth_percussive < 0.6
-        ):
-            texture = julia_set(
-                cfg.width,
-                cfg.height,
-                c=julia_c,
-                center=complex(drift_x, drift_y),
-                zoom=self.zoom_level,
-                max_iter=max_iter,
+        # Fractal zoom breathes with the music rather than monotonically
+        # increasing.  Bass energy pushes the zoom inward (revealing
+        # finer boundary structure), while a slow sine oscillation keeps
+        # it moving so the Julia set boundary stays visible.  The
+        # feedback buffer provides the infinite-tunnel effect separately.
+        breath = 0.4 * math.sin(self.time * 0.4)
+        fractal_zoom = 1.0 + self._smooth_low * 0.5 + breath
+        fractal_zoom = max(0.6, min(fractal_zoom, 1.8))
+
+        # Lissajous drift — generous amplitude keeps the viewport
+        # exploring the Julia set boundary rather than sitting in a
+        # dark interior pocket.
+        self._drift_phase += dt * 0.3
+        drift_x = math.sin(self._drift_phase * 1.3) * 0.25 / max(fractal_zoom, 1)
+        drift_y = math.cos(self._drift_phase * 0.9) * 0.18 / max(fractal_zoom, 1)
+
+        # Cheap low-res probe to detect flat Julia sets BEFORE
+        # spending time on the full-res render.  When the current
+        # c-value produces a featureless set, fall back to a
+        # known-good c.  Two-tier fallback: first try the last
+        # cached good c (re-probed at the CURRENT zoom), then
+        # the always-reliable default.
+        use_mandelbrot = cfg.fractal_mode == "mandelbrot"
+        effective_c = julia_c
+
+        if not use_mandelbrot:
+            probe_iter = min(max_iter, 100)
+            effective_c = self._pick_best_c(
+                julia_c, fractal_zoom, probe_iter,
             )
-        elif cfg.fractal_mode == "mandelbrot" or (
-            cfg.fractal_mode == "blend" and self._smooth_percussive >= 0.6
-        ):
+
+        if use_mandelbrot:
             texture = mandelbrot_zoom(
                 cfg.width,
                 cfg.height,
                 center=cfg.mandelbrot_center + complex(drift_x * 0.01, drift_y * 0.01),
-                zoom=self.zoom_level * 0.5,
+                zoom=fractal_zoom * 0.5,
                 max_iter=max_iter,
             )
         else:
             texture = julia_set(
                 cfg.width,
                 cfg.height,
-                c=julia_c,
+                c=effective_c,
                 center=complex(drift_x, drift_y),
-                zoom=self.zoom_level,
+                zoom=fractal_zoom,
                 max_iter=max_iter,
             )
 
-        # Blend in noise for organic texture
-        if self._smooth_energy > 0.1:
+        # Light organic noise — very subtle, just to add living texture.
+        # Heavy noise injection destroys fractal boundary detail after
+        # the kaleidoscope mirror spreads it, so we keep this minimal.
+        if self._smooth_energy > 0.3:
             noise = noise_fractal(
                 cfg.width,
                 cfg.height,
                 time=self.time,
-                octaves=3,
+                octaves=4,
                 scale=2.0 + self._smooth_harmonic * 2,
             )
-            noise_blend = 0.08 + self._smooth_energy * 0.12
+            noise_blend = 0.03 + self._smooth_energy * 0.04
             texture = texture * (1 - noise_blend) + noise * noise_blend
 
         # --- Radial warp (breathing) ---
@@ -263,9 +305,10 @@ class FractalKaleidoscopeRenderer:
 
         # --- Kaleidoscope mirror ---
 
-        # Segment count: base ± high energy modulation
-        high_energy = frame_data.get("high_energy", 0.5)
-        seg_mod = int(high_energy * 4)
+        # Segment count: base ± smoothed high energy modulation.
+        # Using the smoothed value prevents frame-to-frame jitter
+        # that makes the kaleidoscope pattern jump.
+        seg_mod = int(self._smooth_high * 4)
         num_seg = max(4, cfg.num_segments + seg_mod - 2)
 
         texture = polar_mirror(
@@ -287,7 +330,8 @@ class FractalKaleidoscopeRenderer:
         # --- Infinite zoom blend ---
 
         zoom_factor = cfg.base_zoom_factor * (1.0 + self._smooth_energy * 0.01)
-        feedback_alpha = cfg.feedback_alpha
+        # Reduce feedback on heavy percussion so fresh fractal detail dominates
+        feedback_alpha = cfg.feedback_alpha * (1.0 - self._smooth_percussive * 0.6)
 
         frame_rgb = infinite_zoom_blend(
             frame_rgb,
@@ -299,7 +343,8 @@ class FractalKaleidoscopeRenderer:
         # --- Post-processing ---
 
         if cfg.glow_enabled:
-            glow_int = cfg.glow_intensity * (1.0 + self._smooth_percussive * 0.5)
+            glow_int = cfg.glow_intensity * (1.0 + self._smooth_percussive * 0.3)
+            glow_int = min(glow_int, 0.50)
             frame_rgb = add_glow(frame_rgb, intensity=glow_int, radius=cfg.glow_radius)
 
         if cfg.aberration_enabled:
@@ -309,7 +354,15 @@ class FractalKaleidoscopeRenderer:
             frame_rgb = chromatic_aberration(frame_rgb, offset=ab_offset)
 
         if cfg.vignette_strength > 0:
-            frame_rgb = vignette(frame_rgb, strength=cfg.vignette_strength)
+            # Vignette pulses with percussion — beats contract the
+            # spotlight, drawing the eye inward to the fractal detail.
+            vign_str = cfg.vignette_strength * (
+                1.0 + self._smooth_percussive * 0.6
+            )
+            frame_rgb = vignette(frame_rgb, strength=vign_str)
+
+        # Tone-map before storing in feedback buffer to break brightness accumulation
+        frame_rgb = tone_map_soft(frame_rgb)
 
         # Update feedback buffer
         self.feedback_buffer = frame_rgb.copy()
@@ -337,7 +390,6 @@ class FractalKaleidoscopeRenderer:
         # Reset state
         self.feedback_buffer = None
         self.accumulated_rotation = 0.0
-        self.zoom_level = 1.0
         self.julia_t = 0.0
         self.time = 0.0
         self._drift_phase = 0.0
@@ -346,6 +398,7 @@ class FractalKaleidoscopeRenderer:
         self._smooth_brightness = 0.5
         self._smooth_energy = 0.3
         self._smooth_low = 0.3
+        self._smooth_high = 0.3
 
         for i, frame_data in enumerate(frames):
             frame = self.render_frame(frame_data, i)

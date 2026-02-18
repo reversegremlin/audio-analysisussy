@@ -7,6 +7,7 @@ from chromascope.experiment.colorgrade import (
     add_glow,
     apply_palette,
     chromatic_aberration,
+    tone_map_soft,
     vignette,
 )
 
@@ -33,6 +34,15 @@ class TestApplyPalette:
         r1 = apply_palette(vals, hue_base=0.0)
         r2 = apply_palette(vals, hue_base=0.5)
         assert not np.array_equal(r1, r2)
+
+    def test_low_values_produce_dark_colors(self):
+        """Low escape values should produce dark but not necessarily black output."""
+        vals = np.full((60, 80), 0.1, dtype=np.float32)
+        result = apply_palette(vals, saturation=0.85, contrast=1.4)
+        # Low values should be dim (dark jewel tones, not white)
+        assert result.mean() < 80, (
+            f"Low values too bright: mean={result.mean():.1f}"
+        )
 
 
 class TestAddGlow:
@@ -90,3 +100,54 @@ class TestVignette:
         frame = np.random.randint(0, 255, (60, 80, 3), dtype=np.uint8)
         result = vignette(frame, strength=0.0)
         np.testing.assert_array_equal(result, frame)
+
+
+class TestToneMapSoft:
+    def test_output_shape_and_dtype(self):
+        frame = np.random.randint(0, 255, (60, 80, 3), dtype=np.uint8)
+        result = tone_map_soft(frame)
+        assert result.shape == frame.shape
+        assert result.dtype == np.uint8
+
+    def test_below_shoulder_unchanged(self):
+        """Pixels below shoulder threshold should pass through untouched."""
+        frame = np.full((60, 80, 3), 100, dtype=np.uint8)  # well below 0.85*255=216
+        result = tone_map_soft(frame, shoulder=0.85)
+        np.testing.assert_array_equal(result, frame)
+
+    def test_above_shoulder_compressed(self):
+        """Pixels above shoulder should be compressed downward."""
+        frame = np.full((60, 80, 3), 250, dtype=np.uint8)
+        result = tone_map_soft(frame, shoulder=0.85)
+        # Should be less than original 250
+        assert result.mean() < 250
+        # But still relatively bright (not crushed)
+        assert result.mean() > 220
+
+    def test_pure_white_compressed(self):
+        """Pure 255 should be compressed below 255."""
+        frame = np.full((60, 80, 3), 255, dtype=np.uint8)
+        result = tone_map_soft(frame, shoulder=0.85)
+        assert result.max() < 255
+
+    def test_monotonicity(self):
+        """Brighter input should still produce brighter output."""
+        low = np.full((10, 10, 3), 220, dtype=np.uint8)
+        high = np.full((10, 10, 3), 250, dtype=np.uint8)
+        r_low = tone_map_soft(low, shoulder=0.85)
+        r_high = tone_map_soft(high, shoulder=0.85)
+        assert r_high.mean() > r_low.mean()
+
+    def test_shoulder_zero_compresses_everything(self):
+        """With shoulder=0, all non-zero pixels are compressed."""
+        frame = np.full((10, 10, 3), 128, dtype=np.uint8)
+        result = tone_map_soft(frame, shoulder=0.0)
+        # Should be less than original since everything is above shoulder
+        assert result.mean() < 128
+
+    def test_default_shoulder_catches_highlights(self):
+        """Default shoulder (0.78) should compress pixels above ~199."""
+        frame = np.full((10, 10, 3), 220, dtype=np.uint8)
+        result = tone_map_soft(frame)  # default shoulder=0.78
+        # 220 is above 0.78*255=198.9, so it should be compressed
+        assert result.mean() < 220

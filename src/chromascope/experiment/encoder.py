@@ -11,11 +11,12 @@ from pathlib import Path
 from typing import Iterator
 
 
-# Quality presets: (preset, crf, pix_fmt)
+# Quality presets: (preset, crf, maxrate, bufsize, pix_fmt)
+# Maxrate/bufsize targeting YouTube's recommended bitrates
 QUALITY_PRESETS = {
-    "high": ("slow", "18", "yuv444p"),
-    "medium": ("medium", "23", "yuv420p"),
-    "fast": ("ultrafast", "28", "yuv420p"),
+    "high": ("slow", "22", "50M", "100M", "yuv420p"),     # 4k profile (target ~45Mbps)
+    "medium": ("medium", "24", "15M", "30M", "yuv420p"), # 1080p profile (target ~12Mbps)
+    "fast": ("ultrafast", "28", "8M", "16M", "yuv420p"), # 720p profile (target ~7.5Mbps)
 }
 
 
@@ -49,7 +50,9 @@ def encode_video(
     Returns:
         Path to the output file.
     """
-    preset, crf, pix_fmt = QUALITY_PRESETS.get(quality, QUALITY_PRESETS["high"])
+    preset, crf, maxrate, bufsize, pix_fmt = QUALITY_PRESETS.get(
+        quality, QUALITY_PRESETS["medium"]
+    )
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -68,7 +71,11 @@ def encode_video(
         "-c:v", "libx264",
         "-preset", preset,
         "-crf", crf,
+        "-maxrate", maxrate,
+        "-bufsize", bufsize,
         "-pix_fmt", pix_fmt,
+        # YouTube compatibility
+        "-movflags", "+faststart",
         # Audio encoding
         "-c:a", "aac",
         "-b:a", "192k",
