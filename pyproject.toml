@@ -43,6 +43,7 @@ experiment = [
 chromascope = "chromascope.cli:main"
 chromascope-fractal = "chromascope.experiment.cli:main"
 chromascope-solar = "chromascope.experiment.solar_cli:main"
+chromascope-decay = "chromascope.experiment.decay_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

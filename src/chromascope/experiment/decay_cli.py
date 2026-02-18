@@ -1,0 +1,191 @@
+"""
+CLI entry point for the Decay Renderer.
+
+Usage:
+    chromascope-decay <audio_file> [options]
+"""
+
+import argparse
+import sys
+import time
+from pathlib import Path
+
+from chromascope.experiment.encoder import encode_video
+from chromascope.experiment.decay import DecayRenderer, DecayConfig
+from chromascope.pipeline import AudioPipeline
+
+
+def _progress_bar(current: int, total: int, width: int = 35):
+    """Print a progress bar to stdout."""
+    pct = current / max(total, 1) * 100
+    filled = int(width * current / max(total, 1))
+    bar = "#" * filled + "-" * (width - filled)
+    if sys.stdout.isatty():
+        sys.stdout.write(f"\r[{bar}] {pct:5.1f}%  frame {current}/{total}")
+        sys.stdout.flush()
+        if current >= total:
+            sys.stdout.write("\n")
+    else:
+        if current % max(1, total // 20) == 0 or current >= total:
+            print(f"{pct:5.1f}%  frame {current}/{total}", flush=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="chromascope-decay",
+        description="Audio-reactive cloud chamber decay video renderer",
+    )
+
+    parser.add_argument(
+        "audio",
+        type=Path,
+        help="Input audio file (wav, mp3, flac)",
+    )
+    parser.add_argument(
+        "-o", "--output",
+        type=Path,
+        default=None,
+        help="Output MP4 path (default: <audio>_decay.mp4)",
+    )
+
+    # Resolution & Profile
+    parser.add_argument(
+        "-p", "--profile", type=str, default="medium",
+        choices=["low", "medium", "high"],
+        help="Target profile (low: 720p 30fps, medium: 1080p 60fps, high: 4k 60fps)",
+    )
+    parser.add_argument("--width", type=int, default=None, help="Video width (overrides profile)")
+    parser.add_argument("--height", type=int, default=None, help="Video height (overrides profile)")
+    parser.add_argument("-f", "--fps", type=int, default=None, help="Frames per second (overrides profile)")
+
+    # Visual
+    parser.add_argument(
+        "--base-cpm", type=int, default=6000,
+        help="Baseline simulated event rate (default: 6000)",
+    )
+    parser.add_argument(
+        "--persistence", type=float, default=0.92,
+        help="Trail persistence [0.0-1.0] (default: 0.92)",
+    )
+    parser.add_argument(
+        "--diffusion", type=float, default=0.05,
+        help="Spatial diffusion factor [0.0-1.0] (default: 0.05)",
+    )
+    parser.add_argument(
+        "--ionization-gain", type=float, default=1.0,
+        help="Ionization intensity gain multiplier (default: 1.0)",
+    )
+    parser.add_argument(
+        "--style", type=str, default="uranium",
+        choices=["lab", "uranium", "noir", "neon"],
+        help="Visual style (default: uranium)",
+    )
+
+    # Post-processing
+    parser.add_argument("--no-glow", action="store_true", help="Disable glow")
+
+    # Limits
+    parser.add_argument(
+        "--max-duration", type=float, default=None,
+        help="Limit output to N seconds",
+    )
+
+    # Caching
+    parser.add_argument("--no-cache", action="store_true", help="Force re-analysis of audio")
+
+    # Quality
+    parser.add_argument(
+        "-q", "--quality", type=str, default=None,
+        choices=["high", "medium", "fast"],
+        help="Encoding quality (defaults to profile quality)",
+    )
+
+    args = parser.parse_args()
+
+    if not args.audio.exists():
+        print(f"Error: Audio file not found: {args.audio}", file=sys.stderr)
+        sys.exit(1)
+
+    # Map profile to defaults
+    PROFILES = {
+        "low": {"width": 1280, "height": 720, "fps": 30, "quality": "fast"},
+        "medium": {"width": 1920, "height": 1080, "fps": 60, "quality": "medium"},
+        "high": {"width": 3840, "height": 2160, "fps": 60, "quality": "high"},
+    }
+    p_cfg = PROFILES[args.profile]
+
+    width = args.width or p_cfg["width"]
+    height = args.height or p_cfg["height"]
+    fps = args.fps or p_cfg["fps"]
+    quality = args.quality or p_cfg["quality"]
+
+    output = args.output
+    if output is None:
+        output = args.audio.with_name(f"{args.audio.stem}_decay.mp4")
+
+    # Step 1: Audio analysis
+    print(f"Analyzing audio: {args.audio}")
+    t0 = time.time()
+
+    pipeline = AudioPipeline(target_fps=fps)
+    result = pipeline.process(args.audio, use_cache=not args.no_cache)
+    manifest = result["manifest"]
+
+    print(f"  BPM: {result['bpm']:.1f}")
+    print(f"  Duration: {result['duration']:.1f}s")
+    print(f"  Frames: {result['n_frames']}")
+    print(f"  Analysis took {time.time() - t0:.1f}s")
+
+    # Trim if needed
+    if args.max_duration is not None:
+        max_frames = int(args.max_duration * fps)
+        if max_frames < len(manifest["frames"]):
+            manifest["frames"] = manifest["frames"][:max_frames]
+            print(f"  Limiting to {args.max_duration}s ({max_frames} frames)")
+
+    total_frames = len(manifest["frames"])
+
+    # Step 2: Render
+    print(f"\nRendering {total_frames} frames at {width}x{height} @ {fps}fps")
+    
+    config = DecayConfig(
+        width=width,
+        height=height,
+        fps=fps,
+        base_cpm=args.base_cpm,
+        trail_persistence=args.persistence,
+        diffusion=args.diffusion,
+        ionization_gain=args.ionization_gain,
+        style=args.style,
+        glow_enabled=not args.no_glow,
+    )
+
+    renderer = DecayRenderer(config)
+    frame_gen = renderer.render_manifest(manifest, progress_callback=_progress_bar)
+
+    # Step 3: Encode
+    t1 = time.time()
+    duration = args.max_duration or result["duration"]
+
+    encode_video(
+        frame_iterator=frame_gen,
+        audio_path=args.audio,
+        output_path=output,
+        width=width,
+        height=height,
+        fps=fps,
+        quality=quality,
+        duration=duration,
+        total_frames=total_frames,
+    )
+
+    elapsed = time.time() - t1
+    file_size_mb = output.stat().st_size / 1024 / 1024
+
+    print(f"\nDone! {file_size_mb:.1f} MB")
+    print(f"  Render+encode took {elapsed:.1f}s ({total_frames / max(elapsed, 0.01):.1f} fps)")
+    print(f"  Output: {output}")
+
+
+if __name__ == "__main__":
+    main()
