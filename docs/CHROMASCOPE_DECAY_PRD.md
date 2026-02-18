@@ -86,23 +86,39 @@ Current visual modes (e.g., fractal/kaleidoscope) deliver rich geometry and symm
 
 ### 7.2 Audio-to-Decay Mapping
 
-At target FPS, derive visual control channels from existing manifest features:
+At target FPS, derive visual control channels from existing manifest features. Each mapping must be implemented with explicit behavioral intent, including anti-patterns to avoid.
 
 1. **Event Rate Driver**
-   - Source: onset strength + high-band energy + transient confidence
-   - Output: frame-local spawn probability / Poisson lambda
+   - Source: onset strength + transient confidence + high-band energy.
+   - **Wrong implementation:** event rate linearly tracks RMS, which reduces the effect to a loudness meter with particles.
+   - **Right implementation:** event rate follows a nonlinear response curve over onset/transient activity with:
+     - a **soft floor** (background ionization never reaches zero), and
+     - a **hard ceiling** (high-energy sections never collapse into visual noise).
+   - Expected behavior: loud-but-sustained passages produce moderate, steady trail density; snare-like attacks create sharper local density spikes.
+
 2. **Alpha/Beta Mix Driver**
-   - Source: low/mid/high band ratios
-   - Output: categorical blend weights for short-thick vs long-thin trails
+   - Source: low/mid/high band ratios + transient profile.
+   - **Wrong implementation:** alpha and beta are only size variants with otherwise identical motion.
+   - **Right implementation:** alpha and beta use distinct kinematic models:
+     - **Alpha:** slow, thicker, slight curvature, faster energy loss.
+     - **Beta:** fast, thin, near-straight trajectories, longer apparent travel.
+   - Expected behavior: low-frequency dominance (e.g., bass/808) weights toward alpha-like tracks; high-frequency transients (e.g., cymbals/hats) weight toward beta-like threads.
+
 3. **Trail Energy Driver**
-   - Source: RMS + spectral flux
-   - Output: trail luminance and condensation intensity
+   - Source: RMS + spectral flux.
+   - Output: trail core luminance, condensation halo intensity, and overexposure threshold behavior.
+   - Expected behavior: sustained energy increases halo fullness and core persistence without causing uniform white clipping.
+
 4. **Directional Bias Driver**
-   - Source: chroma entropy + centroid drift
-   - Output: subtle orientation drift and wobble amplitude
+   - Source: chroma entropy + spectral centroid drift + melodic contour proxy.
+   - Output: mean trail orientation drift + wobble amplitude.
+   - Expected behavior: melodic phrases should gently "lean" the field (subtle angular drift) rather than causing abrupt directional jumps.
+
 5. **Beat Burst Driver**
-   - Source: beat/onset boolean trigger
-   - Output: brief spike in event count + glow bloom radius
+   - Source: beat/onset trigger.
+   - **Wrong implementation:** boolean switch that doubles spawn count for one frame.
+   - **Right implementation:** short envelope with approximately 1-frame attack and 8–12-frame decay, simultaneously modulating spawn multiplier and bloom radius.
+   - Expected behavior: a weighted shockwave sensation that decays naturally instead of a single-frame pop.
 
 ### 7.3 Visual Simulation and Rendering
 
@@ -262,3 +278,58 @@ If persisted, these should be additive, optional fields.
 3. Is GPU shader path required in v1, or is optimized CPU/Numpy renderer acceptable initially?
 4. Should decay overlays be composable with existing fractal/kaleidoscope modes in a future hybrid preset?
 
+
+
+---
+
+## 15. Visual Experience Reference — "What the Music Feels Like as Physics"
+
+This section defines phenomenology over parameters. A developer should be able to close their eyes, hear a passage, and predict what the chamber is doing.
+
+1. **The resting field**
+   - Even near silence, the chamber is never dead.
+   - Maintain low-rate background ionization: sparse single-pixel specks and occasional wandering beta threads crossing diagonally.
+   - Feel target: visual room tone (like vinyl hiss), indicating the universe is always active at low intensity.
+
+2. **A sustained bass note or pad**
+   - Increase alpha dominance near center-mass.
+   - Spawn dense, slow, thick tracks with broad, soft condensation halos.
+   - Feel target: gravitational pressure in the medium, not speed.
+
+3. **A hi-hat or high transient**
+   - Emit brief sprays of thin beta threads at acute angles.
+   - Keep lifetime short (few frames), with faint afterimage that dissipates in under ~0.5s.
+   - Feel target: scattered, high-velocity energy that cannot hold shape.
+
+4. **A snare or kick on the beat**
+   - Trigger beat-burst behavior: clustered outward alpha spawns with stochastic angular spread.
+   - Bloom should spike for roughly 2–3 frames, then roll off exponentially.
+   - Feel target: vapor shockwave (inhalation/release), never a fireworks-style explosion.
+
+5. **A melodic line or vocal**
+   - Use tonal/chroma contour to bias orientation drift (approximately 10–15° across phrases).
+   - Modulate trail width subtly with pitch confidence.
+   - Feel target: melody causes the chamber to "lean" in musically legible but understated ways.
+
+6. **A build or riser**
+   - As spectral flux rises, shift mix toward beta-dominant kinematics (longer, thinner, faster trails).
+   - Allow partial persistence in accumulation buffers to create cross-hatching and long-exposure character.
+   - Feel target: structured chaos where field-level luminosity increases without one trail dominating.
+
+7. **The drop**
+   - Permit one (or two at most) near-maximum event-density frames plus peak bloom.
+   - Immediately begin controlled pullback on the following frames.
+   - Feel target: pressure release through the whole medium, not a white flash or hard scene cut.
+
+8. **A quiet outro**
+   - Taper event rate, shorten and thicken alpha behavior slightly, and gradually drain accumulation.
+   - End state should return to sparse beta crossings over mostly clear vapor.
+   - Feel target: the chamber going back to sleep.
+
+### 15.1 Self-Evaluation Heuristic
+
+Implementations should be judged against this question during listening tests:
+
+> Does the chamber feel like it is inside the music, or does it merely react to numeric thresholds?
+
+The bar for acceptance is the former.
