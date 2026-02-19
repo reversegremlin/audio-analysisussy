@@ -106,11 +106,12 @@ def test_mirror_renderer_cycle():
     frame_data = {"global_energy": 1.0, "spectral_centroid": 0.5}
     
     # Potential growth is now 3x faster (1.5 instead of 0.5)
-    # potential accumulates at energy * dt * 1.5
-    # energy=1.0, dt=1/60 => 1.5/60 = 1/40 per frame
-    # 40 frames = 1.0 potential => triggers transition
+    # potential accumulates at energy * dt * 2.0
+    # energy=1.0, dt=1/60 => 2.0/60 = 1/30 per frame
+    # 30 frames = 1.0 potential => triggers transition ON BEAT
     for i in range(50):
-        renderer.render_frame(frame_data, i)
+        # Must include is_beat=True to trigger the new transition logic
+        renderer.render_frame({"global_energy": 1.0, "spectral_centroid": 0.5, "is_beat": True}, i)
         
     # Should be in transition now
     assert renderer.transition_alpha > 0

@@ -264,11 +264,13 @@ class DecayRenderer:
             
             # Annihilation color (matter-antimatter)
             if int_mask is not None:
-                # Shifting intense cyan/magenta/white
-                hue_int = (hue_base + 0.5) % 1.0
-                rgb_int = self._hsv_to_rgb(hue_int, 0.9, np.clip(track * 2.0 + vapor * 1.5, 0, 1))
-                # Add white-hot core to interference
-                white_hot = np.clip(track * 3.0, 0, 1)[:,:,None]
+                # Pulse the interference intensity with percussive impact
+                p_kick = self._smooth_percussive * 3.0
+                hue_int = (hue_base + 0.5 + self._smooth_harmonic * 0.1) % 1.0
+                rgb_int = self._hsv_to_rgb(hue_int, 0.9, np.clip(track * (2.0 + p_kick) + vapor * 1.5, 0, 1))
+                
+                # Add white-hot core to interference, scaled by percussive impact
+                white_hot = np.clip(track * (3.0 + p_kick * 2.0), 0, 1)[:,:,None]
                 rgb_int = np.maximum(rgb_int, white_hot)
                 
                 # Blend in the interference color
@@ -340,22 +342,34 @@ class MirrorRenderer:
 
     def render_frame(self, frame_data: dict[str, Any], frame_index: int) -> np.ndarray:
         dt = 1.0 / self.cfg.fps; energy = frame_data.get("global_energy", 0.1)
+        is_beat = frame_data.get("is_beat", False); percussive = frame_data.get("percussive_impact", 0.0)
+        sub_bass = frame_data.get("sub_bass", 0.0)
         
-        # 1. Update State - Cinematic slow sweep
-        self.phase += dt * (0.15 + energy * 0.4) 
+        # 1. Update State - Synchronized Motion & Reversals
+        # Beat-locked reversals
+        if is_beat and sub_bass > 0.6: self.phase_dir = -getattr(self, 'phase_dir', 1.0)
+        else: self.phase_dir = getattr(self, 'phase_dir', 1.0)
         
+        # Audio-reactive phase increment with beat "shiver"
+        p_inc = (0.12 + energy * 0.35) * self.phase_dir
+        if is_beat: p_inc *= (1.5 + percussive * 2.0)
+        self.phase += dt * p_inc
+        
+        # 2. Beat-Locked Mode Cycling
         if self.requested_split == "cycle" or self.requested_int == "cycle":
-            self.change_potential += energy * dt * 1.5
-            if self.change_potential > 1.0 and self.transition_alpha <= 0:
+            self.change_potential += energy * dt * 2.0
+            # Wait for both threshold AND a beat to trigger change
+            if self.change_potential > 0.85 and is_beat and self.transition_alpha <= 0:
                 self.change_potential = 0
                 if self.requested_split == "cycle": self.next_split_idx = (self.curr_split_idx + 1) % len(self.MIRROR_MODES)
                 if self.requested_int == "cycle": self.next_int_idx = (self.curr_int_idx + 1) % len(self.INT_MODES)
+            
             if self.next_split_idx != self.curr_split_idx or self.next_int_idx != self.curr_int_idx:
-                self.transition_alpha += dt * 0.6
+                self.transition_alpha += dt * 0.7
                 if self.transition_alpha >= 1.0:
                     self.curr_split_idx = self.next_split_idx; self.curr_int_idx = self.next_int_idx; self.transition_alpha = 0.0
 
-        # 2. Determine strictly symmetrical panning axis
+        # 3. Determine strictly symmetrical panning axis
         mode = self.MIRROR_MODES[self.curr_split_idx]
         amp_x, amp_y = self.cfg.width * 0.45, self.cfg.height * 0.45
         
@@ -369,7 +383,7 @@ class MirrorRenderer:
         off_a_x, off_a_y = axis_x * osc * amp_x, axis_y * osc * amp_y
         off_b_x, off_b_y = -off_a_x, -off_a_y
 
-        # 3. Process Instances
+        # 4. Process Instances
         t_a, v_a = self.instance_a.get_raw_buffers(frame_data)
         t_b, v_b = self.instance_b.get_raw_buffers(frame_data)
         
@@ -395,16 +409,19 @@ class MirrorRenderer:
         
         overlap = np.clip(mask_a_s * mask_b_s * 4.0, 0, 1)
         
-        def compute_int(a, b, mode):
-            if mode == "resonance": return (a * b) * 12.0
-            elif mode == "constructive": return (a + b) * 0.8
-            elif mode == "destructive": return np.abs(a - b) * 5.0
-            else: return np.maximum(a, b) + (a * b * 8.0)
+        def compute_int(a, b, mode, p_boost):
+            # Violent beat-reactive gain
+            gain = 1.0 + p_boost * 3.5
+            if mode == "resonance": return (a * b) * 12.0 * gain
+            elif mode == "constructive": return (a + b) * 0.8 * gain
+            elif mode == "destructive": return np.abs(a - b) * 5.0 * gain
+            else: return (np.maximum(a, b) + (a * b * 10.0)) * gain
 
-        track_int = compute_int(t_a_s, t_b_s, self.INT_MODES[self.curr_int_idx]) * (1-self.transition_alpha) + \
-                    compute_int(t_a_s, t_b_s, self.INT_MODES[self.next_int_idx]) * self.transition_alpha
-        vapor_int = compute_int(v_a_s, v_b_s, self.INT_MODES[self.curr_int_idx]) * (1-self.transition_alpha) + \
-                    compute_int(v_a_s, v_b_s, self.INT_MODES[self.next_int_idx]) * self.transition_alpha
+        # Calculate interference with percussive boost
+        track_int = compute_int(t_a_s, t_b_s, self.INT_MODES[self.curr_int_idx], percussive) * (1-self.transition_alpha) + \
+                    compute_int(t_a_s, t_b_s, self.INT_MODES[self.next_int_idx], percussive) * self.transition_alpha
+        vapor_int = compute_int(v_a_s, v_b_s, self.INT_MODES[self.curr_int_idx], percussive) * (1-self.transition_alpha) + \
+                    compute_int(v_a_s, v_b_s, self.INT_MODES[self.next_int_idx], percussive) * self.transition_alpha
 
         track_final = (t_a_s * (1-overlap)) + (t_b_s * (1-overlap)) + (track_int * overlap)
         vapor_final = (v_a_s * (1-overlap)) + (v_b_s * (1-overlap)) + (vapor_int * overlap)
