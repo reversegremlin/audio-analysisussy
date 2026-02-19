@@ -241,73 +241,75 @@ class DecayRenderer:
         h, w = self.cfg.height, self.cfg.width
         cx, cy = w/2, h/2
         
-        # Calculate distance field for color transitions
+        # Calculate distance field
         y, x = np.ogrid[:h, :w]
         dist = np.sqrt((x - cx)**2 + (y - cy)**2)
-        
-        # Core size baseline
         core_radius = 50.0 * self.ore_scale
-        # Transition starts at 1.0x core radius, fully shifts by 2.0x
-        # This captures "half or more of the size of the center"
         dist_norm = dist / core_radius
-        shift_mask = np.clip((dist_norm - 1.2) / 1.0, 0, 1)
+        shift_mask = np.clip((dist_norm - 1.2) / 1.5, 0, 1)
         
-        # Harmonic modulation of the color shift
-        h_mod = self._smooth_harmonic * 0.5
-        shift_mask = np.clip(shift_mask + h_mod, 0, 1)
+        # Harmonic modulation of color depth
+        h_mod = self._smooth_harmonic * 0.4
+        
+        # Base Hue Rotation driven by Spectral Centroid + Time
+        # This ensures we cycle through the spectrum but stay locked to the "timbre"
+        hue_base = (self.time * 0.05 + self._smooth_centroid * 0.5) % 1.0
+        
+        # Color Theory: Tip color is Harmonious (Complementary or Triadic)
+        # Shift tips by 0.5 (complementary) or 0.33 (triadic)
+        hue_tip = (hue_base + 0.33 + self._smooth_harmonic * 0.2) % 1.0
 
-        if style == "uranium":
-            # Inner: Radioactive Emerald
-            r_in = track * 0.35 + vapor * 0.1
-            g_in = track * 1.0 + vapor * 0.8
-            b_in = track * 0.2 + vapor * 0.1
+        if style in ["uranium", "neon"]:
+            # Saturation pulses with energy
+            sat_in = 0.8 + self._smooth_energy * 0.2
+            sat_out = 0.6 + self._smooth_brilliance * 0.4
             
-            # Outer Tips: Ghostly Cyan/Blue (Harmonious with Emerald)
-            r_out = track * 0.1 + vapor * 0.05
-            g_out = track * 0.7 + vapor * 0.5
-            b_out = track * 1.0 + vapor * 0.9
+            # Value mapping
+            val_in = np.clip(track * 1.5 + vapor * 0.8, 0, 1)
+            val_out = np.clip(track * 1.0 + vapor * 1.2, 0, 1)
             
-            r = r_in * (1 - shift_mask) + r_out * shift_mask
-            g = g_in * (1 - shift_mask) + g_out * shift_mask
-            b = b_in * (1 - shift_mask) + b_out * shift_mask
+            # HSV to RGB for Inner
+            rgb_in = self._hsv_to_rgb(hue_base, sat_in, val_in)
+            # HSV to RGB for Outer Tips
+            rgb_out = self._hsv_to_rgb(hue_tip, sat_out, val_out)
             
-            # Sub-bass core heat (Red-shifted green)
-            heat = np.exp(-dist / (60.0 * self.ore_scale))
-            r = np.maximum(r, (track + vapor) * heat * 0.9)
-            rgb = np.stack([r, g, b], axis=-1)
+            # Linear blend based on distance
+            rgb = rgb_in * (1 - shift_mask[:,:,None]) + rgb_out * shift_mask[:,:,None]
             
-        elif style == "neon":
-            # Inner: Electric Magenta
-            # Cycle base hue slightly with time
-            hue_cycle = math.sin(self.time * 0.5) * 0.1
+            # Add "Plasma Heat" to core (Red-shift current inner hue)
+            heat_mask = np.exp(-dist / (60.0 * self.ore_scale))
+            heat_hue = (hue_base - 0.1) % 1.0
+            rgb_heat = self._hsv_to_rgb(heat_hue, 1.0, heat_mask * (0.8 + self._smooth_sub_bass))
+            rgb = np.maximum(rgb, rgb_heat)
             
-            r_in = track * 1.0 + vapor * (0.8 + hue_cycle)
-            g_in = track * 0.2 + vapor * 0.1
-            b_in = track * 0.9 + vapor * 0.7
-            
-            # Outer Tips: Deep Violet/Electric Blue
-            r_out = track * 0.4 + vapor * 0.2
-            g_out = track * 0.1 + vapor * 0.05
-            b_out = track * 1.0 + vapor * 1.0
-            
-            r = r_in * (1 - shift_mask) + r_out * shift_mask
-            g = g_in * (1 - shift_mask) + g_out * shift_mask
-            b = b_in * (1 - shift_mask) + b_out * shift_mask
-            rgb = np.stack([r, g, b], axis=-1)
-            
-        else: # lab / noir
+        elif style == "noir":
+            val = np.clip(track * 1.3 + vapor * 0.7, 0, 1)
+            val = np.power(val, 1.5)
+            # Use rotating hue for a very subtle metallic tint
+            rgb_tint = self._hsv_to_rgb(hue_base, 0.2, val)
+            rgb = rgb_tint
+        else: # lab
             val = np.clip(track * 1.2 + vapor * 0.6, 0, 1)
-            if style == "noir": 
-                val = np.power(val, 1.5)
-                # Noir gets a subtle blue tint at the tips for "cold" radioactivity
-                r = val * (1 - shift_mask * 0.2)
-                g = val * (1 - shift_mask * 0.1)
-                b = val
-                rgb = np.stack([r, g, b], axis=-1)
-            else:
-                rgb = np.stack([val, val, val], axis=-1)
+            rgb = np.stack([val, val, val], axis=-1)
             
         return (np.clip(rgb, 0, 1) * 255).astype(np.uint8)
+
+    def _hsv_to_rgb(self, h: float, s: float, v: np.ndarray) -> np.ndarray:
+        """Vectorized float HSV to RGB for a fixed H/S and array V."""
+        # Standard HSV to RGB conversion
+        c = v * s
+        x = c * (1 - abs((h * 6) % 2 - 1))
+        m = v - c
+        
+        sector = int(h * 6) % 6
+        if sector == 0: r, g, b = c, x, 0
+        elif sector == 1: r, g, b = x, c, 0
+        elif sector == 2: r, g, b = 0, c, x
+        elif sector == 3: r, g, b = 0, x, c
+        elif sector == 4: r, g, b = x, 0, c
+        else: r, g, b = c, 0, x
+        
+        return np.stack([r + m, g + m, b + m], axis=-1)
 
     def render_frame(
         self,
