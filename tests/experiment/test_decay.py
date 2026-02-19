@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from chromascope.experiment.decay import DecayRenderer, DecayConfig
+from chromascope.experiment.decay import DecayRenderer, DecayConfig, MirrorRenderer
 
 def test_decay_renderer_init():
     config = DecayConfig(width=640, height=480, fps=30)
@@ -77,3 +77,22 @@ def test_particle_drag():
     
     # vx should have decreased due to drag
     assert renderer.particles[0].vx < initial_vx
+
+def test_mirror_renderer():
+    config = DecayConfig(width=100, height=100)
+    renderer = MirrorRenderer(config, split_mode="vertical", interference_mode="resonance")
+    
+    frame_data = {
+        "global_energy": 0.5,
+        "percussive_impact": 0.8,
+        "is_beat": True,
+        "spectral_flux": 0.5,
+        "harmonic_energy": 0.4,
+        "sub_bass": 0.3
+    }
+    
+    frame = renderer.render_frame(frame_data, 0)
+    assert frame.shape == (100, 100, 3)
+    # Both instances should have particles
+    assert len(renderer.instance_a.particles) > 0
+    assert len(renderer.instance_b.particles) > 0

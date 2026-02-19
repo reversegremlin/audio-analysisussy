@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from chromascope.experiment.encoder import encode_video
-from chromascope.experiment.decay import DecayRenderer, DecayConfig
+from chromascope.experiment.decay import DecayRenderer, DecayConfig, MirrorRenderer
 from chromascope.pipeline import AudioPipeline
 
 
@@ -87,6 +87,18 @@ def main():
         "--style", type=str, default="uranium",
         choices=["lab", "uranium", "noir", "neon"],
         help="Visual style (default: uranium)",
+    )
+
+    # Mirror & Interference
+    parser.add_argument(
+        "--mirror", type=str, default=None,
+        choices=["vertical", "horizontal", "diagonal", "circular"],
+        help="Split and overlap two independent simulations",
+    )
+    parser.add_argument(
+        "--interference", type=str, default="resonance",
+        choices=["resonance", "constructive", "destructive", "sweet_spot"],
+        help="Math for the overlap zone (default: resonance)",
     )
 
     # Post-processing
@@ -170,7 +182,11 @@ def main():
         glow_enabled=not args.no_glow,
     )
 
-    renderer = DecayRenderer(config)
+    if args.mirror:
+        renderer = MirrorRenderer(config, split_mode=args.mirror, interference_mode=args.interference)
+    else:
+        renderer = DecayRenderer(config)
+        
     frame_gen = renderer.render_manifest(manifest, progress_callback=_progress_bar)
 
     # Step 3: Encode
