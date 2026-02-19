@@ -8,10 +8,10 @@ Translates music into a field of radioactive trails:
 - Central Ore: Pulsating radioactive core.
 
 Dynamic Sliding Mirror Architecture:
-- Moving "Plates": Two halves of the visual field slide independently.
-- Content Masking: Simulation A is masked to the "Left", B to the "Right".
-- Spatial Overlap: These "half-visuals" move into and through each other.
-- Interference: New patterns emerge ONLY where the two sliding plates collide.
+- Symmetrical Opposites: Two halves move in exact opposite directions.
+- Centered Intersection: Collision and interference ALWAYS happen around the center.
+- Axis-Locked Motion: Slides are strictly horizontal, vertical, or diagonal.
+- Audio-Reactive Phasing: Music energy drives the speed and "rush" of the overlap.
 """
 
 import math
@@ -85,11 +85,13 @@ class DecayRenderer:
         self.np_rng = np.random.default_rng(seed)
         self.center_pos = center_pos or (self.cfg.width / 2, self.cfg.height / 2)
         
+        # State
         self.particles: List[Particle] = []
         self.time = 0.0
         self.track_buffer = np.zeros((self.cfg.height, self.cfg.width), dtype=np.float32)
         self.vapor_buffer = np.zeros((self.cfg.height, self.cfg.width), dtype=np.float32)
         
+        # Smoothed audio
         self._smooth_energy = 0.1
         self._smooth_percussive = 0.0
         self._smooth_harmonic = 0.2
@@ -247,15 +249,12 @@ class DecayRenderer:
 
     def _apply_styles(self, track: np.ndarray, vapor: np.ndarray, dist_field: np.ndarray | None = None) -> np.ndarray:
         style = self.cfg.style; h, w = self.cfg.height, self.cfg.width; cx, cy = w/2, h/2
-        
         if dist_field is None:
             y, x = np.ogrid[:h, :w]
             dist_field = np.sqrt((x - cx)**2 + (y - cy)**2)
-            
         shift_mask = np.clip((dist_field / (50.0 * self.ore_scale) - 1.2) / 1.5, 0, 1)
         hue_base = (self.time * 0.05 + self._smooth_centroid * 0.5) % 1.0
         hue_tip = (hue_base + 0.33 + self._smooth_harmonic * 0.2) % 1.0
-        
         if style in ["uranium", "neon"]:
             rgb_in = self._hsv_to_rgb(hue_base, 0.8 + self._smooth_energy * 0.2, np.clip(track * 1.5 + vapor * 0.8, 0, 1))
             rgb_out = self._hsv_to_rgb(hue_tip, 0.6 + self._smooth_brilliance * 0.4, np.clip(track * 1.0 + vapor * 1.2, 0, 1))
@@ -285,8 +284,9 @@ class DecayRenderer:
 
 class MirrorRenderer:
     """
-    Dynamic Sliding Plate Compositor. Two halves of the world slide and overlap.
-    Corrects styling distance field to follow shifted ores.
+    Dynamic Symmetrical Sliding Compositor. 
+    Halves move in strictly opposite directions along a specific axis.
+    Intersection ALWAYS centered.
     """
     MIRROR_MODES = ["vertical", "horizontal", "diagonal", "circular"]
     INT_MODES = ["resonance", "constructive", "destructive", "sweet_spot"]
@@ -303,17 +303,16 @@ class MirrorRenderer:
         self.transition_alpha = 0.0
         self.change_potential = 0.0
         
+        # Symmetrical instances (identical settings, different seeds)
         self.instance_a = DecayRenderer(config, seed=42)
         self.instance_b = DecayRenderer(config, seed=1337)
         
-        self.phase_a = 0.0; self.phase_b = 0.0
-        self.dir_a = 1.0; self.dir_b = 1.0
-        
+        self.phase = 0.0
         h, w = config.height, config.width
         self.yg, self.xg = np.mgrid[0:h, 0:w].astype(np.float32)
 
     def _get_identity_mask(self, mode: str) -> np.ndarray:
-        h, w = self.cfg.height, self.cfg.width; cx, cy = w/2, h/2; grad = 100.0
+        h, w = self.cfg.height, self.cfg.width; cx, cy = w/2, h/2; grad = 50.0 # Sharper split
         if mode == "vertical": return np.clip(0.5 - (self.xg - cx) / grad, 0, 1)
         elif mode == "horizontal": return np.clip(0.5 - (self.yg - cy) / grad, 0, 1)
         elif mode == "diagonal": return np.clip(0.5 - ((self.xg - cx) - (self.yg - cy)) / grad, 0, 1)
@@ -324,17 +323,11 @@ class MirrorRenderer:
         return map_coordinates(buffer, coords, order=1, mode='wrap')
 
     def render_frame(self, frame_data: dict[str, Any], frame_index: int) -> np.ndarray:
-        dt = 1.0 / self.cfg.fps; energy = frame_data.get("global_energy", 0.1); sub_bass = frame_data.get("sub_bass", 0.0)
+        dt = 1.0 / self.cfg.fps; energy = frame_data.get("global_energy", 0.1)
         
-        if sub_bass > 0.7: self.dir_a *= -1.0; self.dir_b *= -1.0
-        self.phase_a += dt * (0.5 + energy * 1.5) * self.dir_a
-        self.phase_b += dt * (0.4 + energy * 1.2) * self.dir_b
+        # 1. Update State
+        self.phase += dt * (0.6 + energy * 2.0) # Faster phase driven by music
         
-        off_a_x = math.sin(self.phase_a) * (self.cfg.width * 0.4)
-        off_a_y = math.cos(self.phase_a * 0.7) * (self.cfg.height * 0.4)
-        off_b_x = math.cos(self.phase_b * 1.1) * (self.cfg.width * 0.4)
-        off_b_y = math.sin(self.phase_b * 0.9) * (self.cfg.height * 0.4)
-
         if self.requested_split == "cycle" or self.requested_int == "cycle":
             self.change_potential += energy * dt * 1.5
             if self.change_potential > 1.0 and self.transition_alpha <= 0:
@@ -346,6 +339,21 @@ class MirrorRenderer:
                 if self.transition_alpha >= 1.0:
                     self.curr_split_idx = self.next_split_idx; self.curr_int_idx = self.next_int_idx; self.transition_alpha = 0.0
 
+        # 2. Determine strictly symmetrical panning axis
+        mode = self.MIRROR_MODES[self.curr_split_idx]
+        amp_x, amp_y = self.cfg.width * 0.45, self.cfg.height * 0.45
+        
+        if mode == "vertical": axis_x, axis_y = 1.0, 0.0
+        elif mode == "horizontal": axis_x, axis_y = 0.0, 1.0
+        elif mode == "diagonal": axis_x, axis_y = 1.0, 1.0
+        else: axis_x, axis_y = 1.0, -1.0 # Circular mode slides along opposite diagonal
+        
+        # strictly opposite oscillation around center
+        osc = math.sin(self.phase)
+        off_a_x, off_a_y = axis_x * osc * amp_x, axis_y * osc * amp_y
+        off_b_x, off_b_y = -off_a_x, -off_a_y
+
+        # 3. Process Instances
         t_a, v_a = self.instance_a.get_raw_buffers(frame_data)
         t_b, v_b = self.instance_b.get_raw_buffers(frame_data)
         
@@ -363,22 +371,19 @@ class MirrorRenderer:
         v_b_s = self._smooth_shift(v_b * mask_src_b, off_b_y, off_b_x)
         mask_b_s = self._smooth_shift(mask_src_b, off_b_y, off_b_x)
         
-        # Shift Distance Fields so tips move with ores
+        # Shift Distance Fields
         cx, cy = self.cfg.width/2, self.cfg.height/2
         dist_base = np.sqrt((self.xg - cx)**2 + (self.yg - cy)**2)
-        dist_a_s = self._smooth_shift(dist_base, off_a_y, off_a_x)
-        dist_b_s = self._smooth_shift(dist_base, off_b_y, off_b_x)
-        
-        # Combine distance field: nearest ore wins for styling
-        dist_final = np.minimum(dist_a_s, dist_b_s)
+        dist_final = np.minimum(self._smooth_shift(dist_base, off_a_y, off_a_x),
+                               self._smooth_shift(dist_base, off_b_y, off_b_x))
         
         overlap = np.clip(mask_a_s * mask_b_s * 4.0, 0, 1)
         
         def compute_int(a, b, mode):
-            if mode == "resonance": return (a * b) * 10.0 # Violent boost
+            if mode == "resonance": return (a * b) * 12.0
             elif mode == "constructive": return (a + b) * 0.8
-            elif mode == "destructive": return np.abs(a - b) * 4.0
-            else: return np.maximum(a, b) + (a * b * 6.0)
+            elif mode == "destructive": return np.abs(a - b) * 5.0
+            else: return np.maximum(a, b) + (a * b * 8.0)
 
         track_int = compute_int(t_a_s, t_b_s, self.INT_MODES[self.curr_int_idx]) * (1-self.transition_alpha) + \
                     compute_int(t_a_s, t_b_s, self.INT_MODES[self.next_int_idx]) * self.transition_alpha
@@ -388,7 +393,6 @@ class MirrorRenderer:
         track_final = (t_a_s * (1-overlap)) + (t_b_s * (1-overlap)) + (track_int * overlap)
         vapor_final = (v_a_s * (1-overlap)) + (v_b_s * (1-overlap)) + (vapor_int * overlap)
         
-        # Style with combined and shifted distance field
         rgb = self.instance_a._apply_styles(track_final, vapor_final, dist_field=dist_final)
         if self.cfg.glow_enabled: rgb = add_glow(rgb, intensity=min(0.35 + self.instance_a._smooth_flux * 0.5, 0.9), radius=18)
         if self.cfg.vignette_strength > 0: rgb = vignette(rgb, strength=self.cfg.vignette_strength * (1.0 + self.instance_a._smooth_sub_bass * 1.5))
@@ -396,7 +400,7 @@ class MirrorRenderer:
 
     def render_manifest(self, manifest: dict[str, Any], progress_callback: callable = None) -> Iterator[np.ndarray]:
         self.instance_a = DecayRenderer(self.cfg, seed=42); self.instance_b = DecayRenderer(self.cfg, seed=1337)
-        self.phase_a = 0.0; self.phase_b = 0.0; self.dir_a = 1.0; self.dir_b = 1.0
+        self.phase = 0.0
         for i, frame_data in enumerate(manifest.get("frames", [])):
             yield self.render_frame(frame_data, i)
             if progress_callback: progress_callback(i + 1, len(manifest["frames"]))
