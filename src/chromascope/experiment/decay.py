@@ -2,16 +2,16 @@
 Audio-reactive cloud chamber decay renderer.
 
 Translates music into a field of radioactive trails:
-- Alpha: short, thick, bright (starts fast, slows down rapidly)
-- Beta: long, thin, fast (sustained velocity, subtle drag)
+- Alpha: short, thick, bright
+- Beta: long, thin, fast
 - Gamma: sparse flashes/speck events
-- Central Ore: Pulsating radioactive core spawning decay events.
+- Central Ore: Pulsating radioactive core.
 
 Dynamic Sliding Mirror Architecture:
-- Independent Dual-Simulations: Truly unique patterns on each "plate".
-- Sliding Plates: Two halves of the visual field move independently over each other.
-- Audio-Reactive Panning: Plates slide, overlap, and reverse based on music energy.
-- Overlap Interference: Complex patterns created only where the plates collide.
+- Moving "Plates": Two halves of the visual field slide independently.
+- Content Masking: Simulation A is masked to the "Left", B to the "Right" (or other splits).
+- Spatial Overlap: These "half-visuals" move into and through each other.
+- Interference: New patterns emerge ONLY where the two sliding plates collide.
 """
 
 import math
@@ -75,7 +75,7 @@ class DecayConfig:
 class DecayRenderer:
     """
     Renders organic, smokey decay trails with drag and harmonic reactivity.
-    Independent via local random state.
+    Truly independent via local random state.
     """
 
     def __init__(self, config: DecayConfig | None = None, seed: int | None = None, 
@@ -85,11 +85,13 @@ class DecayRenderer:
         self.np_rng = np.random.default_rng(seed)
         self.center_pos = center_pos or (self.cfg.width / 2, self.cfg.height / 2)
         
+        # State
         self.particles: List[Particle] = []
         self.time = 0.0
         self.track_buffer = np.zeros((self.cfg.height, self.cfg.width), dtype=np.float32)
         self.vapor_buffer = np.zeros((self.cfg.height, self.cfg.width), dtype=np.float32)
         
+        # Smoothed audio
         self._smooth_energy = 0.1
         self._smooth_percussive = 0.0
         self._smooth_harmonic = 0.2
@@ -168,6 +170,31 @@ class DecayRenderer:
                 new_particles.append(p)
         self.particles = new_particles
 
+    def _draw_ore(self, draw: ImageDraw.Draw, center: tuple[float, float], scale: float):
+        cx, cy = center
+        num_pts = 16; pts = []
+        for i in range(num_pts):
+            angle = i * (2 * math.pi / num_pts) + self.ore_rotation
+            r = (50.0 + self.rng.uniform(-10, 10) * self._smooth_energy) * scale
+            pts.append((cx + math.cos(angle) * r, cy + math.sin(angle) * r))
+        draw.polygon(pts, fill=0.6 + self._smooth_harmonic * 0.4)
+        for _ in range(3):
+            hr = self.rng.uniform(5, 15) * scale
+            hx = cx + self.rng.uniform(-10, 10) * scale
+            hy = cy + self.rng.uniform(-10, 10) * scale
+            draw.ellipse([hx-hr, hy-hr, hx+hr, hy+hr], fill=1.0)
+
+    def _apply_vapor_distortion(self, buffer: np.ndarray) -> np.ndarray:
+        strength = self.cfg.distortion_strength * (1.0 + self._smooth_flux * 2.0)
+        if strength <= 0.01: return buffer
+        h, w = buffer.shape
+        t = self.time * 2.5
+        dx = np.sin(t + np.linspace(0, 12, w)) * strength * 8
+        dy = np.cos(t * 1.1 + np.linspace(0, 12, h)) * strength * 8
+        y, x = self._distortion_offsets
+        coords = np.array([y + dy[:, None], x + dx[None, :]])
+        return map_coordinates(buffer, coords, order=1, mode='reflect')
+
     def get_raw_buffers(self, frame_data: dict[str, Any]) -> Tuple[np.ndarray, np.ndarray]:
         cfg = self.cfg; dt = 1.0 / cfg.fps
         self.time += dt; self._smooth_audio(frame_data)
@@ -193,19 +220,7 @@ class DecayRenderer:
         self.update_particles(dt)
         track_img = Image.new("F", (cfg.width, cfg.height), 0.0); vapor_img = Image.new("F", (cfg.width, cfg.height), 0.0)
         draw_t = ImageDraw.Draw(track_img); draw_v = ImageDraw.Draw(vapor_img)
-        
-        cx, cy = self.center_pos
-        num_pts = 16; pts = []
-        for i in range(num_pts):
-            angle = i * (2 * math.pi / num_pts) + self.ore_rotation
-            r = (50.0 + self.rng.uniform(-10, 10) * self._smooth_energy) * self.ore_scale
-            pts.append((cx + math.cos(angle) * r, cy + math.sin(angle) * r))
-        draw_t.polygon(pts, fill=0.6 + self._smooth_harmonic * 0.4)
-        for _ in range(3):
-            hr = self.rng.uniform(5, 15) * self.ore_scale
-            hx = cx + self.rng.uniform(-10, 10) * self.ore_scale
-            hy = cy + self.rng.uniform(-10, 10) * self.ore_scale
-            draw_t.ellipse([hx-hr, hy-hr, hx+hr, hy+hr], fill=1.0)
+        self._draw_ore(draw_t, self.center_pos, self.ore_scale)
         
         v_cx, v_cy = cfg.width / 2, cfg.height / 2
         for p in self.particles:
@@ -217,8 +232,10 @@ class DecayRenderer:
                 draw_t.line([(tlx, tly), (tx, ty)], fill=color, width=max(1, thickness // 2))
                 draw_v.line([(tlx, tly), (tx, ty)], fill=color * 0.6, width=thickness)
 
-        self.track_buffer = np.maximum(self.track_buffer, np.array(track_img))
-        self.vapor_buffer = np.maximum(self.vapor_buffer, np.array(vapor_img))
+        current_t = self._apply_vapor_distortion(np.array(track_img))
+        current_v = self._apply_vapor_distortion(np.array(vapor_img))
+        self.track_buffer = np.maximum(self.track_buffer, current_t)
+        self.vapor_buffer = np.maximum(self.vapor_buffer, current_v)
         return self.track_buffer, self.vapor_buffer
 
     def _hsv_to_rgb(self, h: float, s: float, v: np.ndarray) -> np.ndarray:
@@ -267,8 +284,7 @@ class DecayRenderer:
 
 class MirrorRenderer:
     """
-    Independent sliding 'plates' compositor. Halves of the visual move and overlap dynamically.
-    Uses sub-pixel interpolation for smooth, jitter-free motion.
+    Dynamic Sliding Plate Compositor. Two halves of the world slide and overlap.
     """
     MIRROR_MODES = ["vertical", "horizontal", "diagonal", "circular"]
     INT_MODES = ["resonance", "constructive", "destructive", "sweet_spot"]
@@ -288,46 +304,39 @@ class MirrorRenderer:
         self.instance_a = DecayRenderer(config, seed=42)
         self.instance_b = DecayRenderer(config, seed=1337)
         
-        # Smooth parametric state
         self.phase_a = 0.0; self.phase_b = 0.0
         self.dir_a = 1.0; self.dir_b = 1.0
         
         h, w = config.height, config.width
-        self.y, self.x = np.mgrid[0:h, 0:w].astype(np.float32)
+        self.yg, self.xg = np.mgrid[0:h, 0:w].astype(np.float32)
 
-    def _get_mask(self, mode: str, pulse: float) -> np.ndarray:
-        h, w = self.cfg.height, self.cfg.width; cx, cy = w/2, h/2; grad = 400.0 # Wider overlap
-        if mode == "vertical": return np.clip(0.5 - (self.x - (cx + pulse)) / grad, 0, 1)
-        elif mode == "horizontal": return np.clip(0.5 - (self.y - (cy + pulse)) / grad, 0, 1)
-        elif mode == "diagonal": return np.clip(0.5 - ((self.x - cx) - (self.y - cy) + pulse) / grad, 0, 1)
-        else: r = np.sqrt((self.x - cx)**2 + (self.y - cy)**2); return np.clip(0.5 - (r - (200.0 * self.instance_a.ore_scale + pulse)) / grad, 0, 1)
+    def _get_identity_mask(self, mode: str) -> np.ndarray:
+        """Create the source mask that defines the identity of simulation A."""
+        h, w = self.cfg.height, self.cfg.width; cx, cy = w/2, h/2; grad = 100.0
+        if mode == "vertical": return np.clip(0.5 - (self.xg - cx) / grad, 0, 1)
+        elif mode == "horizontal": return np.clip(0.5 - (self.yg - cy) / grad, 0, 1)
+        elif mode == "diagonal": return np.clip(0.5 - ((self.xg - cx) - (self.yg - cy)) / grad, 0, 1)
+        else: r = np.sqrt((self.xg - cx)**2 + (self.yg - cy)**2); return np.clip(0.5 - (r - 200.0) / grad, 0, 1)
 
     def _smooth_shift(self, buffer: np.ndarray, dy: float, dx: float) -> np.ndarray:
-        """Sub-pixel bilinear shift with wrapping for perfectly smooth motion."""
-        coords = np.array([self.y - dy, self.x - dx])
+        coords = np.array([self.yg - dy, self.xg - dx])
         return map_coordinates(buffer, coords, order=1, mode='wrap')
 
     def render_frame(self, frame_data: dict[str, Any], frame_index: int) -> np.ndarray:
-        dt = 1.0 / self.cfg.fps; energy = frame_data.get("global_energy", 0.1)
-        percussive = frame_data.get("percussive_impact", 0.0)
-        is_beat = frame_data.get("is_beat", False)
-        sub_bass = frame_data.get("sub_bass", 0.0)
+        dt = 1.0 / self.cfg.fps; energy = frame_data.get("global_energy", 0.1); sub_bass = frame_data.get("sub_bass", 0.0)
+        
+        # 1. Physics & Panning Logic
+        if sub_bass > 0.7: self.dir_a *= -1.0; self.dir_b *= -1.0
+        self.phase_a += dt * (0.5 + energy * 1.5) * self.dir_a
+        self.phase_b += dt * (0.4 + energy * 1.2) * self.dir_b
+        
+        # Large sweeps to ensure plates cross through the middle
+        off_a_x = math.sin(self.phase_a) * (self.cfg.width * 0.4)
+        off_a_y = math.cos(self.phase_a * 0.7) * (self.cfg.height * 0.4)
+        off_b_x = math.cos(self.phase_b * 1.1) * (self.cfg.width * 0.4)
+        off_b_y = math.sin(self.phase_b * 0.9) * (self.cfg.height * 0.4)
 
-        # 1. Lissajous Parametric Motion (Smooth, non-hanging)
-        # Direction reversal on sub-bass peaks
-        if sub_bass > 0.7:
-            self.dir_a *= -1.0; self.dir_b *= -1.0
-            
-        self.phase_a += dt * (0.4 + energy * 1.2) * self.dir_a
-        self.phase_b += dt * (0.3 + energy * 1.0) * self.dir_b
-        
-        # Plate Offsets (Float)
-        off_a_x = math.sin(self.phase_a) * (self.cfg.width * 0.3)
-        off_a_y = math.cos(self.phase_a * 0.7) * (self.cfg.height * 0.3)
-        off_b_x = math.cos(self.phase_b * 1.1) * (self.cfg.width * 0.3)
-        off_b_y = math.sin(self.phase_b * 0.9) * (self.cfg.height * 0.3)
-        
-        # 2. Mode Cycling
+        # 2. Cycle Logic
         if self.requested_split == "cycle" or self.requested_int == "cycle":
             self.change_potential += energy * dt * 1.5
             if self.change_potential > 1.0 and self.transition_alpha <= 0:
@@ -336,37 +345,45 @@ class MirrorRenderer:
                 if self.requested_int == "cycle": self.next_int_idx = (self.curr_int_idx + 1) % len(self.INT_MODES)
             if self.next_split_idx != self.curr_split_idx or self.next_int_idx != self.curr_int_idx:
                 self.transition_alpha += dt * 0.6
-                if self.transition_alpha >= 1.0:
-                    self.curr_split_idx = self.next_split_idx; self.curr_int_idx = self.next_int_idx; self.transition_alpha = 0.0
+                if self.transition_alpha >= 1.0: self.curr_split_idx = self.next_split_idx; self.curr_int_idx = self.next_int_idx; self.transition_alpha = 0.0
 
-        # 3. Get and Smoothly Shift
+        # 3. Get raw and Shift with their Identity Masks
         t_a, v_a = self.instance_a.get_raw_buffers(frame_data)
         t_b, v_b = self.instance_b.get_raw_buffers(frame_data)
         
-        t_a_s = self._smooth_shift(t_a, off_a_y, off_a_x); v_a_s = self._smooth_shift(v_a, off_a_y, off_a_x)
-        t_b_s = self._smooth_shift(t_b, off_b_y, off_b_x); v_b_s = self._smooth_shift(v_b, off_b_y, off_b_x)
+        # Create Identity Masks (e.g. A is Left, B is Right)
+        mask_src_a_curr = self._get_identity_mask(self.MIRROR_MODES[self.curr_split_idx])
+        mask_src_a_next = self._get_identity_mask(self.MIRROR_MODES[self.next_split_idx])
+        mask_src_a = mask_src_a_curr * (1 - self.transition_alpha) + mask_src_a_next * self.transition_alpha
+        mask_src_b = 1.0 - mask_src_a
         
-        # 4. Composite & Interference
-        pulse = math.sin(self.instance_a.time * 2) * 50 * self.instance_a._smooth_energy
-        mask_a_curr = self._get_mask(self.MIRROR_MODES[self.curr_split_idx], pulse)
-        mask_a_next = self._get_mask(self.MIRROR_MODES[self.next_split_idx], pulse)
-        mask_a = mask_a_curr * (1 - self.transition_alpha) + mask_a_next * self.transition_alpha
-        mask_b = 1.0 - mask_a
+        # Shift everything: Content AND its Identity
+        t_a_s = self._smooth_shift(t_a * mask_src_a, off_a_y, off_a_x)
+        v_a_s = self._smooth_shift(v_a * mask_src_a, off_a_y, off_a_x)
+        mask_a_s = self._smooth_shift(mask_src_a, off_a_y, off_a_x)
+        
+        t_b_s = self._smooth_shift(t_b * mask_src_b, off_b_y, off_b_x)
+        v_b_s = self._smooth_shift(v_b * mask_src_b, off_b_y, off_b_x)
+        mask_b_s = self._smooth_shift(mask_src_b, off_b_y, off_b_x)
+        
+        # 4. Overlap & Interference
+        # The collision zone is where both shifted identity masks are active
+        overlap = np.clip(mask_a_s * mask_b_s * 4.0, 0, 1) # Wide overlap
         
         def compute_int(a, b, mode):
-            if mode == "resonance": return (a * b) * 6.0
-            elif mode == "constructive": return (a + b) * 0.7
-            elif mode == "destructive": return np.abs(a - b) * 2.0
-            else: return np.maximum(a, b) + (a * b * 4.0)
+            if mode == "resonance": return (a * b) * 8.0
+            elif mode == "constructive": return (a + b) * 0.8
+            elif mode == "destructive": return np.abs(a - b) * 3.0
+            else: return np.maximum(a, b) + (a * b * 5.0)
 
-        overlap = np.clip(1.0 - np.abs(mask_a - 0.5) * 1.5, 0, 1)
         track_int = compute_int(t_a_s, t_b_s, self.INT_MODES[self.curr_int_idx]) * (1-self.transition_alpha) + \
                     compute_int(t_a_s, t_b_s, self.INT_MODES[self.next_int_idx]) * self.transition_alpha
         vapor_int = compute_int(v_a_s, v_b_s, self.INT_MODES[self.curr_int_idx]) * (1-self.transition_alpha) + \
                     compute_int(v_a_s, v_b_s, self.INT_MODES[self.next_int_idx]) * self.transition_alpha
 
-        track_final = (t_a_s * mask_a * (1-overlap)) + (t_b_s * mask_b * (1-overlap)) + track_int * overlap
-        vapor_final = (v_a_s * mask_a * (1-overlap)) + (v_b_s * mask_b * (1-overlap)) + vapor_int * overlap
+        # Composite based on shifted identity
+        track_final = (t_a_s * (1-overlap)) + (t_b_s * (1-overlap)) + (track_int * overlap)
+        vapor_final = (v_a_s * (1-overlap)) + (v_b_s * (1-overlap)) + (vapor_int * overlap)
         
         rgb = self.instance_a._apply_styles(track_final, vapor_final)
         if self.cfg.glow_enabled: rgb = add_glow(rgb, intensity=min(0.35 + self.instance_a._smooth_flux * 0.5, 0.9), radius=18)
