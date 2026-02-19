@@ -247,7 +247,9 @@ class DecayRenderer:
         else: r, g, b = c, 0, x
         return np.stack([r + m, g + m, b + m], axis=-1)
 
-    def _apply_styles(self, track: np.ndarray, vapor: np.ndarray, dist_field: np.ndarray | None = None) -> np.ndarray:
+    def _apply_styles(self, track: np.ndarray, vapor: np.ndarray, 
+                      dist_field: np.ndarray | None = None, 
+                      int_mask: np.ndarray | None = None) -> np.ndarray:
         style = self.cfg.style; h, w = self.cfg.height, self.cfg.width; cx, cy = w/2, h/2
         if dist_field is None:
             y, x = np.ogrid[:h, :w]
@@ -259,6 +261,20 @@ class DecayRenderer:
             rgb_in = self._hsv_to_rgb(hue_base, 0.8 + self._smooth_energy * 0.2, np.clip(track * 1.5 + vapor * 0.8, 0, 1))
             rgb_out = self._hsv_to_rgb(hue_tip, 0.6 + self._smooth_brilliance * 0.4, np.clip(track * 1.0 + vapor * 1.2, 0, 1))
             rgb = rgb_in * (1 - shift_mask[:,:,None]) + rgb_out * shift_mask[:,:,None]
+            
+            # Annihilation color (matter-antimatter)
+            if int_mask is not None:
+                # Shifting intense cyan/magenta/white
+                hue_int = (hue_base + 0.5) % 1.0
+                rgb_int = self._hsv_to_rgb(hue_int, 0.9, np.clip(track * 2.0 + vapor * 1.5, 0, 1))
+                # Add white-hot core to interference
+                white_hot = np.clip(track * 3.0, 0, 1)[:,:,None]
+                rgb_int = np.maximum(rgb_int, white_hot)
+                
+                # Blend in the interference color
+                m = int_mask[:,:,None]
+                rgb = rgb * (1 - m) + rgb_int * m
+
             heat_mask = np.exp(-dist_field / (60.0 * self.ore_scale))
             rgb_heat = self._hsv_to_rgb((hue_base - 0.1) % 1.0, 1.0, heat_mask * (0.8 + self._smooth_sub_bass))
             rgb = np.maximum(rgb, rgb_heat)
@@ -325,8 +341,8 @@ class MirrorRenderer:
     def render_frame(self, frame_data: dict[str, Any], frame_index: int) -> np.ndarray:
         dt = 1.0 / self.cfg.fps; energy = frame_data.get("global_energy", 0.1)
         
-        # 1. Update State
-        self.phase += dt * (0.6 + energy * 2.0) # Faster phase driven by music
+        # 1. Update State - Cinematic slow sweep
+        self.phase += dt * (0.15 + energy * 0.4) 
         
         if self.requested_split == "cycle" or self.requested_int == "cycle":
             self.change_potential += energy * dt * 1.5
@@ -393,7 +409,7 @@ class MirrorRenderer:
         track_final = (t_a_s * (1-overlap)) + (t_b_s * (1-overlap)) + (track_int * overlap)
         vapor_final = (v_a_s * (1-overlap)) + (v_b_s * (1-overlap)) + (vapor_int * overlap)
         
-        rgb = self.instance_a._apply_styles(track_final, vapor_final, dist_field=dist_final)
+        rgb = self.instance_a._apply_styles(track_final, vapor_final, dist_field=dist_final, int_mask=overlap)
         if self.cfg.glow_enabled: rgb = add_glow(rgb, intensity=min(0.35 + self.instance_a._smooth_flux * 0.5, 0.9), radius=18)
         if self.cfg.vignette_strength > 0: rgb = vignette(rgb, strength=self.cfg.vignette_strength * (1.0 + self.instance_a._smooth_sub_bass * 1.5))
         return tone_map_soft(rgb)
