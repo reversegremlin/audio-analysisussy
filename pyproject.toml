@@ -37,6 +37,8 @@ dev = [
 experiment = [
     "Pillow>=10.0.0",
     "noise>=1.2.2",
+    "numba>=0.57.0",
+    "pygame>=2.1.0",
 ]
 
 [project.scripts]

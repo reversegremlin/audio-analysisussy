@@ -123,9 +123,27 @@ class BaseVisualizer(abc.ABC):
         """Default implementation that combines update, field generation, and polishing."""
         self.update(frame_data)
         field = self.get_raw_field()
-        
+
         polisher = VisualPolisher(self.cfg)
         return polisher.apply(field, frame_data, self.time, self._smooth_audio_dict())
+
+    def render_manifest(self, manifest: Dict[str, Any], progress_callback=None):
+        """Iterate over a manifest and yield one rendered frame per entry.
+
+        Args:
+            manifest: Dict with a ``"frames"`` list of per-frame dicts.
+            progress_callback: Optional callable ``(current, total)`` called
+                               after each frame is yielded.
+
+        Yields:
+            uint8 RGB frames as (H, W, 3) numpy arrays.
+        """
+        frames = manifest.get("frames", [])
+        total = len(frames)
+        for i, f_data in enumerate(frames):
+            yield self.render_frame(f_data, i)
+            if progress_callback is not None:
+                progress_callback(i + 1, total)
 
 
     def _smooth_audio_dict(self) -> Dict[str, float]:

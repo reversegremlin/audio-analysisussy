@@ -11,13 +11,8 @@ import time
 from pathlib import Path
 
 from chromascope.experiment.encoder import encode_video
-from chromascope.experiment.solar import SolarRenderer
+from chromascope.experiment.solar import SolarConfig, SolarRenderer
 from chromascope.pipeline import AudioPipeline
-
-# A simple config class for now
-class RenderConfig:
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
 
 
 def _progress_bar(current: int, total: int, width: int = 35):
@@ -62,8 +57,6 @@ def main():
     parser.add_argument("--pan-speed-x", type=float, default=0.1, help="Horizontal pan speed (default: 0.1)")
     parser.add_argument("--pan-speed-y", type=float, default=0.05, help="Vertical pan speed (default: 0.05)")
     parser.add_argument("--zoom-speed", type=float, default=0.05, help="Zoom speed (default: 0.05)")
-    parser.add_argument("--colormap", type=str, default="default", help="Color map to use (default: default)")
-
 
     # Post-processing
     parser.add_argument("--no-glow", action="store_true", help="Disable glow")
@@ -118,14 +111,13 @@ def main():
     # Step 2: Render
     print(f"\nRendering {total_frames} frames at {args.width}x{args.height} @ {args.fps}fps")
 
-    config = RenderConfig(
+    config = SolarConfig(
         width=args.width,
         height=args.height,
         fps=args.fps,
         pan_speed_x=args.pan_speed_x,
         pan_speed_y=args.pan_speed_y,
         zoom_speed=args.zoom_speed,
-        colormap=args.colormap,
         glow_enabled=not args.no_glow,
         aberration_enabled=not args.no_aberration,
         vignette_strength=0.0 if args.no_vignette else 0.3,

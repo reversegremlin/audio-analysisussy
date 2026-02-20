@@ -3,14 +3,13 @@ Tests for the solar renderer.
 """
 import numpy as np
 
-from chromascope.experiment.solar import SolarRenderer
-from chromascope.experiment.solar_cli import RenderConfig
+from chromascope.experiment.solar import SolarRenderer, SolarConfig
 
 def test_solar_renderer_runs():
     """
     Test that the solar renderer runs for a few frames without errors.
     """
-    config = RenderConfig(width=100, height=100, fps=60, colormap="default", pan_speed_x=0.1, pan_speed_y=0.05, zoom_speed=0.05)
+    config = SolarConfig(width=100, height=100, fps=60, pan_speed_x=0.1, pan_speed_y=0.05, zoom_speed=0.05)
     renderer = SolarRenderer(config)
     
     manifest = {

@@ -93,6 +93,12 @@ def main():
     parser.add_argument("--max-duration", type=float, default=None)
     parser.add_argument("--no-cache", action="store_true")
 
+    # Preview
+    parser.add_argument(
+        "--preview", action="store_true",
+        help="Show real-time preview in a pygame window instead of encoding to MP4",
+    )
+
     args = parser.parse_args()
 
     if not args.audio.exists():
@@ -159,14 +165,20 @@ def main():
     else:
         renderer = viz_cls_a(config)
 
-    # Step 3: Render and Encode
+    # Step 3: Render (preview or encode)
     print(f"Rendering mode: {args.mode}, mirror: {args.mirror}, interference: {args.interference}")
-    
-    # We need a unified render_manifest or just iterate here
+
     frames = manifest.get("frames", [])
     if args.max_duration:
         frames = frames[:int(args.max_duration * fps)]
-        
+
+    if args.preview:
+        from chromascope.experiment.preview import run_preview
+        print(f"Opening preview window ({len(frames)} frames @ {fps} fps)…")
+        run_preview(renderer, frames, fps, title=f"Chromascope — {args.mode}")
+        print("Preview closed.")
+        return
+
     def frame_gen():
         for i, f_data in enumerate(frames):
             yield renderer.render_frame(f_data, i)

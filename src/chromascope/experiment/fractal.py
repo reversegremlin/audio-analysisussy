@@ -14,6 +14,7 @@ import numpy as np
 
 from chromascope.experiment.base import BaseConfig, BaseVisualizer
 from chromascope.experiment.kaleidoscope import (
+    flow_field_warp,
     infinite_zoom_blend,
     polar_mirror,
     radial_warp,
@@ -331,14 +332,15 @@ class FractalKaleidoscopeRenderer(BaseVisualizer):
             noise_blend = 0.03 + self._smooth_energy * 0.04 + self._smooth_flatness * 0.1
             texture = texture * (1 - noise_blend) + noise * noise_blend
 
-        # Radial warp
+        # Vapor Warp 2.0 — Perlin-style flow-field displacement
         warp_amp = cfg.warp_amplitude * (0.5 + self._smooth_low * 1.5 + self._smooth_flux * 1.0)
         if warp_amp > 0.005:
-            texture = radial_warp(
+            texture = flow_field_warp(
                 texture,
                 amplitude=warp_amp,
-                frequency=cfg.warp_frequency,
+                scale=cfg.warp_frequency,
                 time=self.time * 2,
+                octaves=3,
             )
 
         # Kaleidoscope mirror

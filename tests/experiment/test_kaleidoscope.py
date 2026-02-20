@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from chromascope.experiment.kaleidoscope import (
+    flow_field_warp,
     infinite_zoom_blend,
     polar_mirror,
     radial_warp,
@@ -66,6 +67,38 @@ class TestRadialWarp:
         texture = np.random.rand(60, 80).astype(np.float32)
         result = radial_warp(texture, amplitude=0.0)
         np.testing.assert_array_equal(result, texture)
+
+
+class TestFlowFieldWarp:
+    def test_output_shape_2d(self):
+        texture = np.random.rand(120, 160).astype(np.float32)
+        result = flow_field_warp(texture, amplitude=0.05)
+        assert result.shape == (120, 160)
+
+    def test_output_shape_3d(self):
+        texture = np.random.randint(0, 255, (120, 160, 3), dtype=np.uint8)
+        result = flow_field_warp(texture, amplitude=0.05)
+        assert result.shape == (120, 160, 3)
+
+    def test_zero_amplitude_near_identity(self):
+        """With amplitude≈0 the warp is approximately identity."""
+        texture = np.random.rand(60, 80).astype(np.float32)
+        result = flow_field_warp(texture, amplitude=0.0)
+        np.testing.assert_array_equal(result, texture)
+
+    def test_nonzero_amplitude_changes_output(self):
+        """Non-trivial amplitude should change most pixels."""
+        np.random.seed(42)
+        texture = np.random.rand(60, 80).astype(np.float32)
+        result = flow_field_warp(texture, amplitude=0.15, scale=2.0, time=1.0)
+        assert not np.array_equal(result, texture)
+
+    def test_animation_changes_with_time(self):
+        """Different time values should produce different results."""
+        texture = np.random.rand(60, 80).astype(np.float32)
+        r1 = flow_field_warp(texture, amplitude=0.1, time=0.0)
+        r2 = flow_field_warp(texture, amplitude=0.1, time=5.0)
+        assert not np.array_equal(r1, r2)
 
 
 class TestInfiniteZoomBlend:

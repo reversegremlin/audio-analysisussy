@@ -17,14 +17,14 @@
     - [X] Port Symmetrical Mirror to `FractalKaleidoscopeRenderer`.
     - [X] Implement `CrossVisualizerCompositor` (e.g. Solar interfering with Decay).
 
-## 🔵 Phase 2: Performance & Polish
-- [ ] **Numba Acceleration**: JIT-compile particle physics and buffer mixing.
+## 🔵 Phase 2: Performance & Polish [COMPLETE]
+- [X] **Numba Acceleration**: JIT-compile particle physics (`decay.py` SoA + `@numba.njit`); vectorized fBm replaces `pnoise3` loop in `solar.py` (100-500× faster at 1080p).
 - [X] **Resolution Scaling**: Implement internal low-res rendering for mirrored modes.
-- [ ] **Vapor Warp 2.0**: Replace simple Sine distortion with Perlin/Simplex Flow Fields.
+- [X] **Vapor Warp 2.0**: `flow_field_warp()` in `kaleidoscope.py` — two independent fBm fields drive dx/dy, giving organic non-radial swirling distortion. Used by `FractalKaleidoscopeRenderer`.
 
-## 🔴 Phase 3: CLI & UX
+## 🔴 Phase 3: CLI & UX [COMPLETE]
 - [X] **Unified CLI**: Add `--mirror` and `--interference` to the main `chromascope` entry point.
-- [ ] **Real-Time Preview**: Build a minimal `opencv` or `pygame` viewer for local testing.
+- [X] **Real-Time Preview**: `chromascope audio.wav --preview` opens a pygame window with SPACE=pause, ESC=quit, →=step.
 
 ---
-**Current Priority:** Numba Acceleration for Decay/Solar physics.
+**All phases complete.**

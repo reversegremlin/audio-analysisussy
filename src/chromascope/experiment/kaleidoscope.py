@@ -134,6 +134,84 @@ def radial_warp(
     return texture[src_y, src_x]
 
 
+def flow_field_warp(
+    texture: np.ndarray,
+    amplitude: float = 0.05,
+    scale: float = 3.0,
+    time: float = 0.0,
+    octaves: int = 3,
+) -> np.ndarray:
+    """
+    Flow-field warp using two independent multi-octave fBm displacement fields.
+
+    Unlike :func:`radial_warp` (which applies a single radially-symmetric
+    sine displacement), this function drives *x* and *y* offsets from two
+    separate, orthogonal noise fields built from angled sine fBm.  The
+    result is an organic, swirling, non-symmetric distortion reminiscent
+    of Perlin flow fields — no centre-locked breathing pattern.
+
+    Args:
+        texture: Input (H, W) or (H, W, 3) array.
+        amplitude: Maximum pixel displacement as a fraction of image size.
+        scale: Spatial frequency of the underlying noise field.
+        time: Animation time offset.
+        octaves: Number of fBm octaves (more = richer detail, slightly slower).
+
+    Returns:
+        Warped array with the same shape and dtype as *texture*.
+    """
+    if texture.ndim == 2:
+        h, w = texture.shape
+    else:
+        h, w = texture.shape[:2]
+
+    max_disp = max(w, h) * amplitude
+
+    # Normalised coordinate grids in [0, scale]
+    x_norm = np.linspace(0.0, scale, w, dtype=np.float32)
+    y_norm = np.linspace(0.0, scale, h, dtype=np.float32)
+    xg, yg = np.meshgrid(x_norm, y_norm)
+
+    # Build two independent fBm fields (dx and dy)
+    dx_field = np.zeros((h, w), dtype=np.float32)
+    dy_field = np.zeros((h, w), dtype=np.float32)
+
+    amp = 1.0
+    for k in range(octaves):
+        freq = 2.0 ** k
+        t_x = time * (k + 1) * 0.30
+        t_y = time * (k + 1) * 0.30 + 1.7  # phase-shifted to decorrelate
+
+        # dx: driven by sine in x-direction + cosine in y-direction
+        dx_field += np.sin(xg * freq * 2.0 * np.pi + t_x) * amp
+        dx_field += np.cos(yg * freq * 2.0 * np.pi + t_x * 0.71) * (amp * 0.7)
+
+        # dy: driven by cosine in x-direction + sine in y-direction
+        # (perpendicular pairing gives curl-like swirl)
+        dy_field += np.cos(xg * freq * 2.0 * np.pi + t_y) * (amp * 0.7)
+        dy_field += np.sin(yg * freq * 2.0 * np.pi + t_y * 1.31) * amp
+
+        amp *= 0.5
+
+    # Normalise each field independently to [-1, 1]
+    def _norm(f: np.ndarray) -> np.ndarray:
+        m = np.abs(f).max()
+        return f / (m + 1e-8)
+
+    dx_field = _norm(dx_field)
+    dy_field = _norm(dy_field)
+
+    # Apply as pixel offsets
+    y_px = np.arange(h, dtype=np.float32)
+    x_px = np.arange(w, dtype=np.float32)
+    xg_px, yg_px = np.meshgrid(x_px, y_px)
+
+    src_x = np.clip(xg_px + dx_field * max_disp, 0.0, w - 1).astype(np.intp)
+    src_y = np.clip(yg_px + dy_field * max_disp, 0.0, h - 1).astype(np.intp)
+
+    return texture[src_y, src_x]
+
+
 def infinite_zoom_blend(
     current_frame: np.ndarray,
     feedback_buffer: np.ndarray | None,

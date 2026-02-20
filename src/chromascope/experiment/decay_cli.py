@@ -11,7 +11,8 @@ import time
 from pathlib import Path
 
 from chromascope.experiment.encoder import encode_video
-from chromascope.experiment.decay import DecayRenderer, DecayConfig, MirrorRenderer
+from chromascope.experiment.decay import DecayRenderer, DecayConfig
+from chromascope.experiment.renderer import UniversalMirrorCompositor
 from chromascope.pipeline import AudioPipeline
 
 
@@ -79,16 +80,6 @@ def main():
         "--ionization-gain", type=float, default=1.2,
         help="Ionization intensity gain multiplier (default: 1.2)",
     )
-    parser.add_argument(
-        "--distortion", type=float, default=0.15,
-        help="Vapor distortion strength [0.0-1.0] (default: 0.15)",
-    )
-    parser.add_argument(
-        "--style", type=str, default="uranium",
-        choices=["lab", "uranium", "noir", "neon"],
-        help="Visual style (default: uranium)",
-    )
-
     # Mirror & Interference
     parser.add_argument(
         "--mirror", type=str, default=None,
@@ -177,16 +168,16 @@ def main():
         vapor_persistence=args.vapor_persistence,
         base_diffusion=args.diffusion,
         ionization_gain=args.ionization_gain,
-        distortion_strength=args.distortion,
-        style=args.style,
         glow_enabled=not args.no_glow,
+        mirror_mode=args.mirror or "off",
+        interference_mode=args.interference,
     )
 
     if args.mirror:
-        renderer = MirrorRenderer(config, split_mode=args.mirror, interference_mode=args.interference)
+        renderer = UniversalMirrorCompositor(DecayRenderer, config)
     else:
         renderer = DecayRenderer(config)
-        
+
     frame_gen = renderer.render_manifest(manifest, progress_callback=_progress_bar)
 
     # Step 3: Encode
