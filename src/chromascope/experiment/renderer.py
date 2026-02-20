@@ -1,427 +1,194 @@
 """
-Frame orchestrator for the fractal kaleidoscope renderer.
-
-Enhanced with v1.1 audio features:
-- Sub-bass & Brilliance drive deep zoom and rotation spikes.
-- Spectral Flux & Sharpness control fractal detail and post-process intensity.
-- Spectral Flatness modulates noise injection for organic texture.
+Universal Master Compositor and Orchestrator.
+Handles mirroring, interference, and heterogeneous visualizer blending.
 """
 
 import math
-from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 import numpy as np
+from scipy.ndimage import map_coordinates
 
-from chromascope.experiment.colorgrade import (
-    add_glow,
-    apply_palette,
-    chromatic_aberration,
-    tone_map_soft,
-    vignette,
-)
-from chromascope.experiment.fractal import (
-    interpolate_c,
-    julia_set,
-    mandelbrot_zoom,
-    noise_fractal,
-)
-from chromascope.experiment.kaleidoscope import (
-    infinite_zoom_blend,
-    polar_mirror,
-    radial_warp,
-)
+from chromascope.experiment.base import BaseConfig, BaseVisualizer, VisualPolisher
 
 
-@dataclass
-class RenderConfig:
-    """Configuration for the fractal kaleidoscope renderer."""
-
-    width: int = 1920
-    height: int = 1080
-    fps: int = 60
-    num_segments: int = 8
-    fractal_mode: str = "blend"  # "julia", "mandelbrot", or "blend"
-
-    # Zoom
-    base_zoom_speed: float = 1.0
-    zoom_beat_punch: float = 1.08
-
-    # Rotation
-    base_rotation_speed: float = 1.0
-
-    # Fractal detail
-    base_max_iter: int = 200
-    max_max_iter: int = 400
-
-    # Post-processing
-    glow_enabled: bool = True
-    glow_intensity: float = 0.35
-    glow_radius: int = 15
-    aberration_enabled: bool = True
-    aberration_offset: int = 3
-    vignette_strength: float = 0.3
-
-    # Feedback / infinite zoom
-    feedback_alpha: float = 0.20
-    base_zoom_factor: float = 1.015
-
-    # Warp
-    warp_amplitude: float = 0.03
-    warp_frequency: float = 4.0
-
-    # Color
-    base_saturation: float = 0.88
-    contrast: float = 1.4
-
-    # Mandelbrot zoom target — a visually interesting spiral region
-    mandelbrot_center: complex = field(
-        default_factory=lambda: -0.7435669 + 0.1314023j
-    )
-
-
-class FractalKaleidoscopeRenderer:
+class UniversalMirrorCompositor:
     """
-    Renders audio-reactive fractal kaleidoscope frames.
-
-    Driven by manifest data from the AudioPipeline.
+    Handles symmetrical mirroring and interference for any BaseVisualizer.
+    Can also blend different visualizer types.
     """
 
-    def __init__(self, config: RenderConfig | None = None):
-        self.cfg = config or RenderConfig()
+    MIRROR_MODES = ["off", "vertical", "horizontal", "diagonal", "circular"]
+    INT_MODES = ["resonance", "constructive", "destructive", "sweet_spot"]
 
-        # State
-        self.feedback_buffer: np.ndarray | None = None
-        self.accumulated_rotation = 0.0
-        self.julia_t = 0.0  # parameter along the c-value path
+    def __init__(
+        self, 
+        viz_class_a: Type[BaseVisualizer], 
+        config: BaseConfig,
+        viz_class_b: Optional[Type[BaseVisualizer]] = None,
+        seed: int = 42
+    ):
+        self.cfg = config
+        self.viz_class_a = viz_class_a
+        self.viz_class_b = viz_class_b or viz_class_a
+        
+        # Scaling logic (MultiProfile)
+        self.render_w, self.render_h = config.width, config.height
+        self.sim_w, self.sim_h = config.get_profile_dims()
+        
+        # Adjust config for instances to use sim resolution
+        # We'll pass a copy to avoid side effects
+        from dataclasses import replace
+        sim_cfg = replace(config, width=self.sim_w, height=self.sim_h)
+        
+        # Symmetrical instances
+        self.instance_a = self.viz_class_a(sim_cfg, seed=seed)
+        self.instance_b = self.viz_class_b(sim_cfg, seed=seed + 1337)
+        
+        self.phase = 0.0
+        self.phase_dir = 1.0
         self.time = 0.0
-
-        # Smoothed audio values (v1.1)
-        self._smooth_percussive = 0.0
-        self._smooth_harmonic = 0.3
-        self._smooth_brightness = 0.5
-        self._smooth_energy = 0.3
-        self._smooth_low = 0.3
-        self._smooth_high = 0.3
         
-        # New features smoothing
-        self._smooth_flux = 0.0
-        self._smooth_flatness = 0.0
-        self._smooth_sharpness = 0.0
-        self._smooth_sub_bass = 0.0
-        self._smooth_brilliance = 0.0
-
-        # Lissajous drift state
-        self._drift_phase = 0.0
-
-    # Default fallback c — always produces rich boundary detail
-    _DEFAULT_GOOD_C = complex(-0.7269, 0.1889)
-
-    def _lerp(self, current: float, target: float, factor: float) -> float:
-        return current + (target - current) * factor
-
-    @staticmethod
-    def _probe_c(c: complex, zoom: float, probe_iter: int) -> bool:
-        """Return True if *c* produces a detailed Julia set at *zoom*."""
-        probe = julia_set(32, 24, c=c, center=complex(0, 0),
-                          zoom=zoom, max_iter=probe_iter)
-        boundary_frac = float((probe > 0.4).mean())
-        return 0.10 < boundary_frac < 0.85
-
-    def _pick_best_c(
-        self, julia_c: complex, zoom: float, probe_iter: int,
-    ) -> complex:
-        """Choose the best c-value, falling back if the primary is flat."""
-        # 1. Try the current interpolated c
-        if self._probe_c(julia_c, zoom, probe_iter):
-            self._last_good_c = julia_c
-            return julia_c
-
-        # 2. Try the cached last-good c (may be stale at new zoom)
-        cached = getattr(self, '_last_good_c', None)
-        if cached is not None and self._probe_c(cached, zoom, probe_iter):
-            return cached
-
-        # 3. Guaranteed-good default
-        return self._DEFAULT_GOOD_C
-
-    def _smooth_audio(self, frame_data: dict[str, Any]):
-        """Update smoothed audio values from frame data."""
-        is_beat = frame_data.get("is_beat", False)
-        fast = 0.3 if is_beat else 0.12
-        med = 0.1
-        slow = 0.08
-
-        self._smooth_percussive = self._lerp(
-            self._smooth_percussive,
-            frame_data.get("percussive_impact", 0.0),
-            fast,
+        # State for cycling
+        self.curr_mirror_idx = self.MIRROR_MODES.index(
+            config.mirror_mode if config.mirror_mode in self.MIRROR_MODES else "vertical"
         )
-        self._smooth_harmonic = self._lerp(
-            self._smooth_harmonic,
-            frame_data.get("harmonic_energy", 0.3),
-            slow,
+        self.next_mirror_idx = self.curr_mirror_idx
+        self.curr_int_idx = self.INT_MODES.index(
+            config.interference_mode if config.interference_mode in self.INT_MODES else "resonance"
         )
-        self._smooth_brightness = self._lerp(
-            self._smooth_brightness,
-            frame_data.get("spectral_brightness", 0.5),
-            slow,
-        )
-        self._smooth_energy = self._lerp(
-            self._smooth_energy,
-            frame_data.get("global_energy", 0.3),
-            slow,
-        )
-        self._smooth_low = self._lerp(
-            self._smooth_low,
-            frame_data.get("low_energy", 0.3),
-            slow,
-        )
-        self._smooth_high = self._lerp(
-            self._smooth_high,
-            frame_data.get("high_energy", 0.3),
-            slow,
-        )
+        self.next_int_idx = self.curr_int_idx
+        self.transition_alpha = 0.0
+        self.change_potential = 0.0
         
-        # v1.1 smoothing
-        self._smooth_flux = self._lerp(
-            self._smooth_flux,
-            frame_data.get("spectral_flux", 0.0),
-            fast
-        )
-        self._smooth_flatness = self._lerp(
-            self._smooth_flatness,
-            frame_data.get("spectral_flatness", 0.0),
-            med
-        )
-        self._smooth_sharpness = self._lerp(
-            self._smooth_sharpness,
-            frame_data.get("sharpness", 0.0),
-            med
-        )
-        self._smooth_sub_bass = self._lerp(
-            self._smooth_sub_bass,
-            frame_data.get("sub_bass", 0.0),
-            med
-        )
-        self._smooth_brilliance = self._lerp(
-            self._smooth_brilliance,
-            frame_data.get("brilliance", 0.0),
-            fast
-        )
+        # Grid for shifts (sim resolution)
+        self.yg, self.xg = np.mgrid[0:self.sim_h, 0:self.sim_w].astype(np.float32)
 
-    def render_frame(
-        self,
-        frame_data: dict[str, Any],
-        frame_index: int,
-    ) -> np.ndarray:
-        """
-        Render a single frame.
+    def _get_identity_mask(self, mode: str) -> np.ndarray:
+        h, w = self.sim_h, self.sim_w
+        cx, cy = w / 2, h / 2
+        grad = 50.0 * (w / self.render_w) # Adjusted gradient for sim resolution
+        
+        if mode == "vertical":
+            return np.clip(0.5 - (self.xg - cx) / grad, 0, 1)
+        elif mode == "horizontal":
+            return np.clip(0.5 - (self.yg - cy) / grad, 0, 1)
+        elif mode == "diagonal":
+            return np.clip(0.5 - ((self.xg - cx) - (self.yg - cy)) / grad, 0, 1)
+        elif mode == "circular":
+            r = np.sqrt((self.xg - cx)**2 + (self.yg - cy)**2)
+            return np.clip(0.5 - (r - min(h, w) // 4) / grad, 0, 1)
+        return np.ones((h, w), dtype=np.float32)
 
-        Args:
-            frame_data: Frame dict from manifest.
-            frame_index: Frame index.
 
-        Returns:
-            (H, W, 3) uint8 RGB numpy array.
-        """
-        cfg = self.cfg
-        dt = 1.0 / cfg.fps
+    def _smooth_shift(self, buffer: np.ndarray, dy: float, dx: float) -> np.ndarray:
+        # Use wrap mode for infinite feel
+        coords = np.array([self.yg - dy, self.xg - dx])
+        return map_coordinates(buffer, coords, order=1, mode='wrap')
+
+    def render_frame(self, frame_data: Dict[str, Any], frame_index: int) -> np.ndarray:
+        """Composites a single frame."""
+        dt = 1.0 / self.cfg.fps
         self.time += dt
-
-        # Smooth audio
-        self._smooth_audio(frame_data)
+        energy = frame_data.get("global_energy", 0.1)
         is_beat = frame_data.get("is_beat", False)
-        is_onset = frame_data.get("is_onset", False)
+        percussive = frame_data.get("percussive_impact", 0.0)
+        sub_bass = frame_data.get("sub_bass", 0.0)
+        
+        # 1. Update Phase
+        if is_beat and sub_bass > 0.7:
+            self.phase_dir = -self.phase_dir
+            
+        p_inc = (0.02 + energy * 0.08) * self.phase_dir
+        if is_beat:
+            p_inc *= (1.1 + percussive * 1.2)
+        self.phase += dt * p_inc
+        
+        # 2. Cycle logic
+        if self.cfg.mirror_mode == "cycle" or self.cfg.interference_mode == "cycle":
+            self.change_potential += energy * dt * 2.0
+            if self.change_potential > 0.85 and is_beat and self.transition_alpha <= 0:
+                self.change_potential = 0
+                if self.cfg.mirror_mode == "cycle":
+                    self.next_mirror_idx = (self.curr_mirror_idx + 1) % len(self.MIRROR_MODES)
+                    if self.MIRROR_MODES[self.next_mirror_idx] == "off": # Skip off in cycle
+                         self.next_mirror_idx = (self.next_mirror_idx + 1) % len(self.MIRROR_MODES)
+                if self.cfg.interference_mode == "cycle":
+                    self.next_int_idx = (self.curr_int_idx + 1) % len(self.INT_MODES)
+            
+            if self.next_mirror_idx != self.curr_mirror_idx or self.next_int_idx != self.curr_int_idx:
+                self.transition_alpha += dt * 0.6
+                if self.transition_alpha >= 1.0:
+                    self.curr_mirror_idx = self.next_mirror_idx
+                    self.curr_int_idx = self.next_int_idx
+                    self.transition_alpha = 0.0
 
-        # --- Update state ---
+        # 3. Off mode optimization
+        mode_str = self.MIRROR_MODES[self.curr_mirror_idx]
+        if mode_str == "off" and self.transition_alpha <= 0:
+            return self.instance_a.render_frame(frame_data, frame_index)
 
-        # Rotation: harmonic + brilliance spikes
-        rotation_delta = (
-            0.01
-            * cfg.base_rotation_speed
-            * (1.0 + self._smooth_harmonic * 2.0 + self._smooth_brilliance * 3.0)
-        )
-        self.accumulated_rotation += rotation_delta
+        # 4. Axis-Locked Symmetrical Clashing
+        amp_x, amp_y = self.cfg.width * 0.4, self.cfg.height * 0.4
+        
+        if mode_str == "vertical": axis_x, axis_y = 1.0, 0.0
+        elif mode_str == "horizontal": axis_x, axis_y = 0.0, 1.0
+        elif mode_str == "diagonal": axis_x, axis_y = 1.0, 1.0
+        else: axis_x, axis_y = 0.0, 0.0 # circular/off
+        
+        osc = math.sin(self.phase)
+        off_a_x, off_a_y = axis_x * osc * amp_x, axis_y * osc * amp_y
+        off_b_x, off_b_y = -off_a_x, -off_a_y
 
-        # Julia c-parameter drift
-        c_speed = 0.0003 * (1.0 + self._smooth_harmonic)
-        self.julia_t += c_speed
-        julia_c = interpolate_c(self.julia_t)
+        # 5. Process Instances
+        self.instance_a.update(frame_data)
+        self.instance_b.update(frame_data)
+        
+        field_a = self.instance_a.get_raw_field()
+        field_b = self.instance_b.get_raw_field()
+        
+        # Merge multi-fields if necessary (Decay style)
+        def normalize_field(f):
+            if isinstance(f, tuple):
+                return np.clip(f[0] * 1.5 + f[1] * 0.8, 0, 1)
+            return f
+            
+        field_a = normalize_field(field_a)
+        field_b = normalize_field(field_b)
+        
+        # Masks
+        mask_src_a_curr = self._get_identity_mask(self.MIRROR_MODES[self.curr_mirror_idx])
+        mask_src_a_next = self._get_identity_mask(self.MIRROR_MODES[self.next_mirror_idx])
+        mask_src_a = mask_src_a_curr * (1 - self.transition_alpha) + mask_src_a_next * self.transition_alpha
+        mask_src_b = 1.0 - mask_src_a
+        
+        # Shift
+        field_a_s = self._smooth_shift(field_a * mask_src_a, off_a_y, off_a_x)
+        mask_a_s = self._smooth_shift(mask_src_a, off_a_y, off_a_x)
+        
+        field_b_s = self._smooth_shift(field_b * mask_src_b, off_b_y, off_b_x)
+        mask_b_s = self._smooth_shift(mask_src_b, off_b_y, off_b_x)
+        
+        overlap = np.clip(mask_a_s * mask_b_s * 4.0, 0, 1)
+        
+        # 6. Interference
+        def compute_int(a, b, mode, p_boost):
+            gain = 1.0 + p_boost * 3.5
+            if mode == "resonance": return (a * b) * 5.0 * gain
+            elif mode == "constructive": return (a + b) * 0.8 * gain
+            elif mode == "destructive": return np.abs(a - b) * 5.0 * gain
+            else: return (np.maximum(a, b) + (a * b * 10.0)) * gain
 
-        # Max iterations from brightness + flux
-        max_iter = int(
-            cfg.base_max_iter
-            + (self._smooth_brightness + self._smooth_flux * 0.5) * (cfg.max_max_iter - cfg.base_max_iter)
-        )
 
-        # Hue from chroma
-        hue_base = frame_data.get("pitch_hue", 0.0)
-        if is_onset:
-            hue_base = (hue_base + 0.1) % 1.0
+        int_mode_curr = self.INT_MODES[self.curr_int_idx]
+        int_mode_next = self.INT_MODES[self.next_int_idx]
+        
+        field_int = compute_int(field_a_s, field_b_s, int_mode_curr, percussive) * (1-self.transition_alpha) + \
+                    compute_int(field_a_s, field_b_s, int_mode_next, percussive) * self.transition_alpha
 
-        # --- Generate fractal texture ---
-
-        # Fractal zoom breathes with the music. Sub-bass pushes zoom deeper.
-        breath = 0.4 * math.sin(self.time * 0.4)
-        fractal_zoom = 1.0 + self._smooth_low * 0.5 + self._smooth_sub_bass * 0.8 + breath
-        fractal_zoom = max(0.6, min(fractal_zoom, 2.5))
-
-        # Lissajous drift
-        self._drift_phase += dt * 0.3
-        drift_x = math.sin(self._drift_phase * 1.3) * 0.25 / max(fractal_zoom, 1)
-        drift_y = math.cos(self._drift_phase * 0.9) * 0.18 / max(fractal_zoom, 1)
-
-        use_mandelbrot = cfg.fractal_mode == "mandelbrot"
-        effective_c = julia_c
-
-        if not use_mandelbrot:
-            probe_iter = min(max_iter, 100)
-            effective_c = self._pick_best_c(
-                julia_c, fractal_zoom, probe_iter,
-            )
-
-        if use_mandelbrot:
-            texture = mandelbrot_zoom(
-                cfg.width,
-                cfg.height,
-                center=cfg.mandelbrot_center + complex(drift_x * 0.01, drift_y * 0.01),
-                zoom=fractal_zoom * 0.5,
-                max_iter=max_iter,
-            )
-        else:
-            texture = julia_set(
-                cfg.width,
-                cfg.height,
-                c=effective_c,
-                center=complex(drift_x, drift_y),
-                zoom=fractal_zoom,
-                max_iter=max_iter,
-            )
-
-        # Organic noise: spectral flatness controls noise injection amount
-        if self._smooth_energy > 0.3 or self._smooth_flatness > 0.2:
-            noise = noise_fractal(
-                cfg.width,
-                cfg.height,
-                time=self.time,
-                octaves=4,
-                scale=2.0 + self._smooth_harmonic * 2 + self._smooth_flatness * 4,
-            )
-            # Flatness increases noise blend
-            noise_blend = 0.03 + self._smooth_energy * 0.04 + self._smooth_flatness * 0.1
-            texture = texture * (1 - noise_blend) + noise * noise_blend
-
-        # --- Radial warp (breathing) ---
-
-        warp_amp = cfg.warp_amplitude * (0.5 + self._smooth_low * 1.5 + self._smooth_flux * 1.0)
-        if warp_amp > 0.005:
-            texture = radial_warp(
-                texture,
-                amplitude=warp_amp,
-                frequency=cfg.warp_frequency,
-                time=self.time * 2,
-            )
-
-        # --- Kaleidoscope mirror ---
-
-        # Segment count: base ± smoothed high energy modulation.
-        seg_mod = int(self._smooth_high * 4 + self._smooth_flux * 2)
-        num_seg = max(4, cfg.num_segments + seg_mod - 2)
-
-        texture = polar_mirror(
-            texture,
-            num_segments=num_seg,
-            rotation=self.accumulated_rotation,
-        )
-
-        # --- Color grading ---
-
-        frame_rgb = apply_palette(
-            texture,
-            hue_base=hue_base,
-            time=self.time,
-            # Brilliance increases saturation
-            saturation=cfg.base_saturation * (0.8 + self._smooth_harmonic * 0.4 + self._smooth_brilliance * 0.5),
-            contrast=cfg.contrast,
-        )
-
-        # --- Infinite zoom blend ---
-
-        # Energy + Sub-bass pushes the infinite zoom faster
-        zoom_factor = cfg.base_zoom_factor * (1.0 + self._smooth_energy * 0.01 + self._smooth_sub_bass * 0.02)
-        # Reduce feedback on heavy percussion so fresh fractal detail dominates
-        feedback_alpha = cfg.feedback_alpha * (1.0 - self._smooth_percussive * 0.6)
-
-        frame_rgb = infinite_zoom_blend(
-            frame_rgb,
-            self.feedback_buffer,
-            zoom_factor=zoom_factor,
-            feedback_alpha=feedback_alpha,
-        )
-
-        # --- Post-processing ---
-
-        if cfg.glow_enabled:
-            # Flux and percussive drive glow
-            glow_int = cfg.glow_intensity * (1.0 + self._smooth_percussive * 0.3 + self._smooth_flux * 0.4)
-            glow_int = min(glow_int, 0.65)
-            frame_rgb = add_glow(frame_rgb, intensity=glow_int, radius=cfg.glow_radius)
-
-        if cfg.aberration_enabled:
-            # Sharpness drives chromatic aberration
-            ab_offset = int(
-                cfg.aberration_offset * (1.0 + self._smooth_percussive * 1.5 + self._smooth_sharpness * 3.0)
-            )
-            frame_rgb = chromatic_aberration(frame_rgb, offset=ab_offset)
-
-        if cfg.vignette_strength > 0:
-            # Vignette pulses with percussion and flux
-            vign_str = cfg.vignette_strength * (
-                1.0 + self._smooth_percussive * 0.6 + self._smooth_flux * 0.4
-            )
-            frame_rgb = vignette(frame_rgb, strength=vign_str)
-
-        # Tone-map before storing in feedback buffer
-        frame_rgb = tone_map_soft(frame_rgb)
-
-        # Update feedback buffer
-        self.feedback_buffer = frame_rgb.copy()
-
-        return frame_rgb
-
-    def render_manifest(
-        self,
-        manifest: dict[str, Any],
-        progress_callback: callable = None,
-    ) -> Iterator[np.ndarray]:
-        """
-        Render all frames from a manifest as a generator.
-        """
-        frames = manifest.get("frames", [])
-        total = len(frames)
-
-        # Reset state
-        self.feedback_buffer = None
-        self.accumulated_rotation = 0.0
-        self.julia_t = 0.0
-        self.time = 0.0
-        self._drift_phase = 0.0
-        self._smooth_percussive = 0.0
-        self._smooth_harmonic = 0.3
-        self._smooth_brightness = 0.5
-        self._smooth_energy = 0.3
-        self._smooth_low = 0.3
-        self._smooth_high = 0.3
-        self._smooth_flux = 0.0
-        self._smooth_flatness = 0.0
-        self._smooth_sharpness = 0.0
-        self._smooth_sub_bass = 0.0
-        self._smooth_brilliance = 0.0
-
-        for i, frame_data in enumerate(frames):
-            frame = self.render_frame(frame_data, i)
-            yield frame
-
-            if progress_callback:
-                progress_callback(i + 1, total)
+        field_final = (field_a_s * (1-overlap)) + (field_b_s * (1-overlap)) + (field_int * overlap)
+        field_final = np.clip(field_final, 0, 1)
+        
+        # 7. Polish
+        polisher = VisualPolisher(self.cfg)
+        return polisher.apply(field_final, frame_data, self.time, self.instance_a._smooth_audio_dict())

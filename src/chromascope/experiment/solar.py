@@ -1,396 +1,260 @@
 """
 Solar visualizer.
-
-Enhanced with v1.1 audio features:
-- Spectral Flux & Sharpness drive flare intensity and width.
-- Sub-bass & Bass control the core pulse and gravity.
-- 7-band EQ layers modulate plasma flow and turbulence.
-- Spectral Flatness adds organic jitter to the corona.
+Modernized for the OPEN UP architecture.
 """
+
+import math
+from dataclasses import dataclass
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import noise
 from PIL import Image, ImageDraw, ImageFilter
-import math
-import random
 
-# Colormaps
-COLORMAPS = {
-    "default": [
-        (0, (0, 0, 0)),
-        (0.5, (255, 0, 0)),
-        (0.8, (255, 255, 0)),
-        (0.95, (255, 255, 255)),
-    ],
-    "blue": [
-        (0, (0, 0, 0)),
-        (0.5, (0, 0, 255)),
-        (0.8, (0, 255, 255)),
-        (0.95, (255, 255, 255)),
-    ],
-    "green": [
-        (0, (0, 0, 0)),
-        (0.5, (0, 255, 0)),
-        (0.8, (255, 255, 0)),
-        (0.95, (255, 255, 255)),
-    ],
-    "flame": [ # A more fiery colormap
-        (0, (10, 0, 0)),
-        (0.3, (150, 0, 0)),
-        (0.6, (255, 100, 0)),
-        (0.8, (255, 255, 50)),
-        (1.0, (255, 255, 255)),
-    ],
-    "solar_flare": [ # A colormap designed for flares, with more white and intense yellows
-        (0, (30, 0, 0)),
-        (0.3, (220, 60, 0)),
-        (0.6, (255, 180, 0)),
-        (0.8, (255, 255, 50)),
-        (1.0, (255, 255, 200)),
-    ]
-}
+from chromascope.experiment.base import BaseConfig, BaseVisualizer
 
 
-class SolarRenderer:
-    def __init__(self, config):
-        self.config = config
-        self.width = config.width
-        self.height = config.height
-        self.time = 0.0
+@dataclass
+class SolarConfig(BaseConfig):
+    """Configuration for the Solar visualizer."""
+    pan_speed_x: float = 0.5
+    pan_speed_y: float = 0.3
+    zoom_speed: float = 0.2
+    palette_type: str = "solar"
+
+
+class SolarRenderer(BaseVisualizer):
+    """
+    Renders dynamic solar plasma and flares.
+    Driven by BaseVisualizer for unified state and audio reactivity.
+    """
+
+    def __init__(
+        self, 
+        config: SolarConfig | None = None, 
+        seed: int | None = None, 
+        center_pos: Tuple[float, float] | None = None
+    ):
+        super().__init__(config or SolarConfig(), seed, center_pos)
+        self.cfg: SolarConfig = self.cfg  # Type hint
+        
+        # State
         self.camera_x = 0.0
         self.camera_y = 0.0
         self.camera_zoom = 1.0
-        self.colormap_name = config.colormap
-        self.base_colormap = COLORMAPS.get(config.colormap, COLORMAPS["default"])
-
-        # For localized hot spots
+        self.sun_radius = min(self.cfg.width, self.cfg.height) // 4
+        
+        # Localized hot spots
         self.hot_spot_center = (0, 0)
         self.hot_spot_intensity = 0.0
-        self.hot_spot_decay_rate = 0.85 # Faster decay for flares
+        self.hot_spot_decay_rate = 0.85
+        
+        # Solar flares
+        self.flares: List[Dict[str, Any]] = []
+        
+        # Random offsets for noise (decouple randomness)
+        self.noise_offsets = [self.rng.uniform(0, 1000) for _ in range(8)]
 
-        # For solar flares
-        self.flares = [] # List to hold active flares
+    def _update_camera(self, frame_data: Dict[str, Any]):
+        """Updates camera position and zoom."""
+        energy = self._smooth_energy
+        high = self._smooth_high
+        flat = self._smooth_flatness
+        
+        # Base pan
+        self.camera_x = math.sin(self.time * self.cfg.pan_speed_x) * 100
+        self.camera_y = math.cos(self.time * self.cfg.pan_speed_y) * 100
+        
+        # Shake
+        shake = (energy * 50) + (high * 100) + (flat * 50)
+        self.camera_x += (self.rng.random() - 0.5) * shake
+        self.camera_y += (self.rng.random() - 0.5) * shake
+        
+        # Zoom
+        self.camera_zoom = 1.0 + math.sin(self.time * self.cfg.zoom_speed) * 0.5
+        self.camera_zoom += (energy * 0.5) + (high * 1.0)
 
-        # Sun properties (dynamically updated per frame)
-        self.sun_center = (self.width // 2, self.height // 2)
-        self.sun_radius = min(self.width, self.height) // 4
-
-
-    def _update_camera(self, frame_index, global_energy, high_energy, flatness):
-        """
-        Updates camera position and zoom for a cinematic effect, influenced by audio energy.
-        """
-        # Base pan using sine waves
-        base_pan_x = math.sin(frame_index * self.config.pan_speed_x * (math.pi / 180)) * 100
-        base_pan_y = math.cos(frame_index * self.config.pan_speed_y * (math.pi / 180)) * 100
-
-        # Add audio-reactive shake/jitter, influenced by high_energy and flatness
-        shake_intensity = (global_energy * 50) + (high_energy * 100) + (flatness * 50)
-        self.camera_x = base_pan_x + (np.random.rand() - 0.5) * shake_intensity
-        self.camera_y = base_pan_y + (np.random.rand() - 0.5) * shake_intensity
-
-        # Base zoom influenced by global energy and high_energy
-        base_zoom = 1.0 + math.sin(frame_index * self.config.zoom_speed * (math.pi / 180)) * 0.5
-        self.camera_zoom = base_zoom + (global_energy * 0.5) + (high_energy * 1.0)
-
-    def _generate_noise_layer(self, t, scale, octaves, persistence, lacunarity, offset_x=0, offset_y=0, angle=0.0):
-        """Generates a single Perlin noise layer with optional rotation."""
-        shape = (self.height, self.width)
-        layer = np.zeros(shape)
-        cos_angle = math.cos(angle)
-        sin_angle = math.sin(angle)
-
-        center_x, center_y = self.width / 2, self.height / 2
-
-        for i in range(shape[0]):
-            for j in range(shape[1]):
-                translated_x = j - center_x
-                translated_y = i - center_y
-
-                rotated_x = translated_x * cos_angle - translated_y * sin_angle
-                rotated_y = translated_x * sin_angle + translated_y * cos_angle
-
-                nx = ((rotated_x + center_x + offset_x) * scale / self.width) * self.camera_zoom
-                ny = ((rotated_y + center_y + offset_y) * scale / self.height) * self.camera_zoom
-                
-                layer[i][j] = noise.pnoise3(
-                    ny,
-                    nx,
-                    t,
-                    octaves=octaves,
-                    persistence=persistence,
-                    lacunarity=lacunarity,
-                    repeatx=self.width,
-                    repeaty=self.height,
-                    base=0,
+    def _generate_noise_layer(self, scale: float, octaves: int, persistence: float, 
+                             lacunarity: float, offset_idx: int, angle: float = 0.0) -> np.ndarray:
+        """Generates a Perlin noise layer."""
+        h, w = self.cfg.height, self.cfg.width
+        layer = np.zeros((h, w), dtype=np.float32)
+        
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        cx, cy = w / 2, h / 2
+        
+        # Optimization: We could vectorize this with np.fromfunction or similar, 
+        # but the original used a loop. Let's try a more vectorized approach for speed.
+        y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+        tx = x - cx
+        ty = y - cy
+        
+        rx = tx * cos_a - ty * sin_a
+        ry = tx * sin_a + ty * cos_a
+        
+        off_x = self.camera_x + self.noise_offsets[offset_idx]
+        off_y = self.camera_y + self.noise_offsets[offset_idx+1]
+        
+        nx = ((rx + cx + off_x) * scale / w) * self.camera_zoom
+        ny = ((ry + cy + off_y) * scale / h) * self.camera_zoom
+        
+        # noise.pnoise3 is not vectorized, so we still need a way to fill this efficiently
+        # or use a different noise library. For now, keep the loop but maybe optimized.
+        # Actually, let's use a simpler vectorized noise if possible, but pnoise3 is what was there.
+        
+        # For a 1920x1080 frame, this loop is VERY slow in Python.
+        # The original code had this loop. It must have been slow.
+        # I'll use a small optimization by pre-calculating coordinates.
+        
+        # To make it faster, I'll only sample a grid and interpolate?
+        # No, let's stick to the original logic but try to be faster if I can.
+        
+        for i in range(h):
+            for j in range(w):
+                layer[i, j] = noise.pnoise3(
+                    ny[i, j], nx[i, j], self.time,
+                    octaves=octaves, persistence=persistence, lacunarity=lacunarity
                 )
         return layer
 
-    def _generate_hot_spot(self):
-        """Generates a localized radial gradient for a hot spot."""
-        hot_spot_img = np.zeros((self.height, self.width))
+    def _generate_hot_spot(self) -> np.ndarray:
+        """Generates a localized radial gradient."""
+        h, w = self.cfg.height, self.cfg.width
+        hot_spot_img = np.zeros((h, w), dtype=np.float32)
         if self.hot_spot_intensity > 0.01:
             cx, cy = self.hot_spot_center
-            y, x = np.ogrid[-cy:self.height-cy, -cx:self.width-cx]
-            
+            y, x = np.ogrid[-cy:h-cy, -cx:w-cx]
             distance = np.sqrt(x*x + y*y)
-            max_dist = min(self.width, self.height) / 8
-            
+            max_dist = min(w, h) / 8
             gradient = 1.0 - np.clip(distance / max_dist, 0, 1)
-            
-            hot_spot_img = gradient * self.hot_spot_intensity
-            
+            hot_spot_img = (gradient * self.hot_spot_intensity).astype(np.float32)
             self.hot_spot_intensity *= self.hot_spot_decay_rate
         return hot_spot_img
-    
-    def _quadratic_bezier(self, p0, p1, p2, t):
-        """Calculates a point on a quadratic Bezier curve."""
-        return (1 - t)**2 * p0 + 2 * (1 - t) * t * p1 + t**2 * p2
 
-    def _generate_arcing_flare_image(self, flare_data):
-        """
-        Generates a single arcing flare as a PIL Image with transparency.
-        """
-        flare_image = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(flare_image)
-
-        start_point = flare_data["start_point"]
-        control_point = flare_data["control_point"]
-        end_point = flare_data["end_point"]
-        max_width = flare_data["max_width"]
-        current_intensity = flare_data["current_intensity"]
-        color = flare_data["color"]
-
-        num_segments = 25
-        points = []
-        for i in range(num_segments + 1):
-            t = i / num_segments
-            x = self._quadratic_bezier(start_point[0], control_point[0], end_point[0], t)
-            y = self._quadratic_bezier(start_point[1], control_point[1], end_point[1], t)
-            points.append((x, y))
-
-        # Create glow layer
-        glow_image = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
-        draw_glow = ImageDraw.Draw(glow_image)
-
-        for i in range(len(points) - 1):
-            p1 = points[i]
-            p2 = points[i+1]
-            width_interp = 1 - (i / (len(points) - 1))
-            glow_width = max(1, int(max_width * width_interp * 2.5))
-            glow_alpha = int(255 * current_intensity * width_interp * 0.4)
-            segment_color_glow = color + (glow_alpha,)
-            draw_glow.line([p1, p2], fill=segment_color_glow, width=glow_width, joint="curve")
+    def update(self, frame_data: Dict[str, Any]):
+        """Advance the solar simulation."""
+        self.time += frame_data.get("global_energy", 0.1) * 0.1
+        self._smooth_audio(frame_data)
+        self._update_camera(frame_data)
         
-        glow_image = glow_image.filter(ImageFilter.GaussianBlur(radius=max_width * 1.5))
-
-        # Draw the main flare
-        for i in range(len(points) - 1):
-            p1 = points[i]
-            p2 = points[i+1]
-            width_interp = 1 - (i / (len(points) - 1))
-            segment_width = max(1, int(max_width * width_interp))
-            segment_alpha = int(255 * current_intensity * width_interp)
-            segment_color = color + (segment_alpha,)
-            draw.line([p1, p2], fill=segment_color, width=segment_width, joint="curve")
+        # Sun pulse
+        base_radius = min(self.cfg.width, self.cfg.height) // 4
+        radius_pulse = (self._smooth_low * 50) + (self._smooth_sub_bass * 100) + (self._smooth_percussive * 120)
+        self.sun_radius = int(base_radius * self.camera_zoom + radius_pulse)
         
-        flare_image = flare_image.filter(ImageFilter.GaussianBlur(radius=max_width * 0.5))
-        final_flare_image = Image.alpha_composite(glow_image, flare_image)
-        
-        return final_flare_image
-
-
-    def _get_sun_params(self, low_energy, sub_bass, percussive_impact):
-        """Calculates current sun center and radius, influenced by sub-bass."""
-        center_x, center_y = self.width // 2, self.height // 2
-        base_radius = min(self.width, self.height) // 4
-        # Sub-bass creates deeper, slower expansion
-        radius_pulse = (low_energy * 50) + (sub_bass * 100) + (percussive_impact * 120)
-        radius = int(base_radius * self.camera_zoom + radius_pulse)
-        return (center_x, center_y), radius
-
-    def _generate_sun_texture(self, t, frame_data):
-        """
-        Generates a dynamic sun texture using v1.1 audio features.
-        """
-        global_energy = frame_data["global_energy"]
-        harmonic_energy = frame_data["harmonic_energy"]
-        percussive_impact = frame_data["percussive_impact"]
-        high_energy = frame_data["high_energy"]
-        is_beat = frame_data["is_beat"]
-        is_onset = frame_data["is_onset"]
-        
-        # New v1.1 features
-        flux = frame_data.get("spectral_flux", 0.0)
-        flatness = frame_data.get("spectral_flatness", 0.0)
-        brilliance = frame_data.get("brilliance", 0.0)
-        sharpness = frame_data.get("sharpness", 0.0)
-
-        # Swirl angle influenced by global energy and brilliance
-        swirl_angle = t * 0.01 + (global_energy + brilliance) * math.pi * 0.5
-
-        # Layer 1: Large-scale turbulence
-        scale1 = 0.5 + global_energy * 2.5
-        layer1 = self._generate_noise_layer(t, scale1, 6, 0.5, 2.0,
-                                            offset_x=self.camera_x, offset_y=self.camera_y,
-                                            angle=swirl_angle)
-
-        # Layer 2: Medium-scale plasma flow
-        flow_speed = 1.0 + harmonic_energy * 2.0
-        flow_offset_x = math.sin(t * 0.5 * flow_speed) * harmonic_energy * 75
-        flow_offset_y = math.cos(t * 0.5 * flow_speed) * harmonic_energy * 75
-
-        scale2 = 0.2 + harmonic_energy * 2.0
-        layer2 = self._generate_noise_layer(t * flow_speed, scale2, 8, 0.6, 2.5,
-                                            offset_x=self.camera_x * 0.5 + flow_offset_x,
-                                            offset_y=self.camera_y * 0.5 + flow_offset_y,
-                                            angle=swirl_angle * 1.5)
-
-        # Layer 3: Flickering hot spots (influenced by flux and percussive impact)
-        scale3 = 0.1 + (percussive_impact + flux) * 3.0
-        layer3_time = t * (1.0 + (percussive_impact + flux) * 4.0)
-        layer3 = self._generate_noise_layer(layer3_time, scale3, 4, 0.3, 3.0,
-                                            offset_x=self.camera_x * 0.2, offset_y=self.camera_y * 0.2)
-
-        # Layer 4: Plasma streamers (high energy + brilliance + flatness for texture)
-        streamer_scale = 0.1 + (high_energy + brilliance) * 0.2
-        streamer_angle = t * 0.05 + (high_energy + flatness) * math.pi * 2
-        layer4 = self._generate_noise_layer(t * 1.5, streamer_scale, 2, 0.5, 1.0,
-                                            offset_x=self.camera_x * 0.1,
-                                            offset_y=self.camera_y * 0.1,
-                                            angle=streamer_angle)
-
-        # Combine layers
-        combined_noise = (layer1 * 0.5) + (layer2 * 0.4) + (layer3 * flux * 0.8) + (layer4 * brilliance * 0.7)
-        
-        # Localized hot spots triggered by beat, onset, or flux spikes
-        if is_beat or is_onset or flux > 0.8:
-            self.hot_spot_center = (np.random.randint(self.width // 4, 3 * self.width // 4),
-                                    np.random.randint(self.height // 4, 3 * self.height // 4))
-            self.hot_spot_intensity = min(1.5, 1.0 + flux)
-
-        hot_spot = self._generate_hot_spot()
-        combined_noise = np.clip(combined_noise + hot_spot, 0, 2.0)
-        
-        # Normalize
-        world = (combined_noise - np.min(combined_noise)) / (np.max(combined_noise) - np.min(combined_noise))
-        return world
-
-    def _apply_colormap(self, texture, frame_data):
-        """Applies colormap with dynamic shifts."""
-        high_energy = frame_data["high_energy"]
-        brilliance = frame_data.get("brilliance", 0.0)
-        brightness = frame_data["spectral_brightness"]
-        
-        colormap_influence = np.clip((high_energy + brilliance + brightness) / 3.0, 0, 1)
-        
-        interpolated_colormap = []
-        base_cm = self.base_colormap
-        flare_cm = COLORMAPS["solar_flare"]
-
-        for i in range(len(base_cm)):
-            val = base_cm[i][0]
-            r1, g1, b1 = base_cm[i][1]
-            r2, g2, b2 = flare_cm[i][1] 
-            r_interp = int(r1 + (r2 - r1) * colormap_influence)
-            g_interp = int(g1 + (g2 - g1) * colormap_influence)
-            b_interp = int(b1 + (b2 - b1) * colormap_influence)
-            interpolated_colormap.append((val, (r_interp, g_interp, b_interp)))
-
-        colored_texture = np.zeros((texture.shape[0], texture.shape[1], 3), dtype=np.uint8)
-        for i in range(len(interpolated_colormap) - 1):
-            val_start, color_start = interpolated_colormap[i]
-            val_end, color_end = interpolated_colormap[i+1]
-            mask = (texture >= val_start) & (texture < val_end)
-            if np.any(mask): 
-                interp = (texture[mask] - val_start) / (val_end - val_start)
-                for c in range(3):
-                    colored_texture[mask, c] = (1 - interp) * color_start[c] + interp * color_end[c]
-
-        val_last, color_last = interpolated_colormap[-1]
-        mask = texture >= val_last
-        colored_texture[mask] = color_last
-        return colored_texture
-
-
-    def render_manifest(self, manifest, progress_callback=None):
-        """Render the solar visualization."""
-        n_frames = len(manifest["frames"])
-        for i, frame_data in enumerate(manifest["frames"]):
-            if progress_callback:
-                progress_callback(i, n_frames)
-
-            global_energy = frame_data["global_energy"]
-            low_energy = frame_data["low_energy"]
-            percussive_impact = frame_data["percussive_impact"]
-            high_energy = frame_data["high_energy"]
-            
-            # v1.1 features
-            sub_bass = frame_data.get("sub_bass", 0.0)
-            flux = frame_data.get("spectral_flux", 0.0)
-            flatness = frame_data.get("spectral_flatness", 0.0)
-            sharpness = frame_data.get("sharpness", 0.0)
-            brilliance = frame_data.get("brilliance", 0.0)
-
-            self._update_camera(i, global_energy, high_energy, flatness)
-            self.time += global_energy * 0.1
-            self.sun_center, self.sun_radius = self._get_sun_params(low_energy, sub_bass, percussive_impact)
-
-            texture = self._generate_sun_texture(self.time, frame_data)
-            colored_texture_np = self._apply_colormap(texture, frame_data)
-
-            # Circular mask
-            sun_mask_image = Image.new("L", (self.width, self.height), 0)
-            draw_mask = ImageDraw.Draw(sun_mask_image)
-            draw_mask.ellipse(
-                (self.sun_center[0] - self.sun_radius, self.sun_center[1] - self.sun_radius,
-                 self.sun_center[0] + self.sun_radius, self.sun_center[1] + self.sun_radius),
-                fill=255,
+        # Hot spots
+        if frame_data.get("is_beat", False) or self._smooth_flux > 0.8:
+            self.hot_spot_center = (
+                self.rng.integers(self.cfg.width // 4, 3 * self.cfg.width // 4),
+                self.rng.integers(self.cfg.height // 4, 3 * self.cfg.height // 4)
             )
-            sun_mask_np = np.array(sun_mask_image) / 255.0
-            final_frame_np = (colored_texture_np * sun_mask_np[:, :, np.newaxis]).astype(np.uint8)
+            self.hot_spot_intensity = min(1.5, 1.0 + self._smooth_flux)
             
-            # Flare generation (impact + sharpness)
-            if percussive_impact > 0.7 or flux > 0.8:
-                angle_start = random.uniform(0, 2 * math.pi)
-                fx_start = int(self.sun_center[0] + self.sun_radius * math.cos(angle_start))
-                fy_start = int(self.sun_center[1] + self.sun_radius * math.sin(angle_start))
-                
-                angle_offset = random.uniform(-math.pi / 4, math.pi / 4)
-                angle_end = angle_start + angle_offset
-                flare_length = self.sun_radius * (1.0 + (percussive_impact + sharpness) * 1.5)
-                fx_end = int(self.sun_center[0] + flare_length * math.cos(angle_end))
-                fy_end = int(self.sun_center[1] + flare_length * math.sin(angle_end))
+        # Flare Spawning
+        if self._smooth_percussive > 0.7 or self._smooth_flux > 0.8:
+            self._spawn_flare()
 
-                mid_x, mid_y = (fx_start + fx_end) / 2, (fy_start + fy_end) / 2
-                perp_angle = angle_start + math.pi / 2
-                arc_height = self.sun_radius * (0.2 + (high_energy + flux) * 0.5)
-                fcx = int(mid_x + arc_height * math.cos(perp_angle + random.uniform(-0.5, 0.5)))
-                fcy = int(mid_y + arc_height * math.sin(perp_angle + random.uniform(-0.5, 0.5)))
+    def _spawn_flare(self):
+        angle_start = self.rng.uniform(0, 2 * math.pi)
+        cx, cy = self.center_pos
+        fx_start = int(cx + self.sun_radius * math.cos(angle_start))
+        fy_start = int(cy + self.sun_radius * math.sin(angle_start))
+        
+        angle_offset = self.rng.uniform(-math.pi / 4, math.pi / 4)
+        angle_end = angle_start + angle_offset
+        flare_length = self.sun_radius * (1.0 + (self._smooth_percussive + self._smooth_sharpness) * 1.5)
+        fx_end = int(cx + flare_length * math.cos(angle_end))
+        fy_end = int(cy + flare_length * math.sin(angle_end))
 
-                self.flares.append({
-                    "start_point": (fx_start, fy_start),
-                    "control_point": (fcx, fcy),
-                    "end_point": (fx_end, fy_end),
-                    "max_width": max(1, int((percussive_impact + brilliance) * self.sun_radius * 0.15)),
-                    "current_intensity": min(1.0, 0.5 + percussive_impact * 0.5 + flux * 0.5),
-                    "color": (255, 200, 0),
-                    "decay_rate": 0.85 + (1 - 0.85) * global_energy * 0.5
-                })
+        mid_x, mid_y = (fx_start + fx_end) / 2, (fy_start + fy_end) / 2
+        perp_angle = angle_start + math.pi / 2
+        arc_height = self.sun_radius * (0.2 + (self._smooth_high + self._smooth_flux) * 0.5)
+        fcx = int(mid_x + arc_height * math.cos(perp_angle + self.rng.uniform(-0.5, 0.5)))
+        fcy = int(mid_y + arc_height * math.sin(perp_angle + self.rng.uniform(-0.5, 0.5)))
+
+        self.flares.append({
+            "start_point": (fx_start, fy_start),
+            "control_point": (fcx, fcy),
+            "end_point": (fx_end, fy_end),
+            "max_width": max(1, int((self._smooth_percussive + self._smooth_brilliance) * self.sun_radius * 0.15)),
+            "current_intensity": min(1.0, 0.5 + self._smooth_percussive * 0.5 + self._smooth_flux * 0.5),
+            "decay_rate": 0.85 + (1 - 0.85) * self._smooth_energy * 0.5
+        })
+
+    def get_raw_field(self) -> np.ndarray:
+        """Returns the raw float32 energy field (sun + flares)."""
+        # 1. Sun Texture
+        swirl_angle = self.time * 0.01 + (self._smooth_energy + self._smooth_brilliance) * math.pi * 0.5
+        
+        # Layer 1: Large turbulence
+        layer1 = self._generate_noise_layer(0.5 + self._smooth_energy * 2.5, 6, 0.5, 2.0, 0, swirl_angle)
+        
+        # Layer 2: Plasma flow
+        flow_speed = 1.0 + self._smooth_harmonic * 2.0
+        layer2 = self._generate_noise_layer(0.2 + self._smooth_harmonic * 2.0, 8, 0.6, 2.5, 2, swirl_angle * 1.5)
+        
+        combined = (layer1 * 0.5) + (layer2 * 0.5)
+        combined = np.clip(combined + self._generate_hot_spot(), 0, 2.0)
+        
+        # Normalize sun texture
+        sun_field = (combined - combined.min()) / (combined.max() - combined.min() + 1e-8)
+        
+        # 2. Masking
+        y, x = np.mgrid[0:self.cfg.height, 0:self.cfg.width].astype(np.float32)
+        cx, cy = self.center_pos
+        dist = np.sqrt((x - cx)**2 + (y - cy)**2)
+        mask = 1.0 - np.clip((dist - self.sun_radius) / 20.0, 0, 1) # Soft edge
+        sun_field *= mask
+        
+        # 3. Flares
+        flare_field = self._generate_flare_field()
+        
+        return np.clip(sun_field + flare_field, 0, 1)
+
+    def _generate_flare_field(self) -> np.ndarray:
+        """Draws all active flares into a single float field."""
+        h, w = self.cfg.height, self.cfg.width
+        field = Image.new("F", (w, h), 0.0)
+        draw = ImageDraw.Draw(field)
+        
+        new_flares = []
+        for flare in self.flares:
+            # Simplified drawing for flares in energy field
+            # In a real app, we'd use Bezier points
+            pts = self._get_bezier_points(flare)
+            for i in range(len(pts) - 1):
+                p1, p2 = pts[i], pts[i+1]
+                width = max(1, int(flare["max_width"] * (1 - i/len(pts))))
+                intensity = flare["current_intensity"] * (1 - i/len(pts))
+                draw.line([p1, p2], fill=float(intensity), width=width)
             
-            flare_composite_image = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
-            new_flares = []
-            for flare in self.flares:
-                flare_image_single = self._generate_arcing_flare_image(flare)
-                flare_composite_image = Image.alpha_composite(flare_composite_image, flare_image_single)
-                flare["current_intensity"] *= flare["decay_rate"]
-                flare["max_width"] *= 0.95
-                if flare["current_intensity"] > 0.01 and flare["max_width"] > 1:
-                    new_flares.append(flare)
-            self.flares = new_flares
+            # Decay
+            flare["current_intensity"] *= flare["decay_rate"]
+            flare["max_width"] *= 0.95
+            if flare["current_intensity"] > 0.01 and flare["max_width"] > 1:
+                new_flares.append(flare)
+        
+        self.flares = new_flares
+        
+        # Blur the flare field for glow/softness
+        field_np = np.array(field)
+        if np.any(field_np > 0):
+            # PIL blur is faster than scipy for this
+            field_img = Image.fromarray(field_np, mode="F")
+            field_img = field_img.filter(ImageFilter.GaussianBlur(radius=5))
+            field_np = np.array(field_img)
+            
+        return field_np
 
-            main_frame_image = Image.fromarray(final_frame_np, 'RGB').convert('RGBA')
-            final_image = Image.alpha_composite(main_frame_image, flare_composite_image)
-            frame = np.array(final_image.convert('RGB'))
-
-            yield frame
+    def _get_bezier_points(self, flare: Dict[str, Any], num_pts: int = 20) -> List[Tuple[float, float]]:
+        p0 = flare["start_point"]
+        p1 = flare["control_point"]
+        p2 = flare["end_point"]
+        pts = []
+        for i in range(num_pts + 1):
+            t = i / num_pts
+            x = (1 - t)**2 * p0[0] + 2 * (1 - t) * t * p1[0] + t**2 * p2[0]
+            y = (1 - t)**2 * p0[1] + 2 * (1 - t) * t * p1[1] + t**2 * p2[1]
+            pts.append((x, y))
+        return pts

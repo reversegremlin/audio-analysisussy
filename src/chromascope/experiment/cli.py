@@ -1,23 +1,34 @@
 """
-CLI entry point for the Fractal Kaleidoscope renderer.
-
-Usage:
-    chromascope-fractal <audio_file> [options]
-    python -m chromascope.experiment <audio_file> [options]
+Unified Chromascope CLI.
+Modernized for the OPEN UP architecture.
 """
 
 import argparse
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Type
 
+import numpy as np
+
+from chromascope.experiment.base import BaseConfig
+from chromascope.experiment.decay import DecayConfig, DecayRenderer
 from chromascope.experiment.encoder import encode_video
-from chromascope.experiment.renderer import FractalKaleidoscopeRenderer, RenderConfig
+from chromascope.experiment.fractal import FractalConfig, FractalKaleidoscopeRenderer
+from chromascope.experiment.renderer import UniversalMirrorCompositor
+from chromascope.experiment.solar import SolarConfig, SolarRenderer
 from chromascope.pipeline import AudioPipeline
 
 
+@dataclass
+class MixedConfig(SolarConfig, DecayConfig, FractalConfig):
+    """A catch-all config for heterogeneous mixing."""
+    pass
+
+
 def _progress_bar(current: int, total: int, width: int = 35):
-    """Print a progress bar to stdout."""
+    """Print a progress bar."""
     pct = current / max(total, 1) * 100
     filled = int(width * current / max(total, 1))
     bar = "#" * filled + "-" * (width - filled)
@@ -33,72 +44,54 @@ def _progress_bar(current: int, total: int, width: int = 35):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="chromascope-fractal",
-        description="Audio-reactive fractal kaleidoscope video renderer",
+        prog="chromascope",
+        description="Chromascope: Audio-reactive visualizer suite",
     )
 
+    parser.add_argument("audio", type=Path, help="Input audio file")
+    parser.add_argument("-o", "--output", type=Path, default=None, help="Output MP4 path")
+
+    # Mode
     parser.add_argument(
-        "audio",
-        type=Path,
-        help="Input audio file (wav, mp3, flac)",
+        "--mode", type=str, default="fractal",
+        choices=["fractal", "solar", "decay", "mixed"],
+        help="Visualization mode (default: fractal)"
+    )
+    
+    # Mirroring & Interference
+    parser.add_argument(
+        "--mirror", type=str, default="off",
+        choices=["off", "vertical", "horizontal", "diagonal", "circular", "cycle"],
+        help="Mirroring mode (default: off)"
     )
     parser.add_argument(
-        "-o", "--output",
-        type=Path,
-        default=None,
-        help="Output MP4 path (default: <audio>_fractal.mp4)",
+        "--interference", type=str, default="resonance",
+        choices=["resonance", "constructive", "destructive", "sweet_spot", "cycle"],
+        help="Interference mode (default: resonance)"
     )
 
     # Resolution & Profile
     parser.add_argument(
         "-p", "--profile", type=str, default="medium",
         choices=["low", "medium", "high"],
-        help="Target profile (low: 720p 30fps, medium: 1080p 60fps, high: 4k 60fps)",
+        help="Target profile (low: 720p, medium: 1080p, high: 4k)",
     )
-    parser.add_argument("--width", type=int, default=None, help="Video width (overrides profile)")
-    parser.add_argument("--height", type=int, default=None, help="Video height (overrides profile)")
-    parser.add_argument("-f", "--fps", type=int, default=None, help="Frames per second (overrides profile)")
-
-    # Visual
-    parser.add_argument(
-        "-s", "--segments", type=int, default=8,
-        help="Kaleidoscope symmetry segments (default: 8)",
-    )
-    parser.add_argument(
-        "--fractal", type=str, default="blend",
-        choices=["julia", "mandelbrot", "blend"],
-        help="Fractal type (default: blend)",
-    )
-    parser.add_argument(
-        "--zoom-speed", type=float, default=1.0,
-        help="Base zoom speed multiplier (default: 1.0)",
-    )
-    parser.add_argument(
-        "--rotation-speed", type=float, default=1.0,
-        help="Base rotation speed multiplier (default: 1.0)",
-    )
+    parser.add_argument("--width", type=int, default=None)
+    parser.add_argument("--height", type=int, default=None)
+    parser.add_argument("-f", "--fps", type=int, default=None)
 
     # Post-processing
-    parser.add_argument("--no-glow", action="store_true", help="Disable glow")
-    parser.add_argument("--no-aberration", action="store_true", help="Disable chromatic aberration")
-    parser.add_argument("--no-vignette", action="store_true", help="Disable vignette")
+    parser.add_argument("--no-glow", action="store_true")
+    parser.add_argument("--no-aberration", action="store_true")
+    parser.add_argument("--no-vignette", action="store_true")
+    parser.add_argument("--palette", type=str, default=None, help="Force palette (jewel, solar)")
+
+    # Performance
+    parser.add_argument("--no-low-res-mirror", action="store_true", help="Disable low-res mirror scaling")
 
     # Limits
-    parser.add_argument(
-        "--max-duration", type=float, default=None,
-        help="Limit output to N seconds",
-    )
-
-    # Caching
-    parser.add_argument("--no-cache", action="store_true", help="Force re-analysis of audio")
-    parser.add_argument("--clear-cache", action="store_true", help="Clear the analysis cache before running")
-
-    # Quality
-    parser.add_argument(
-        "-q", "--quality", type=str, default=None,
-        choices=["high", "medium", "fast"],
-        help="Encoding quality (defaults to profile quality)",
-    )
+    parser.add_argument("--max-duration", type=float, default=None)
+    parser.add_argument("--no-cache", action="store_true")
 
     args = parser.parse_args()
 
@@ -106,102 +99,92 @@ def main():
         print(f"Error: Audio file not found: {args.audio}", file=sys.stderr)
         sys.exit(1)
 
-    # Map profile to defaults
     PROFILES = {
         "low": {"width": 1280, "height": 720, "fps": 30, "quality": "fast"},
         "medium": {"width": 1920, "height": 1080, "fps": 60, "quality": "medium"},
         "high": {"width": 3840, "height": 2160, "fps": 60, "quality": "high"},
     }
     p_cfg = PROFILES[args.profile]
-
     width = args.width or p_cfg["width"]
     height = args.height or p_cfg["height"]
     fps = args.fps or p_cfg["fps"]
-    quality = args.quality or p_cfg["quality"]
+    quality = p_cfg["quality"]
 
-    output = args.output
-    if output is None:
-        output = args.audio.with_name(f"{args.audio.stem}_fractal.mp4")
+    output = args.output or args.audio.with_name(f"{args.audio.stem}_{args.mode}.mp4")
 
     # Step 1: Audio analysis
     print(f"Analyzing audio: {args.audio}")
-    t0 = time.time()
-
     pipeline = AudioPipeline(target_fps=fps)
-
-    if args.clear_cache:
-        print("Clearing analysis cache...")
-        pipeline.clear_cache()
-
     result = pipeline.process(args.audio, use_cache=not args.no_cache)
     manifest = result["manifest"]
 
-    print(f"  BPM: {result['bpm']:.1f}")
-    print(f"  Duration: {result['duration']:.1f}s")
-    print(f"  Frames: {result['n_frames']}")
-    print(f"  Analysis took {time.time() - t0:.1f}s")
+    # Step 2: Setup Config and Renderer
+    viz_cls_b = None
+    palette = args.palette
+    
+    if args.mode == "fractal":
+        config_cls = FractalConfig
+        viz_cls_a = FractalKaleidoscopeRenderer
+    elif args.mode == "solar":
+        config_cls = SolarConfig
+        viz_cls_a = SolarRenderer
+        if not palette: palette = "solar"
+    elif args.mode == "decay":
+        config_cls = DecayConfig
+        viz_cls_a = DecayRenderer
+    elif args.mode == "mixed":
+        config_cls = MixedConfig 
+        viz_cls_a = SolarRenderer
+        viz_cls_b = DecayRenderer
+        if not palette: palette = "solar"
+    else:
+        config_cls = BaseConfig
+        viz_cls_a = FractalKaleidoscopeRenderer
 
-    # Trim if needed
-    if args.max_duration is not None:
-        max_frames = int(args.max_duration * fps)
-        if max_frames < len(manifest["frames"]):
-            manifest["frames"] = manifest["frames"][:max_frames]
-            print(f"  Limiting to {args.max_duration}s ({max_frames} frames)")
-
-    total_frames = len(manifest["frames"])
-
-    # Step 2: Render
-    print(f"\nRendering {total_frames} frames at {width}x{height} @ {fps}fps")
-    quality_map = {
-        "high": (200, 400),
-        "medium": (100, 250),
-        "fast": (60, 120),
-    }
-    base_iter, max_iter = quality_map.get(quality, (100, 250))
-
-    print(f"  Profile: {args.profile}, Fractal: {args.fractal}, Quality: {quality}")
-
-    config = RenderConfig(
+    config = config_cls(
         width=width,
         height=height,
         fps=fps,
-        num_segments=args.segments,
-        fractal_mode=args.fractal,
-        base_zoom_speed=args.zoom_speed,
-        base_rotation_speed=args.rotation_speed,
-        base_max_iter=base_iter,
-        max_max_iter=max_iter,
         glow_enabled=not args.no_glow,
         aberration_enabled=not args.no_aberration,
         vignette_strength=0.0 if args.no_vignette else 0.3,
+        palette_type=palette or "jewel",
+        mirror_mode=args.mirror,
+        interference_mode=args.interference,
+        low_res_mirror=not args.no_low_res_mirror
     )
 
-    renderer = FractalKaleidoscopeRenderer(config)
-    frame_gen = renderer.render_manifest(manifest, progress_callback=_progress_bar)
+    if args.mirror != "off":
+        renderer = UniversalMirrorCompositor(viz_cls_a, config, viz_class_b=viz_cls_b)
+    else:
+        renderer = viz_cls_a(config)
 
-    # Step 3: Encode
-    t1 = time.time()
-
-    duration = args.max_duration or result["duration"]
+    # Step 3: Render and Encode
+    print(f"Rendering mode: {args.mode}, mirror: {args.mirror}, interference: {args.interference}")
+    
+    # We need a unified render_manifest or just iterate here
+    frames = manifest.get("frames", [])
+    if args.max_duration:
+        frames = frames[:int(args.max_duration * fps)]
+        
+    def frame_gen():
+        for i, f_data in enumerate(frames):
+            yield renderer.render_frame(f_data, i)
+            _progress_bar(i + 1, len(frames))
 
     encode_video(
-        frame_iterator=frame_gen,
+        frame_iterator=frame_gen(),
         audio_path=args.audio,
         output_path=output,
         width=width,
         height=height,
         fps=fps,
         quality=quality,
-        duration=duration,
-        total_frames=total_frames,
+        duration=args.max_duration or result["duration"],
+        total_frames=len(frames),
     )
 
-    elapsed = time.time() - t1
-    file_size_mb = output.stat().st_size / 1024 / 1024
-
-    print(f"\nDone! {file_size_mb:.1f} MB")
-    print(f"  Render+encode took {elapsed:.1f}s ({total_frames / max(elapsed, 0.01):.1f} fps)")
-    print(f"  Output: {output}")
+    print(f"\nDone! Output: {output}")
 
 
 if __name__ == "__main__":
