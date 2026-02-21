@@ -98,11 +98,15 @@ class ChemicalRenderer(BaseVisualizer):
         # Reaction heat, crystal body, crystal edges, impurity noise
         self._field_heat = np.zeros((sh, sw), dtype=np.float32)
         self._field_crystal = np.zeros((sh, sw), dtype=np.float32)
+        self._field_crystal_sharp = np.zeros((sh, sw), dtype=np.float32)
         self._field_edge = np.zeros((sh, sw), dtype=np.float32)
         self._field_noise = np.zeros((sh, sw), dtype=np.float32)
 
         # Noise animation state
         self._noise_offsets = [float(self.rng.uniform(0, 1000)) for _ in range(6)]
+
+        # Hex lattice phase (random start per seed for variety)
+        self._hex_phase = float(self.rng.uniform(0, 10))
 
         # Style-specific parameters resolved once
         self._style_params = self._resolve_style(self.cfg.style)
@@ -191,6 +195,26 @@ class ChemicalRenderer(BaseVisualizer):
         # Normalise to [0, 1]
         layer = (layer + 4.0) / 8.0
         return np.clip(layer, 0.0, 1.0).astype(np.float32)
+
+    def _hex_lattice_full(self, scale: float = 10.0) -> np.ndarray:
+        """Hexagonal lattice at full output resolution for crystal interior texture.
+
+        Three cosine waves at 0°, 60°, 120° tile a true hexagonal grid.
+        Returns float32 [0, 1] — peaks mark facet centres, troughs mark crystal planes.
+        """
+        h, w = self.cfg.height, self.cfg.width
+        x = np.linspace(0, scale, w, dtype=np.float32) + self._hex_phase
+        y = np.linspace(0, scale * h / w, h, dtype=np.float32) + self._hex_phase * 0.618
+        xg, yg = np.meshgrid(x, y)
+
+        tau = math.tau
+        a1 = np.cos(tau * xg)
+        a2 = np.cos(tau * (0.5 * xg + 0.866 * yg))
+        a3 = np.cos(tau * (-0.5 * xg + 0.866 * yg))
+        lattice = (a1 + a2 + a3) / 3.0  # [-1, 1]
+        # Sharpen planes so facet centres are clearly bright, planes clearly dark
+        lattice = np.tanh(lattice * 2.5)
+        return ((lattice + 1.0) * 0.5).astype(np.float32)
 
     def _palette_colors(
         self, smoothed: Dict[str, float]
@@ -297,23 +321,23 @@ class ChemicalRenderer(BaseVisualizer):
                     max(0, sx - seed_r):sx + seed_r,
                 ] = 1.0
 
-        # --- Crystal growth: anisotropic, driven by heat + supersaturation ---
-        # Orderliness: high flatness = isotropic; dissonance = anisotropic
+        # --- Crystal growth: 3-axis directional for faceted star/dendrite shape ---
+        # Taking the MAX of three directional blurs (X, Y, diagonal) creates
+        # a star/diamond growth pattern instead of an isotropic blob.
         flatness = self._smooth_flatness
-        # Isotropic branch (coherent lattice)
-        sigma_iso = cfg.crystal_rate * (0.4 + flatness * 1.5)
-        grown_iso = gaussian_filter(self._field_crystal, sigma=sigma_iso)
+        sigma_long = cfg.crystal_rate * (0.6 + ss * 2.0)
+        sigma_short = max(0.15, cfg.crystal_rate * 0.15)
 
-        # Anisotropic branch (dendritic): slightly different x/y sigmas
-        sigma_x = cfg.crystal_rate * (0.3 + ss * 1.8 + (1.0 - flatness) * 0.8)
-        sigma_y = cfg.crystal_rate * (0.3 + ss * 0.9 + (1.0 - flatness) * 1.2)
-        grown_aniso = gaussian_filter(
-            self._field_crystal,
-            sigma=[sigma_y, sigma_x],
-        )
+        grown_x = gaussian_filter(self._field_crystal, sigma=[sigma_short, sigma_long])
+        grown_y = gaussian_filter(self._field_crystal, sigma=[sigma_long, sigma_short])
+        # Diagonal arm (approximates the 45°/135° crystal axes)
+        sigma_d = sigma_long * 0.75
+        grown_d = gaussian_filter(self._field_crystal, sigma=[sigma_d, sigma_d])
+        grown_dir = np.maximum(np.maximum(grown_x, grown_y), grown_d)
 
-        # Blend by flatness
-        grown = grown_iso * flatness + grown_aniso * (1.0 - flatness)
+        # Blend toward isotropic on tonal passages (coherent lattice body)
+        grown_iso = gaussian_filter(self._field_crystal, sigma=sigma_long * 0.5)
+        grown = grown_dir * (1.0 - flatness * 0.5) + grown_iso * (flatness * 0.5)
 
         # Only grow where heat is above threshold (raised in quiet passages)
         heat_thresh = 0.10 + (1.0 - self._smooth_energy) * 0.25
@@ -329,15 +353,31 @@ class ChemicalRenderer(BaseVisualizer):
         dissolution = sp["crystal_decay"] * (2.0 + (1.0 - self._smooth_energy) * 5.0)
         self._field_crystal = np.clip(self._field_crystal - dissolution, 0.0, 1.0)
 
-        # --- Crystal edge field (gradient magnitude → sparkle / facets) ---
-        # Sobel on each axis using scipy
+        # --- Sharpen crystal field → hard faceted boundaries ---
+        # Logistic curve pushes mid-range values toward 0 or 1.
+        # Sharpness scales with spectral flatness: tonal music = harder crystal faces.
+        crystal_sharpness = 5.0 + flatness * 8.0
+        self._field_crystal_sharp = (
+            1.0 / (1.0 + np.exp(-crystal_sharpness * (self._field_crystal - 0.30)))
+        ).astype(np.float32)
+
+        # --- Crystal edge field on the SHARPENED crystal for crisp facet lines ---
         from scipy.ndimage import sobel as _sobel
-        sx_grad = _sobel(self._field_crystal, axis=1)
-        sy_grad = _sobel(self._field_crystal, axis=0)
-        edge_raw = np.sqrt(sx_grad ** 2 + sy_grad ** 2)
-        # Boost edge sharpness with high-band / brilliance
-        edge_boost = 2.0 + self._smooth_brilliance * 4.0 + self._smooth_high * 2.0
-        self._field_edge = np.clip(edge_raw * edge_boost, 0.0, 1.0).astype(np.float32)
+        sx_grad = _sobel(self._field_crystal_sharp, axis=1)
+        sy_grad = _sobel(self._field_crystal_sharp, axis=0)
+        edge_mag = np.sqrt(sx_grad ** 2 + sy_grad ** 2)
+
+        # Facet alignment: cos(6θ) peaks every 30° → matches hexagonal symmetry.
+        # Edges aligned to crystallographic planes receive a brightness bonus.
+        angle_map = np.arctan2(sy_grad, sx_grad + 1e-8)
+        hex_align = (np.cos(6.0 * angle_map) + 1.0) * 0.5  # [0, 1]
+        edge_boost = 1.5 + self._smooth_brilliance * 4.0 + self._smooth_high * 2.0
+        self._field_edge = np.clip(
+            edge_mag * (1.5 + hex_align * 3.0) * edge_boost, 0.0, 1.0
+        ).astype(np.float32)
+
+        # --- Advance hex lattice phase (slow drift animates crystal planes) ---
+        self._hex_phase += dt * 0.25 * (1.0 + self._smooth_harmonic * 0.4)
 
         # --- Impurity noise field (slow fBm drift) ---
         self._field_noise = self._fBm_noise(scale=3.0 + ss, offset_idx=0) * 0.3
@@ -349,9 +389,9 @@ class ChemicalRenderer(BaseVisualizer):
     def get_raw_field(self) -> np.ndarray:
         """Return merged normalised energy map (float32, sim-grid size)."""
         combined = (
-            self._field_heat * 0.45
-            + self._field_crystal * 0.30
-            + self._field_edge * 0.20
+            self._field_heat * 0.40
+            + self._field_crystal_sharp * 0.30
+            + self._field_edge * 0.25
             + self._field_noise * 0.05
         )
         return np.clip(combined, 0.0, 1.0).astype(np.float32)
@@ -367,12 +407,20 @@ class ChemicalRenderer(BaseVisualizer):
 
         # Upscale sim fields to output resolution
         heat = self._upscale(self._field_heat)
-        crystal = self._upscale(self._field_crystal)
         edge = self._upscale(self._field_edge)
         noise = self._upscale(self._field_noise)
 
+        # Sharpen crystal at full output resolution for hard facet boundaries.
+        # (Re-applying logistic at full res gives cleaner results than upscaling
+        # the sim-grid sharpened field, since boundary aliasing is avoided.)
+        crystal_smooth = self._upscale(self._field_crystal)
+        cs = 5.0 + self._smooth_flatness * 8.0
+        crystal_sharp = (
+            1.0 / (1.0 + np.exp(-cs * (crystal_smooth - 0.30)))
+        ).astype(np.float32)
+
         # Apply chemical palette
-        frame_rgb = self._apply_chemical_palette(heat, crystal, edge, noise, smoothed)
+        frame_rgb = self._apply_chemical_palette(heat, crystal_sharp, edge, noise, smoothed)
 
         # Post-processing (standard pipeline)
         cfg = self.cfg
@@ -410,32 +458,63 @@ class ChemicalRenderer(BaseVisualizer):
     def _apply_chemical_palette(
         self,
         heat: np.ndarray,
-        crystal: np.ndarray,
+        crystal_sharp: np.ndarray,
         edge: np.ndarray,
         noise: np.ndarray,
         smoothed: Dict[str, float],
     ) -> np.ndarray:
-        """Composite field layers into a chemistry-inspired neon RGB frame."""
+        """Composite field layers into a chemistry-inspired neon RGB frame.
+
+        crystal_sharp is the logistically-sharpened crystal field (hard facet
+        boundaries). The hexagonal lattice is composited over it to give the
+        crystal body visible internal crystallographic plane structure.
+        """
         heat_col, crystal_col, edge_col = self._palette_colors(smoothed)
 
         h, w = heat.shape
         rgb = np.zeros((h, w, 3), dtype=np.float32)
 
-        # Layer 1 — crystal body (muted emissive base)
-        for ch, val in enumerate(crystal_col):
-            rgb[:, :, ch] += crystal * val * 0.7
+        # --- Hexagonal lattice (full output resolution) ---
+        # Scale varies with harmonics (more tonal = finer lattice planes visible)
+        # and supersaturation (higher branching = broader hex cells)
+        lattice_scale = 9.0 + smoothed["harmonic"] * 6.0 + self._smooth_supersat * 4.0
+        lattice = self._hex_lattice_full(scale=lattice_scale)
 
-        # Layer 2 — reaction heat (bright emissive core)
-        heat_boost = 1.0 + smoothed["high"] * 0.6
+        # --- Layer 1: Crystal interior with hex lattice planes ---
+        # Dark at crystal-plane boundaries (troughs), bright at facet centres (peaks).
+        # This gives the translucent depth of a real mineral specimen.
+        crystal_interior = crystal_sharp * (0.15 + 0.85 * lattice)
+        for ch, val in enumerate(crystal_col):
+            rgb[:, :, ch] += crystal_interior * val * 0.9
+
+        # --- Layer 2: Reaction heat — brighter where it's inside a crystal ---
+        # Heat trapped inside a crystal structure glows more intensely.
+        heat_inside_boost = 1.0 + crystal_sharp * 0.5
+        heat_boost = (1.0 + smoothed["high"] * 0.6) * heat_inside_boost
         for ch, val in enumerate(heat_col):
             rgb[:, :, ch] += heat * val * heat_boost
 
-        # Layer 3 — crystal edges (sharp sparkle / facets)
-        edge_gain = 1.0 + smoothed["brilliance"] * 2.5 + smoothed["sharpness"] * 1.5
+        # --- Layer 3: Crystal facet edges (very bright) ---
+        # These are the light-catching rims where two crystal planes meet.
+        # Much higher gain than before so facets truly blaze.
+        edge_gain = 3.0 + smoothed["brilliance"] * 6.0 + smoothed["sharpness"] * 3.0
         for ch, val in enumerate(edge_col):
             rgb[:, :, ch] += edge * val * edge_gain
 
-        # Layer 4 — impurity noise (very subtle colour texture)
+        # --- Layer 4: Specular vertex sparks ---
+        # Tiny near-white flashes at crystal vertices (where multiple facets meet).
+        # These exist at the intersection of high edge AND high crystal_sharp.
+        # Specular highlights are always near-white regardless of palette.
+        spark_raw = edge * crystal_sharp
+        spark_intensity = (
+            smoothed["brilliance"] * 0.8 + smoothed["sharpness"] * 0.5 + 0.1
+        )
+        sparks = np.clip(spark_raw * spark_intensity * 4.0, 0.0, 1.0)
+        rgb[:, :, 0] += sparks * 0.95
+        rgb[:, :, 1] += sparks * 0.98
+        rgb[:, :, 2] += sparks * 1.00
+
+        # --- Layer 5: Impurity noise (subtle colour texture, prevents dead zones) ---
         rgb[:, :, 0] += noise * 0.04
         rgb[:, :, 1] += noise * 0.02
         rgb[:, :, 2] += noise * 0.06
