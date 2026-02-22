@@ -12,6 +12,7 @@ from typing import Type
 
 import numpy as np
 
+from chromascope.experiment.attractor import AttractorConfig, AttractorRenderer
 from chromascope.experiment.base import BaseConfig
 from chromascope.experiment.chemical import ChemicalConfig, ChemicalRenderer
 from chromascope.experiment.decay import DecayConfig, DecayRenderer
@@ -23,7 +24,7 @@ from chromascope.pipeline import AudioPipeline
 
 
 @dataclass
-class MixedConfig(SolarConfig, DecayConfig, FractalConfig, ChemicalConfig):
+class MixedConfig(SolarConfig, DecayConfig, FractalConfig, ChemicalConfig, AttractorConfig):
     """A catch-all config for heterogeneous mixing."""
     pass
 
@@ -55,7 +56,7 @@ def main():
     # Mode
     parser.add_argument(
         "--mode", type=str, default="fractal",
-        choices=["fractal", "solar", "decay", "mixed", "chemical"],
+        choices=["fractal", "solar", "decay", "mixed", "chemical", "attractor"],
         help="Visualization mode (default: fractal)"
     )
     
@@ -123,6 +124,30 @@ def main():
         help="Chemistry-inspired colour palette (default: mixed)",
     )
 
+    # Attractor-specific
+    parser.add_argument(
+        "--attractor-blend-mode", type=str, default=None,
+        choices=["lorenz", "rossler", "dual", "morph"],
+        help="Attractor blend mode when --mode attractor (default: dual)",
+    )
+    parser.add_argument(
+        "--num-particles", type=int, default=None,
+        help="Number of particles per attractor [default: 3000]",
+    )
+    parser.add_argument(
+        "--trail-decay", type=float, default=None,
+        help="Trail fade rate [0,1] (default: 0.96)",
+    )
+    parser.add_argument(
+        "--projection-speed", type=float, default=None,
+        help="Base azimuth rotation speed in rad/s (default: 0.2)",
+    )
+    parser.add_argument(
+        "--attractor-palette", type=str, default=None,
+        choices=["neon_aurora", "plasma_coil", "void_fire", "quantum_foam"],
+        help="Neon colour palette for attractor mode (default: neon_aurora)",
+    )
+
     # Preview
     parser.add_argument(
         "--preview", action="store_true",
@@ -171,6 +196,9 @@ def main():
     elif args.mode == "chemical":
         config_cls = ChemicalConfig
         viz_cls_a = ChemicalRenderer
+    elif args.mode == "attractor":
+        config_cls = AttractorConfig
+        viz_cls_a = AttractorRenderer
     elif args.mode == "mixed":
         config_cls = MixedConfig
         viz_cls_a = SolarRenderer
@@ -194,6 +222,17 @@ def main():
     )
     if args.mode == "fractal" and args.fractal_mode is not None:
         config_kwargs["fractal_mode"] = args.fractal_mode
+    if args.mode == "attractor":
+        if args.attractor_blend_mode is not None:
+            config_kwargs["blend_mode"] = args.attractor_blend_mode
+        if args.num_particles is not None:
+            config_kwargs["num_particles"] = args.num_particles
+        if args.trail_decay is not None:
+            config_kwargs["trail_decay"] = args.trail_decay
+        if args.projection_speed is not None:
+            config_kwargs["projection_speed"] = args.projection_speed
+        if args.attractor_palette is not None:
+            config_kwargs["attractor_palette"] = args.attractor_palette
     if args.mode == "chemical":
         if args.chem_style is not None:
             config_kwargs["style"] = args.chem_style
