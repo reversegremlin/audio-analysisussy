@@ -1,6 +1,6 @@
 # Chromascope: A Distinctive Audio-to-Visual Engine
 
-Chromascope is not a generic “bars-and-waveform” visualizer. It is a **structured audio-to-visual engine** that converts music into a reusable, frame-accurate control language for many different renderers.
+Chromascope is a **structured audio-to-visual engine** that converts music into a reusable, frame-accurate control language for many different renderers.
 
 At its core, Chromascope treats audio analysis as a **rendering contract**, not a one-off effect.
 
@@ -142,16 +142,6 @@ python scripts/generate_math_showcase_audio.py
 | Fibonacci Etude | ![Fibonacci visual preview](docs/assets/demos/preview_fibonacci.gif) |
 | Golden Ratio Canon | ![Sacred geometry visual preview](docs/assets/demos/preview_geometric.gif) |
 | Prime Pulse Chorale | ![Circuit visual preview](docs/assets/demos/preview_circuit.gif) |
-
-### Recommended public-domain classical sources
-
-For fully public-domain repertoire/performance sourcing, use collections that explicitly label recording rights:
-
-1. Musopen (Public Domain recordings filter)
-2. IMSLP (work PD status + recording license on each page)
-3. Wikimedia Commons classical audio (license badge per file)
-
-> Note: automated YouTube upload is intentionally not wired in this repository (no API credentials flow), so publishing clips currently remains a manual post-production step.
 
 ---
 
