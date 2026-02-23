@@ -88,7 +88,7 @@ Chromascope ships with both real-time and cinematic pathways:
 - **Web interface (`frontend/`)** for interactive experimentation with multiple visual styles.
 - **Python experiment framework (`src/chromascope/experiment/`)** for high-fidelity offline rendering.
 
-Because both consume the same audio-control semantics, ideas transfer cleanly from prototyping to final output.
+Both consume the same audio-control semantics.
 
 ---
 
