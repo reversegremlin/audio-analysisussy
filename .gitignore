@@ -1,0 +1,81 @@
+# --- Audiosyncrasy Specific ---
+# Exclude raw audio files (Keep your repo light)
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.ogg
+*.mp4
+*.avi
+*.mov
+
+# But allow docs teaser videos
+!docs/teaser.mp4
+
+# Exclude large exported manifests/data
+# (Only commit small mock_manifest.json for testing)
+output/
+exports/
+*.npy
+*.npz
+
+# AI/ML Model Weights (Demucs/Spleeter caches)
+.models/
+models/
+.cache/
+
+# --- Python Standard ---
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Environments ---
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Testing & Coverage ---
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.instafail/
+
+# --- IDEs & Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store (MacOS)
+Thumbs.db (Windows)
+
+# --- Logs ---
+*.log
+DEVLOG.md.bak

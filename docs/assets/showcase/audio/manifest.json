@@ -1,0 +1,23 @@
+[
+  {
+    "file": "docs/assets/showcase/audio/fibonacci_etude.wav",
+    "title": "Fibonacci Etude",
+    "description": "Arpeggio index follows Fibonacci sequence.",
+    "sample_rate": 22050,
+    "duration_s": 16.0
+  },
+  {
+    "file": "docs/assets/showcase/audio/golden_ratio_canon.wav",
+    "title": "Golden Ratio Canon",
+    "description": "Second voice enters at phi-scaled offset.",
+    "sample_rate": 22050,
+    "duration_s": 18.0
+  },
+  {
+    "file": "docs/assets/showcase/audio/prime_pulse_chorale.wav",
+    "title": "Prime Pulse Chorale",
+    "description": "Voices pulse on prime-number subdivisions.",
+    "sample_rate": 22050,
+    "duration_s": 15.0
+  }
+]

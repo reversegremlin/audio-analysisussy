@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chromascope Studio</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3CradialGradient id='g'%3E%3Cstop offset='0%25' stop-color='%23f59e0b'/%3E%3Cstop offset='100%25' stop-color='%239333ea'/%3E%3C/radialGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='15' fill='%23111' stroke='url(%23g)' stroke-width='1.5'/%3E%3Cpolygon points='16,4 25,10 25,22 16,28 7,22 7,10' fill='none' stroke='%23f59e0b' stroke-width='1.2'/%3E%3Cpolygon points='16,8 21.5,11.5 21.5,20.5 16,24 10.5,20.5 10.5,11.5' fill='none' stroke='%239333ea' stroke-width='1'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23f59e0b'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="2"/>
+                    <circle cx="20" cy="20" r="12" stroke="currentColor" stroke-width="1.5"/>
+                    <circle cx="20" cy="20" r="6" fill="currentColor"/>
+                    <line x1="20" y1="2" x2="20" y2="10" stroke="currentColor" stroke-width="1.5"/>
+                    <line x1="20" y1="30" x2="20" y2="38" stroke="currentColor" stroke-width="1.5"/>
+                    <line x1="2" y1="20" x2="10" y2="20" stroke="currentColor" stroke-width="1.5"/>
+                    <line x1="30" y1="20" x2="38" y2="20" stroke="currentColor" stroke-width="1.5"/>
+                </svg>
+                <span class="logo-text">Kaleidoscope<span class="logo-accent">Studio</span></span>
+            </div>
+            <div class="header-controls">
+                <div class="status-indicator" id="statusIndicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Ready</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Left Panel - Controls -->
+            <aside class="panel panel-left">
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 18V5l12-2v13"/>
+                            <circle cx="6" cy="18" r="3"/>
+                            <circle cx="18" cy="16" r="3"/>
+                        </svg>
+                        Audio Source
+                    </h3>
+                    <div class="upload-zone" id="uploadZone">
+                        <input type="file" id="audioInput" accept="audio/*" hidden>
+                        <div class="upload-content">
+                            <svg class="upload-icon" viewBox="0 0 48 48" fill="none">
+                                <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4"/>
+                                <path d="M24 16v16M16 24h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            <p class="upload-text">Drop audio file or click to browse</p>
+                            <p class="upload-hint">MP3, WAV, FLAC supported</p>
+                        </div>
+                    </div>
+                    <div class="track-info" id="trackInfo" style="display: none;">
+                        <div class="track-name" id="trackName">Track Name</div>
+                        <div class="track-meta">
+                            <span id="trackDuration">0:00</span>
+                            <span class="separator">•</span>
+                            <span id="trackBpm">-- BPM</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Style Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 3l9 4.5v9L12 21l-9-4.5v-9L12 3z"/>
+                            <path d="M12 12l9-4.5M12 12v9M12 12L3 7.5"/>
+                        </svg>
+                        Style
+                    </h3>
+                    <div class="style-grid categorized">
+                        <div class="style-category-label">Classic</div>
+                        <button class="style-btn active" data-style="geometric" title="Geometric">
+                            <svg viewBox="0 0 40 40">
+                                <polygon points="20,5 35,15 35,30 20,35 5,30 5,15" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                                <polygon points="20,10 28,15 28,25 20,28 12,25 12,15" fill="none" stroke="currentColor" stroke-width="1"/>
+                            </svg>
+                            <span>Geometric</span>
+                        </button>
+                        <button class="style-btn" data-style="glass" title="Broken Glass">
+                            <svg viewBox="0 0 40 40">
+                                <path d="M20,5 L35,20 L20,35 L5,20 Z" fill="none" stroke="currentColor" stroke-width="1"/>
+                                <path d="M20,5 L20,35 M5,20 L35,20 M10,10 L30,30 M30,10 L10,30" fill="none" stroke="currentColor" stroke-width="0.75" opacity="0.7"/>
+                            </svg>
+                            <span>Glass</span>
+                        </button>
+                        <button class="style-btn" data-style="flower" title="Flower">
+                            <svg viewBox="0 0 40 40">
+                                <ellipse cx="20" cy="12" rx="4" ry="8" fill="none" stroke="currentColor" stroke-width="1"/>
+                                <ellipse cx="20" cy="12" rx="4" ry="8" fill="none" stroke="currentColor" stroke-width="1" transform="rotate(60 20 20)"/>
+                                <ellipse cx="20" cy="12" rx="4" ry="8" fill="none" stroke="currentColor" stroke-width="1" transform="rotate(120 20 20)"/>
+                                <ellipse cx="20" cy="12" rx="4" ry="8" fill="none" stroke="currentColor" stroke-width="1" transform="rotate(180 20 20)"/>
+                                <ellipse cx="20" cy="12" rx="4" ry="8" fill="none" stroke="currentColor" stroke-width="1" transform="rotate(240 20 20)"/>
+                                <ellipse cx="20" cy="12" rx="4" ry="8" fill="none" stroke="currentColor" stroke-width="1" transform="rotate(300 20 20)"/>
+                            </svg>
+                            <span>Flower</span>
+                        </button>
+                        <button class="style-btn" data-style="spiral" title="Spiral">
+                            <svg viewBox="0 0 40 40">
+                                <path d="M20,20 Q25,15 25,20 T20,25 T15,20 T20,15 T25,20 T20,28 T12,20 T20,12 T28,20" fill="none" stroke="currentColor" stroke-width="1"/>
+                            </svg>
+                            <span>Spiral</span>
+                        </button>
+
+                        <div class="style-category-label">Technical</div>
+                        <button class="style-btn" data-style="circuit" title="Circuit">
+                            <svg viewBox="0 0 40 40">
+                                <polygon points="20,5 32,12.5 32,27.5 20,35 8,27.5 8,12.5" fill="none" stroke="currentColor" stroke-width="1"/>
+                                <line x1="20" y1="5" x2="20" y2="20" stroke="currentColor" stroke-width="0.75"/>
+                                <line x1="32" y1="12.5" x2="20" y2="20" stroke="currentColor" stroke-width="0.75"/>
+                                <line x1="8" y1="12.5" x2="20" y2="20" stroke="currentColor" stroke-width="0.75"/>
+                                <circle cx="20" cy="20" r="2" fill="currentColor"/>
+                            </svg>
+                            <span>Circuit</span>
+                        </button>
+                        <button class="style-btn" data-style="fibonacci" title="Fibonacci">
+                            <svg viewBox="0 0 40 40">
+                                <path d="M20,20 Q20,10 30,10 Q30,20 30,30 Q20,30 10,30 Q10,20 10,10" fill="none" stroke="currentColor" stroke-width="1"/>
+                                <path d="M20,20 Q22,15 27,15 Q27,20 27,25 Q22,25 17,25 Q17,20 17,15" fill="none" stroke="currentColor" stroke-width="0.75"/>
+                                <circle cx="20" cy="20" r="1.5" fill="currentColor"/>
+                            </svg>
+                            <span>Fibonacci</span>
+                        </button>
+                        <button class="style-btn" data-style="fractal" title="Fractal">
+                            <svg viewBox="0 0 40 40">
+                                <circle cx="20" cy="20" r="15" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.4"/>
+                                <circle cx="20" cy="20" r="8" fill="none" stroke="currentColor" stroke-width="0.6" opacity="0.6"/>
+                                <path d="M20,5 Q25,12.5 20,20 Q15,12.5 20,5Z" fill="none" stroke="currentColor" stroke-width="0.8"/>
+                                <path d="M35,20 Q27.5,25 20,20 Q27.5,15 35,20Z" fill="none" stroke="currentColor" stroke-width="0.8"/>
+                                <path d="M20,35 Q15,27.5 20,20 Q25,27.5 20,35Z" fill="none" stroke="currentColor" stroke-width="0.8"/>
+                                <path d="M5,20 Q12.5,15 20,20 Q12.5,25 5,20Z" fill="none" stroke="currentColor" stroke-width="0.8"/>
+                                <circle cx="20" cy="20" r="1.5" fill="currentColor" opacity="0.9"/>
+                            </svg>
+                            <span>Fractal</span>
+                        </button>
+
+                        <div class="style-category-label">Organic</div>
+                        <button class="style-btn" data-style="mycelial" title="Mycelial">
+                            <svg viewBox="0 0 40 40">
+                                <path d="M20,35 Q20,25 15,18 Q12,14 8,10" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+                                <path d="M20,35 Q22,26 25,20 Q28,16 33,12" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+                                <path d="M15,18 Q10,20 6,22" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/>
+                                <path d="M25,20 Q30,22 34,25" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/>
+                                <circle cx="8" cy="10" r="2" fill="currentColor" opacity="0.7"/>
+                                <circle cx="33" cy="12" r="2" fill="currentColor" opacity="0.7"/>
+                                <circle cx="6" cy="22" r="1.5" fill="currentColor" opacity="0.5"/>
+                                <circle cx="34" cy="25" r="1.5" fill="currentColor" opacity="0.5"/>
+                            </svg>
+                            <span>Mycelial</span>
+                        </button>
+                        <button class="style-btn" data-style="fluid" title="Fluid">
+                            <svg viewBox="0 0 40 40">
+                                <circle cx="15" cy="18" r="7" fill="none" stroke="currentColor" stroke-width="1" opacity="0.8"/>
+                                <circle cx="25" cy="18" r="7" fill="none" stroke="currentColor" stroke-width="1" opacity="0.8"/>
+                                <circle cx="20" cy="26" r="6" fill="none" stroke="currentColor" stroke-width="1" opacity="0.6"/>
+                                <circle cx="20" cy="20" r="2.5" fill="currentColor" opacity="0.5"/>
+                            </svg>
+                            <span>Fluid</span>
+                        </button>
+
+                        <div class="style-category-label">Cosmic</div>
+                        <button class="style-btn" data-style="sacred" title="Sacred">
+                            <svg viewBox="0 0 40 40">
+                                <circle cx="20" cy="20" r="15" fill="none" stroke="currentColor" stroke-width="0.75" opacity="0.5"/>
+                                <polygon points="20,5 24,14 34,14 26,20 29,30 20,24 11,30 14,20 6,14 16,14" fill="none" stroke="currentColor" stroke-width="0.75"/>
+                                <circle cx="20" cy="20" r="3" fill="currentColor" opacity="0.7"/>
+                                <circle cx="20" cy="20" r="7" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.4"/>
+                            </svg>
+                            <span>Sacred</span>
+                        </button>
+                        <button class="style-btn" data-style="dmt" title="DMT">
+                            <svg viewBox="0 0 40 40">
+                                <circle cx="20" cy="20" r="14" fill="none" stroke="currentColor" stroke-width="0.75"/>
+                                <circle cx="20" cy="20" r="8" fill="none" stroke="currentColor" stroke-width="0.75"/>
+                                <path d="M20,6 L20,34 M6,20 L34,20 M10,10 L30,30 M30,10 L10,30" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.6"/>
+                                <circle cx="20" cy="20" r="3" fill="currentColor" opacity="0.7"/>
+                            </svg>
+                            <span>DMT</span>
+                        </button>
+                        <button class="style-btn" data-style="orrery" title="Orrery">
+                            <svg viewBox="0 0 40 40">
+                                <circle cx="20" cy="20" r="14" fill="none" stroke="currentColor" stroke-width="0.75" opacity="0.5"/>
+                                <circle cx="20" cy="20" r="9" fill="none" stroke="currentColor" stroke-width="0.75" opacity="0.5"/>
+                                <circle cx="20" cy="20" r="3" fill="currentColor" opacity="0.7"/>
+                                <circle cx="20" cy="6" r="2" fill="currentColor" opacity="0.6"/>
+                                <circle cx="29" cy="20" r="1.5" fill="currentColor" opacity="0.5"/>
+                                <line x1="20" y1="20" x2="34" y2="12" stroke="currentColor" stroke-width="0.75" opacity="0.4"/>
+                            </svg>
+                            <span>Orrery</span>
+                        </button>
+                        <button class="style-btn" data-style="quark" title="Quark">
+                            <svg viewBox="0 0 40 40">
+                                <circle cx="17" cy="17" r="3" fill="none" stroke="currentColor" stroke-width="1" opacity="0.7"/>
+                                <circle cx="23" cy="17" r="3" fill="none" stroke="currentColor" stroke-width="1" opacity="0.7"/>
+                                <circle cx="20" cy="23" r="3" fill="none" stroke="currentColor" stroke-width="1" opacity="0.7"/>
+                                <line x1="17" y1="17" x2="23" y2="17" stroke="currentColor" stroke-width="0.75" opacity="0.5"/>
+                                <line x1="23" y1="17" x2="20" y2="23" stroke="currentColor" stroke-width="0.75" opacity="0.5"/>
+                                <line x1="20" y1="23" x2="17" y2="17" stroke="currentColor" stroke-width="0.75" opacity="0.5"/>
+                                <circle cx="20" cy="20" r="12" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.3" stroke-dasharray="2 3"/>
+                            </svg>
+                            <span>Quark</span>
+                        </button>
+                    </div>
+                    <button class="randomize-btn" id="randomizeBtn" title="Randomize pattern">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                            <line x1="12" y1="22.08" x2="12" y2="12"/>
+                        </svg>
+                        <span>Randomize</span>
+                    </button>
+                    <!-- Glass Slices Control -->
+                    <div class="slider-control glass-only" id="glassSlicesControl">
+                        <label class="slider-label">
+                            <span>Glass Slices</span>
+                            <span class="slider-value" id="glassSlicesValue">30</span>
+                        </label>
+                        <input type="range" id="glassSlicesSlider" min="10" max="60" value="30" class="styled-slider">
+                    </div>
+                </div>
+
+                <!-- Geometry Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+                        </svg>
+                        Geometry
+                    </h3>
+                    <div class="knob-row">
+                        <div class="knob-control">
+                            <div class="knob" data-param="mirrors" data-min="3" data-max="16" data-value="8">
+                                <div class="knob-track"></div>
+                                <div class="knob-indicator"></div>
+                                <div class="knob-glow"></div>
+                            </div>
+                            <span class="knob-label">Mirrors</span>
+                            <span class="knob-value" id="mirrorsValue">8</span>
+                        </div>
+                        <div class="knob-control">
+                            <div class="knob" data-param="baseRadius" data-min="50" data-max="300" data-value="150">
+                                <div class="knob-track"></div>
+                                <div class="knob-indicator"></div>
+                                <div class="knob-glow"></div>
+                            </div>
+                            <span class="knob-label">Size</span>
+                            <span class="knob-value" id="baseRadiusValue">150</span>
+                        </div>
+                    </div>
+                    <div class="knob-row">
+                        <div class="knob-control">
+                            <div class="knob" data-param="orbitRadius" data-min="50" data-max="400" data-value="200">
+                                <div class="knob-track"></div>
+                                <div class="knob-indicator"></div>
+                                <div class="knob-glow"></div>
+                            </div>
+                            <span class="knob-label">Orbit</span>
+                            <span class="knob-value" id="orbitRadiusValue">200</span>
+                        </div>
+                        <div class="knob-control">
+                            <div class="knob" data-param="rotationSpeed" data-min="0.5" data-max="5" data-value="2" data-step="0.1">
+                                <div class="knob-track"></div>
+                                <div class="knob-indicator"></div>
+                                <div class="knob-glow"></div>
+                            </div>
+                            <span class="knob-label">Spin</span>
+                            <span class="knob-value" id="rotationSpeedValue">2.0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dynamics Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                        </svg>
+                        Dynamics
+                    </h3>
+                    <div class="knob-row">
+                        <div class="knob-control">
+                            <div class="knob" data-param="maxScale" data-min="1.0" data-max="3.0" data-value="1.8" data-step="0.1">
+                                <div class="knob-track"></div>
+                                <div class="knob-indicator"></div>
+                                <div class="knob-glow"></div>
+                            </div>
+                            <span class="knob-label">Punch</span>
+                            <span class="knob-value" id="maxScaleValue">1.8</span>
+                        </div>
+                        <div class="knob-control">
+                            <div class="knob" data-param="trailAlpha" data-min="0" data-max="100" data-value="40">
+                                <div class="knob-track"></div>
+                                <div class="knob-indicator"></div>
+                                <div class="knob-glow"></div>
+                            </div>
+                            <span class="knob-label">Trail</span>
+                            <span class="knob-value" id="trailAlphaValue">40</span>
+                        </div>
+                    </div>
+                    <div class="slider-control">
+                        <label class="slider-label">
+                            <span>Attack</span>
+                            <span class="slider-value" id="attackValue">0 ms</span>
+                        </label>
+                        <input type="range" class="slider" id="attackSlider" min="0" max="200" value="0">
+                    </div>
+                    <div class="slider-control">
+                        <label class="slider-label">
+                            <span>Release</span>
+                            <span class="slider-value" id="releaseValue">200 ms</span>
+                        </label>
+                        <input type="range" class="slider" id="releaseSlider" min="50" max="1000" value="200">
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center - Preview -->
+            <section class="preview-section">
+                <div class="canvas-container">
+                    <canvas id="visualizerCanvas" width="1920" height="1080"></canvas>
+                    <div class="canvas-overlay" id="canvasOverlay">
+                        <div class="overlay-content">
+                            <svg class="overlay-icon" viewBox="0 0 64 64" fill="none">
+                                <circle cx="32" cy="32" r="28" stroke="currentColor" stroke-width="2"/>
+                                <polygon points="26,20 26,44 46,32" fill="currentColor"/>
+                            </svg>
+                            <p>Load an audio file to begin</p>
+                        </div>
+                    </div>
+                    <div class="canvas-badge">
+                        <span id="resolutionBadge">1920 × 1080</span>
+                        <span class="separator">•</span>
+                        <span id="fpsBadge">60 FPS</span>
+                    </div>
+                    <button class="fullscreen-btn" id="fullscreenBtn" title="Toggle Fullscreen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Timeline -->
+                <div class="timeline">
+                    <div class="waveform-container" id="waveformContainer">
+                        <canvas id="waveformCanvas" height="60"></canvas>
+                        <div class="playhead" id="playhead"></div>
+                    </div>
+                    <div class="time-display">
+                        <span id="currentTime">0:00</span>
+                        <span class="time-separator">/</span>
+                        <span id="totalTime">0:00</span>
+                    </div>
+                </div>
+
+                <!-- Transport -->
+                <div class="transport">
+                    <button class="transport-btn" id="skipBackBtn" title="Skip back 10s">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+                        </svg>
+                    </button>
+                    <button class="transport-btn play-btn" id="playBtn" title="Play/Pause">
+                        <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="5,3 19,12 5,21"/>
+                        </svg>
+                        <svg class="pause-icon" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                            <rect x="6" y="4" width="4" height="16"/>
+                            <rect x="14" y="4" width="4" height="16"/>
+                        </svg>
+                    </button>
+                    <button class="transport-btn" id="skipForwardBtn" title="Skip forward 10s">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+                        </svg>
+                    </button>
+                    <div class="volume-control">
+                        <svg viewBox="0 0 24 24" fill="currentColor" class="volume-icon">
+                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                        </svg>
+                        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="80">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel -->
+            <aside class="panel panel-right">
+                <!-- Shape Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                        </svg>
+                        Shape
+                    </h3>
+                    <div class="knob-row">
+                        <div class="knob-control">
+                            <div class="knob" data-param="minSides" data-min="3" data-max="8" data-value="3">
+                                <div class="knob-track"></div>
+                                <div class="knob-indicator"></div>
+                                <div class="knob-glow"></div>
+                            </div>
+                            <span class="knob-label">Min Sides</span>
+                            <span class="knob-value" id="minSidesValue">3</span>
+                        </div>
+                        <div class="knob-control">
+                            <div class="knob" data-param="maxSides" data-min="6" data-max="24" data-value="12">
+                                <div class="knob-track"></div>
+                                <div class="knob-indicator"></div>
+                                <div class="knob-glow"></div>
+                            </div>
+                            <span class="knob-label">Max Sides</span>
+                            <span class="knob-value" id="maxSidesValue">12</span>
+                        </div>
+                    </div>
+                    <div class="knob-row">
+                        <div class="knob-control">
+                            <div class="knob" data-param="baseThickness" data-min="1" data-max="8" data-value="3">
+                                <div class="knob-track"></div>
+                                <div class="knob-indicator"></div>
+                                <div class="knob-glow"></div>
+                            </div>
+                            <span class="knob-label">Stroke</span>
+                            <span class="knob-value" id="baseThicknessValue">3</span>
+                        </div>
+                        <div class="knob-control">
+                            <div class="knob" data-param="maxThickness" data-min="4" data-max="20" data-value="12">
+                                <div class="knob-track"></div>
+                                <div class="knob-indicator"></div>
+                                <div class="knob-glow"></div>
+                            </div>
+                            <span class="knob-label">Max Stroke</span>
+                            <span class="knob-value" id="maxThicknessValue">12</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Colors Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 2a10 10 0 0 1 0 20"/>
+                        </svg>
+                        Colors
+                    </h3>
+                    <div class="color-row">
+                        <label class="color-control">
+                            <span>Accent</span>
+                            <input type="color" id="accentColor" value="#f59e0b">
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-control">
+                            <span>Chroma Colors</span>
+                            <input type="checkbox" id="chromaColors" checked>
+                            <span class="toggle-switch"></span>
+                        </label>
+                    </div>
+                    <div class="slider-control">
+                        <label class="slider-label">
+                            <span>Saturation</span>
+                            <span class="slider-value" id="saturationValue">85%</span>
+                        </label>
+                        <input type="range" class="slider" id="saturationSlider" min="0" max="100" value="85">
+                    </div>
+                </div>
+
+                <!-- Background Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <path d="M21 15l-5-5L5 21"/>
+                        </svg>
+                        Background
+                    </h3>
+                    <div class="color-row">
+                        <label class="color-control">
+                            <span>Color 1</span>
+                            <input type="color" id="bgColor" value="#05050f">
+                        </label>
+                        <label class="color-control">
+                            <span>Color 2</span>
+                            <input type="color" id="bgColor2" value="#1a0a2e">
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-control">
+                            <span>Dynamic Background</span>
+                            <input type="checkbox" id="dynamicBg" checked>
+                            <span class="toggle-switch"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-control">
+                            <span>Particles</span>
+                            <input type="checkbox" id="bgParticles" checked>
+                            <span class="toggle-switch"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle-control">
+                            <span>Beat Pulse</span>
+                            <input type="checkbox" id="bgPulse" checked>
+                            <span class="toggle-switch"></span>
+                        </label>
+                    </div>
+                    <div class="slider-control">
+                        <label class="slider-label">
+                            <span>Reactivity</span>
+                            <span class="slider-value" id="bgReactivityValue">70%</span>
+                        </label>
+                        <input type="range" class="slider" id="bgReactivitySlider" min="0" max="100" value="70">
+                    </div>
+                </div>
+
+                <!-- Export Section -->
+                <div class="panel-section">
+                    <h3 class="section-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export
+                    </h3>
+                    <div class="export-options">
+                        <div class="option-group">
+                            <label class="option-label">Resolution</label>
+                            <div class="button-group">
+                                <button class="option-btn" data-resolution="1280x720">720p</button>
+                                <button class="option-btn active" data-resolution="1920x1080">1080p</button>
+                                <button class="option-btn" data-resolution="3840x2160">4K</button>
+                                <button class="option-btn" data-resolution="custom" id="customResBtn">Custom</button>
+                            </div>
+                            <div class="custom-resolution" id="customResolution" style="display: none;">
+                                <input type="number" id="customWidth" min="320" max="7680" step="2" value="1280" placeholder="Width" class="res-input">
+                                <span class="res-separator">&times;</span>
+                                <input type="number" id="customHeight" min="240" max="4320" step="2" value="720" placeholder="Height" class="res-input">
+                            </div>
+                        </div>
+                        <div class="option-group">
+                            <label class="option-label">Frame Rate</label>
+                            <div class="button-group">
+                                <button class="option-btn" data-fps="30">30</button>
+                                <button class="option-btn active" data-fps="60">60</button>
+                            </div>
+                        </div>
+                        <div class="option-group">
+                            <label class="option-label">Quality</label>
+                            <div class="button-group">
+                                <button class="option-btn" data-quality="fast">Fast</button>
+                                <button class="option-btn" data-quality="medium">Medium</button>
+                                <button class="option-btn active" data-quality="high">High</button>
+                            </div>
+                        </div>
+                        <div class="option-group cli-path-group">
+                            <label class="option-label" for="cliInputSong">Input Song (CLI Path)</label>
+                            <input
+                                type="text"
+                                id="cliInputSong"
+                                class="cli-path-input"
+                                placeholder="/path/to/your song.mp3"
+                                spellcheck="false"
+                                autocomplete="off"
+                            >
+                        </div>
+                        <div class="option-group cli-path-group">
+                            <label class="option-label" for="cliOutputFolder">Output Folder</label>
+                            <input
+                                type="text"
+                                id="cliOutputFolder"
+                                class="cli-path-input"
+                                placeholder="./renders"
+                                value="./renders"
+                                spellcheck="false"
+                                autocomplete="off"
+                            >
+                        </div>
+                    </div>
+                    <button class="export-btn" id="exportBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export Video
+                    </button>
+                    <div class="export-progress" id="exportProgress" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <span class="progress-text" id="progressText">Rendering... 0%</span>
+                    </div>
+                    <div class="cli-export-section">
+                        <button class="cli-export-btn" id="copyCliBtn" title="Generate a CLI command with your current settings">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="4 17 10 11 4 5"/>
+                                <line x1="12" y1="19" x2="20" y2="19"/>
+                            </svg>
+                            Copy CLI Command
+                        </button>
+                        <div class="cli-command-output" id="cliCommandOutput" style="display: none;">
+                            <div class="cli-command-header">
+                                <span class="cli-command-label">Command</span>
+                                <button class="cli-copy-icon" id="cliCopyIcon" title="Copy to clipboard">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="9" y="9" width="13" height="13" rx="2"/>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <pre class="cli-command-text" id="cliCommandText"></pre>
+                            <div class="cli-command-hint" id="cliCommandHint">Paste into your terminal to render offline</div>
+                        </div>
+                        <button class="cli-export-btn cli-config-btn" id="exportConfigBtn" title="Download current settings as a JSON config file">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="12" y1="18" x2="12" y2="12"/>
+                                <polyline points="9 15 12 18 15 15"/>
+                            </svg>
+                            Export Config JSON
+                        </button>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <audio id="audioElement" crossorigin="anonymous"></audio>
+    <script src="render-engine.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

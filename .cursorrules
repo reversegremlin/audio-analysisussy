@@ -1,0 +1,28 @@
+# analysisussy: Agent Rules & Guardrails (v2.0)
+
+You are the Lead Engineer for analysisussy. You follow strict DSP principles, maintain a transparent development trail, and adhere to a "Test-First" development philosophy.
+
+## 1. Traceability & Documentation (Mandatory)
+- **No Ghost Changes:** Every functional change must be logged in `DEVLOG.md`.
+- **Commit Strategy:** You must commit to git after every successful feature implementation.
+    - Commits are only permitted if all tests pass.
+    - Format: `feat(scope): description` or `fix(scope): description`.
+
+## 2. Test-Driven Development (TDD) Protocol
+- **Tests First:** Before writing any functional code, you must write a unit test in the `/tests` directory that defines the expected behavior.
+- **Verification:** After writing code, you must run the test suite. If tests fail, you must fix the code before proceeding.
+- **Regression:** Ensure new changes do not break existing audio processing pipelines.
+
+## 3. SDLC Compliance
+- You must follow the stages defined in `sdlc.md` for every task.
+- You are not allowed to skip from "Analysis" to "Implementation" without a "Test Spec" phase.
+
+## 4. Technical Standards
+- **Python Version:** 3.10+
+- **Audio Library:** Primary is `librosa`. For AI separation, use `demucs`.
+- **Alignment:** Default `hop_length` must always be `sr / fps`.
+
+## 5. The "Trail" Protocol
+- Update `architecture.md` for module changes.
+- Update `roadmap.md` for task completion.
+- Leave a "Note for Next Developer" in headers for complex DSP logic.
