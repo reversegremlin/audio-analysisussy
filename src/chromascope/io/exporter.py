@@ -8,7 +8,7 @@ for use in rendering engines and visualization systems.
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 import numpy as np
 
@@ -25,9 +25,9 @@ class ManifestMetadata:
     fps: int
     n_frames: int
     # Engine or exporter version (kept for backward compatibility)
-    version: str = "1.1"
+    version: str = "2.0"
     # Explicit schema version for the manifest payload
-    schema_version: str = "1.1"
+    schema_version: str = "2.0"
 
 
 class ManifestExporter:
@@ -36,6 +36,7 @@ class ManifestExporter:
 
     The manifest follows the schema defined in the architecture doc,
     with each frame containing all visual driver values.
+    Schema version 2.0 adds Phase-1 audio intelligence fields.
     """
 
     def __init__(self, precision: int = 4):
@@ -50,6 +51,24 @@ class ManifestExporter:
     def _round(self, value: float) -> float:
         """Round to configured precision."""
         return round(float(value), self.precision)
+
+    def _safe_float(self, polished: PolishedFeatures, field: str, index: int) -> Optional[float]:
+        """Safely get a per-frame float from a polished field, returning None if absent."""
+        arr = getattr(polished, field, None)
+        if arr is None:
+            return None
+        if index >= len(arr):
+            return None
+        val = arr[index]
+        if val is None:
+            return None
+        try:
+            f = float(val)
+            if np.isnan(f) or np.isinf(f):
+                return None
+            return self._round(f)
+        except (TypeError, ValueError):
+            return None
 
     def _build_frame(
         self,
@@ -79,7 +98,7 @@ class ManifestExporter:
             "harmonic_energy": self._round(polished.harmonic_energy[index]),
             "global_energy": self._round(polished.global_energy[index]),
             "spectral_flux": self._round(polished.spectral_flux[index]),
-            
+
             # 7-band frequency energy
             "sub_bass": self._round(polished.sub_bass[index]),
             "bass": self._round(polished.bass[index]),
@@ -88,18 +107,18 @@ class ManifestExporter:
             "high_mid": self._round(polished.high_mid[index]),
             "presence": self._round(polished.presence[index]),
             "brilliance": self._round(polished.brilliance[index]),
-            
+
             # Legacy bands (kept for backward compatibility)
             "low_energy": self._round(polished.low_energy[index]),
             "mid_energy": self._round(polished.mid_energy[index]),
             "high_energy": self._round(polished.high_energy[index]),
-            
+
             # Tonality/Texture
             "spectral_brightness": self._round(polished.spectral_brightness[index]),
             "spectral_flatness": self._round(polished.spectral_flatness[index]),
             "spectral_rolloff": self._round(polished.spectral_rolloff[index]),
             "zero_crossing_rate": self._round(polished.zero_crossing_rate[index]),
-            
+
             "dominant_chroma": dominant_chroma,
             "chroma_values": {
                 FeatureAnalyzer.CHROMA_NAMES[i]: self._round(polished.chroma[i, index])
@@ -107,13 +126,76 @@ class ManifestExporter:
             },
         }
 
-        # Derived visual primitives that provide a stable, renderer-agnostic contract.
-        primitives = self._compute_primitives(frame)
+        # ------------------------------------------------------------------
+        # C1 — Timbre
+        # ------------------------------------------------------------------
+        frame["timbre_velocity"] = self._safe_float(polished, "timbre_velocity", index)
+
+        # ------------------------------------------------------------------
+        # C2 — Structure
+        # ------------------------------------------------------------------
+        si = getattr(polished, "section_index", None)
+        frame["section_index"] = int(si[index]) if si is not None else None
+        frame["section_novelty"] = self._safe_float(polished, "section_novelty", index)
+        frame["section_progress"] = self._safe_float(polished, "section_progress", index)
+        sc = getattr(polished, "section_change", None)
+        frame["section_change"] = bool(sc[index]) if sc is not None else None
+
+        # ------------------------------------------------------------------
+        # C3 — Pitch / F0
+        # ------------------------------------------------------------------
+        frame["f0_hz"] = self._safe_float(polished, "f0_hz", index)
+        frame["f0_confidence"] = self._safe_float(polished, "f0_confidence", index)
+        fv = getattr(polished, "f0_voiced", None)
+        frame["f0_voiced"] = bool(fv[index]) if fv is not None else None
+        frame["pitch_velocity"] = self._safe_float(polished, "pitch_velocity", index)
+        frame["pitch_register"] = self._safe_float(polished, "pitch_register", index)
+
+        # ------------------------------------------------------------------
+        # C4 — Key stability (per-frame)
+        # ------------------------------------------------------------------
+        frame["key_stability"] = self._safe_float(polished, "key_stability", index)
+
+        # ------------------------------------------------------------------
+        # C5 — Downbeats / rhythm grid
+        # ------------------------------------------------------------------
+        idb = getattr(polished, "is_downbeat", None)
+        frame["is_downbeat"] = bool(idb[index]) if idb is not None else None
+        frame["beat_position"] = self._safe_float(polished, "beat_position", index)
+        bi = getattr(polished, "bar_index", None)
+        frame["bar_index"] = int(bi[index]) if bi is not None else None
+        frame["bar_progress"] = self._safe_float(polished, "bar_progress", index)
+
+        # ------------------------------------------------------------------
+        # C6 — CQT bands (None when use_cqt=False)
+        # ------------------------------------------------------------------
+        frame["sub_bass_cqt"] = self._safe_float(polished, "sub_bass_cqt", index)
+        frame["bass_cqt"] = self._safe_float(polished, "bass_cqt", index)
+
+        # ------------------------------------------------------------------
+        # C7 — Extended spectral
+        # ------------------------------------------------------------------
+        frame["spectral_bandwidth"] = self._safe_float(polished, "spectral_bandwidth", index)
+
+        # ------------------------------------------------------------------
+        # W4 — Onset shape
+        # ------------------------------------------------------------------
+        ot = getattr(polished, "onset_type", None)
+        frame["onset_type"] = str(ot[index]) if (ot is not None and ot[index] is not None) else None
+        frame["onset_sharpness"] = self._safe_float(polished, "onset_sharpness", index)
+
+        # Derived visual primitives
+        primitives = self._compute_primitives(frame, polished, index)
         frame.update(primitives)
 
         return frame
 
-    def _compute_primitives(self, frame: dict[str, Any]) -> dict[str, float]:
+    def _compute_primitives(
+        self,
+        frame: dict[str, Any],
+        polished: PolishedFeatures,
+        index: int,
+    ) -> dict[str, float]:
         """
         Compute high-level visual primitives from a frame's raw fields.
 
@@ -146,6 +228,13 @@ class ManifestExporter:
         rolloff = frame["spectral_rolloff"]
         sharpness = max(0.0, min(1.0, (flux + rolloff) / 2.0))
 
+        # Phase-1 primitives
+        tv = self._safe_float(polished, "timbre_velocity", index)
+        timbre_velocity = float(tv) if tv is not None else 0.0
+
+        bw = self._safe_float(polished, "spectral_bandwidth", index)
+        bandwidth_norm = float(bw) if bw is not None else 0.0
+
         return {
             "impact": impact,
             "fluidity": fluidity,
@@ -153,6 +242,8 @@ class ManifestExporter:
             "pitch_hue": pitch_hue,
             "texture": texture,
             "sharpness": sharpness,
+            "timbre_velocity": timbre_velocity,
+            "bandwidth_norm": bandwidth_norm,
         }
 
     def build_manifest(
@@ -184,7 +275,7 @@ class ManifestExporter:
             for i in range(polished.n_frames)
         ]
 
-        return {
+        manifest: dict[str, Any] = {
             "metadata": {
                 "bpm": metadata.bpm,
                 "duration": metadata.duration,
@@ -195,6 +286,56 @@ class ManifestExporter:
             },
             "frames": frames,
         }
+
+        # ------------------------------------------------------------------
+        # C2 — Structure block
+        # ------------------------------------------------------------------
+        n_sec = getattr(polished, "n_sections", None)
+        sec_boundaries = getattr(polished, "section_boundary_times", None)
+        if n_sec is not None and sec_boundaries is not None:
+            boundaries_list = [self._round(float(t)) for t in sec_boundaries]
+            # Compute per-section durations from boundary times + total duration
+            if len(boundaries_list) >= 2:
+                sec_durations = [
+                    self._round(b2 - b1)
+                    for b1, b2 in zip(boundaries_list[:-1], boundaries_list[1:])
+                ]
+                # Last section runs to end
+                sec_durations.append(self._round(duration - boundaries_list[-1]))
+            elif len(boundaries_list) == 1:
+                sec_durations = [self._round(duration)]
+            else:
+                sec_durations = []
+
+            manifest["structure"] = {
+                "n_sections": n_sec,
+                "section_boundaries": boundaries_list,
+                "section_durations": sec_durations,
+            }
+
+        # ------------------------------------------------------------------
+        # C4 — Key block
+        # ------------------------------------------------------------------
+        kr = getattr(polished, "key_root_index", None)
+        km = getattr(polished, "key_mode", None)
+        kc = getattr(polished, "key_confidence", None)
+        if kr is not None and km is not None:
+            CHROMA_NAMES = FeatureAnalyzer.CHROMA_NAMES
+            root_name = CHROMA_NAMES[kr % 12]
+            # Relative major: for major key it's the same root; for minor +3
+            if km == "minor":
+                rel_major_idx = (kr + 3) % 12
+            else:
+                rel_major_idx = kr
+            manifest["key"] = {
+                "root": root_name,
+                "root_index": int(kr),
+                "mode": km,
+                "confidence": self._round(float(kc)) if kc is not None else None,
+                "relative_major": CHROMA_NAMES[rel_major_idx],
+            }
+
+        return manifest
 
     def export_json(
         self,
@@ -242,8 +383,7 @@ class ManifestExporter:
         """
         output_path = Path(output_path)
 
-        np.savez_compressed(
-            output_path,
+        arrays: dict[str, Any] = dict(
             is_beat=polished.is_beat,
             is_onset=polished.is_onset,
             percussive_impact=polished.percussive_impact,
@@ -267,9 +407,35 @@ class ManifestExporter:
             chroma=polished.chroma,
             dominant_chroma_indices=polished.dominant_chroma_indices,
             frame_times=polished.frame_times,
-            fps=polished.fps,
-            n_frames=polished.n_frames,
+            fps=np.array([polished.fps]),
+            n_frames=np.array([polished.n_frames]),
         )
+
+        # Phase-1 arrays (include when available)
+        for field in (
+            # C1
+            "mfcc", "mfcc_delta", "mfcc_delta2", "timbre_velocity",
+            # C2
+            "section_index", "section_novelty", "section_progress",
+            "section_boundary_times",
+            # C3
+            "f0_hz", "f0_confidence", "pitch_velocity", "pitch_register",
+            # C4
+            "key_stability",
+            # C5
+            "beat_position", "bar_index", "bar_progress",
+            # C6
+            "sub_bass_cqt", "bass_cqt",
+            # C7
+            "spectral_bandwidth", "spectral_contrast",
+            # W4
+            "onset_sharpness",
+        ):
+            val = getattr(polished, field, None)
+            if val is not None:
+                arrays[field] = val
+
+        np.savez_compressed(output_path, **arrays)
 
         return output_path
 

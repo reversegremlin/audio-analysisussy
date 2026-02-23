@@ -3,11 +3,15 @@ Harmonic-Percussive Source Separation (HPSS) module.
 
 Separates audio signals into harmonic (melodic/chordal) and
 percussive (transient/drum) components for independent visual mapping.
+
+Phase 2 W1 stubs: SeparatedAudio dataclass and SourceSeparator class are
+included here.  SourceSeparator requires the optional ``demucs`` package;
+a clear ImportError is raised if it is absent.
 """
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 
 import librosa
 import numpy as np
@@ -111,3 +115,74 @@ class AudioDecomposer:
         """
         y, sr_out = self.load_audio(audio_path, sr=sr)
         return self.separate(y, sr_out)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 W1 — Demucs source separation (stub)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SeparatedAudio:
+    """
+    Four-stem source separation result (Phase 2 W1).
+
+    Populated by :class:`SourceSeparator` when the optional ``demucs``
+    package is installed.
+    """
+
+    drums: np.ndarray
+    bass: np.ndarray
+    vocals: np.ndarray
+    other: np.ndarray
+    sample_rate: int
+
+
+class SourceSeparator:
+    """
+    Phase 2 W1 stub — four-stem source separation using Demucs.
+
+    Install the optional extra to use this class::
+
+        pip install "chromascope[separation]"
+
+    Raises:
+        ImportError: At construction time if ``demucs`` is not installed.
+    """
+
+    def __init__(self, model_name: str = "htdemucs"):
+        """
+        Initialize the separator and load the Demucs model.
+
+        Args:
+            model_name: Demucs model identifier.
+
+        Raises:
+            ImportError: If demucs is not installed.
+        """
+        try:
+            from demucs.pretrained import get_model  # type: ignore[import]
+            self._model = get_model(model_name)
+        except ModuleNotFoundError as exc:
+            raise ImportError(
+                "The 'demucs' package is required for source separation.\n"
+                "Install it with:  pip install 'chromascope[separation]'"
+            ) from exc
+
+    def separate(
+        self,
+        y: np.ndarray,
+        sr: int,
+    ) -> SeparatedAudio:
+        """
+        Separate an audio signal into four stems.
+
+        Args:
+            y: Mono audio signal.
+            sr: Sample rate.
+
+        Returns:
+            SeparatedAudio with drums, bass, vocals, and other stems.
+        """
+        raise NotImplementedError(
+            "SourceSeparator.separate() is a Phase 2 W1 stub and is not yet implemented."
+        )

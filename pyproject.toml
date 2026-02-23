@@ -40,6 +40,20 @@ experiment = [
     "numba>=0.57.0",
     "pygame>=2.1.0",
 ]
+separation = [
+    "demucs>=4.0.0",
+]
+neural-beats = [
+    "madmom>=0.16.1",
+]
+harmony = [
+    "autochord>=0.1.4",
+]
+analysis-full = [
+    "demucs>=4.0.0",
+    "madmom>=0.16.1",
+    "autochord>=0.1.4",
+]
 
 [project.scripts]
 chromascope = "chromascope.cli:main"

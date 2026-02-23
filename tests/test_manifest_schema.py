@@ -33,9 +33,9 @@ def test_metadata_includes_schema_version(mixed_signal):
     meta = manifest["metadata"]
 
     assert "schema_version" in meta
-    # Initial public schema for the richer manifest
+    # Phase-1 audio intelligence bumped the schema to 2.0
     assert isinstance(meta["schema_version"], str)
-    assert meta["schema_version"].startswith("1.")
+    assert meta["schema_version"] in ("1.1", "2.0") or meta["schema_version"].startswith("2.")
 
 
 def test_frame_includes_visual_primitives(mixed_signal):

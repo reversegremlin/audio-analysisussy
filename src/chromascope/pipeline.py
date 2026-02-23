@@ -32,7 +32,7 @@ class AudioPipeline:
     # Version of the analysis logic/schema.
     # Increment this whenever the feature extraction or polishing logic changes
     # to ensure that cached manifests are invalidated and re-generated.
-    ANALYSIS_VERSION = "1.1"
+    ANALYSIS_VERSION = "2.0"
 
     def __init__(
         self,
@@ -41,6 +41,9 @@ class AudioPipeline:
         hpss_margin: tuple[float, float] = (1.0, 1.0),
         impact_envelope: EnvelopeParams | None = None,
         energy_envelope: EnvelopeParams | None = None,
+        use_cqt: bool = False,
+        use_neural_beats: bool = False,
+        use_demucs: bool = False,
     ):
         """
         Initialize the pipeline.
@@ -51,12 +54,20 @@ class AudioPipeline:
             hpss_margin: Harmonic-Percussive separation aggressiveness.
             impact_envelope: Envelope for percussive signals.
             energy_envelope: Envelope for continuous energy signals.
+            use_cqt: Enable CQT-derived sub-bass/bass bands (C6).
+            use_neural_beats: Reserved — Phase 2 W2 madmom beat tracker.
+            use_demucs: Reserved — Phase 2 W1 Demucs source separation.
         """
         self.target_fps = target_fps or 60
         self.sample_rate = sample_rate
+        self.use_demucs = use_demucs
 
         self.decomposer = AudioDecomposer(margin=hpss_margin)
-        self.analyzer = FeatureAnalyzer(target_fps=target_fps)
+        self.analyzer = FeatureAnalyzer(
+            target_fps=target_fps,
+            use_cqt=use_cqt,
+            use_neural_beats=use_neural_beats,
+        )
         self.polisher = SignalPolisher(
             fps=target_fps,
             impact_envelope=impact_envelope,
