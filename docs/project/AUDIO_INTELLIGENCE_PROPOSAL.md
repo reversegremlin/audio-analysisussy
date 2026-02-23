@@ -1,8 +1,8 @@
 # Audio Intelligence Proposal
 ## From Signal Statistics to Musical Understanding
 
-**Status:** Proposal
-**Date:** 2026-02-22
+**Status:** Phase 1 Complete · Phase 2 Partial (W4 only) · Attractor Retrofitted
+**Date:** 2026-02-22 · **Updated:** 2026-02-23
 **Scope:** `src/chromascope/core/` pipeline + manifest schema + Ableton integration path
 
 ---
@@ -25,14 +25,28 @@ This proposal defines three phases — **Crawl, Walk, Run** — to close that ga
 | Polish | `core/polisher.py` | Normalizes → attack/release envelopes → 0–1 scalars |
 | Export | `io/exporter.py` | Writes per-frame JSON; computes 6 derived "primitives" |
 
-### What the Manifest Currently Carries (per frame)
+### What the Manifest Currently Carries (per frame) — Schema 2.0
+
 ```
 Energy:    percussive_impact, harmonic_energy, global_energy, spectral_flux
 Frequency: sub_bass, bass, low_mid, mid, high_mid, presence, brilliance
+           sub_bass_cqt, bass_cqt  [opt-in: use_cqt=True]
 Texture:   spectral_brightness, spectral_flatness, spectral_rolloff, zero_crossing_rate
+           spectral_bandwidth, spectral_contrast (7 bins)
 Tonality:  chroma_values (12 bins), dominant_chroma
-Triggers:  is_beat, is_onset
+           mfcc (13), mfcc_delta (13), mfcc_delta2 (13), timbre_velocity
+Pitch:     f0_hz, f0_voiced, f0_probs, pitch_register
+Timing:    is_beat, is_onset, is_downbeat, beat_position, bar_index, bar_progress
+           onset_type ("transient"/"percussive"/"harmonic"), onset_sharpness
+Structure: section_index, section_novelty, section_progress, section_change
+Harmony:   key_stability
 Primitives: impact, fluidity, brightness, pitch_hue, texture, sharpness
+```
+
+**Manifest metadata additions (schema 2.0):**
+```json
+"structure": { "n_sections": 8, "section_boundaries": [...], "section_durations": [...] },
+"key":       { "root": "C", "root_index": 0, "mode": "major", "confidence": 0.87 }
 ```
 
 ### Known Gaps in the Current Implementation
@@ -92,11 +106,11 @@ Every phase below moves further along this spectrum. The features don't replace 
 
 ---
 
-## Phase 1 — Crawl
+## Phase 1 — Crawl ✓ COMPLETE
 
 **Theme:** Go deeper with what we already have. All improvements use existing librosa/scipy. No new dependencies. No breaking manifest changes (all additions).
 
-**Estimated effort:** 2–3 weeks
+**Status:** All C1–C7 features implemented. `ANALYSIS_VERSION = "2.0"`, `schema_version = "2.0"`. 87 tests passing. OOM fix applied (pyin runs at 4× coarser hop, output upsampled via nearest-neighbour; `chroma_stft` replaces `chroma_cqt` in structure extraction).
 
 ### C1 — Fix the MFCC Export Gap
 
@@ -112,13 +126,13 @@ MFCCs (13 coefficients) are computed in `analyzer.py:365` and then silently disc
 **Visual mapping:** `mfcc_delta` magnitude → visual morphing speed; sharp MFCC changes = texture transitions.
 
 **TODO:**
-- [ ] Add `mfcc_delta` and `mfcc_delta2` computation to `FeatureAnalyzer.extract_tonality()`
-- [ ] Add `mfcc`, `mfcc_delta`, `mfcc_delta2` to `PolishedFeatures` dataclass
-- [ ] Apply normalization (but not envelope smoothing) in `SignalPolisher.polish()`
-- [ ] Export MFCC arrays to manifest JSON as compact arrays (not per-bin dict)
-- [ ] Add `timbre_velocity` primitive (L2 norm of `mfcc_delta` at each frame)
-- [ ] Update `export_numpy()` to include MFCC arrays
-- [ ] Bump `ANALYSIS_VERSION` to invalidate cache
+- [x] Add `mfcc_delta` and `mfcc_delta2` computation to `FeatureAnalyzer.extract_tonality()`
+- [x] Add `mfcc`, `mfcc_delta`, `mfcc_delta2` to `PolishedFeatures` dataclass
+- [x] Apply normalization (but not envelope smoothing) in `SignalPolisher.polish()`
+- [x] Export MFCC arrays to manifest JSON as compact arrays (not per-bin dict)
+- [x] Add `timbre_velocity` primitive (L2 norm of `mfcc_delta` at each frame)
+- [x] Update `export_numpy()` to include MFCC arrays
+- [x] Bump `ANALYSIS_VERSION` to invalidate cache
 
 ---
 
@@ -175,14 +189,16 @@ def extract_structure(self, decomposed, hop_length):
 - `section_progress` → drives gradual tension builds within a section (intro builds to chorus)
 
 **TODO:**
-- [ ] Add `StructuralFeatures` dataclass to `core/analyzer.py`
-- [ ] Implement `FeatureAnalyzer.extract_structure()` using `librosa.segment`
-- [ ] Add structural features to `ExtractedFeatures` dataclass
-- [ ] Add `section_index`, `section_novelty`, `section_progress` to `PolishedFeatures`
-- [ ] Export structural fields to manifest JSON
-- [ ] Add `structure` block to manifest metadata (boundary timestamps)
-- [ ] Add `section_change` boolean trigger to per-frame data (True on boundaries)
-- [ ] Bump `ANALYSIS_VERSION`
+- [x] Add `StructuralFeatures` dataclass to `core/analyzer.py`
+- [x] Implement `FeatureAnalyzer.extract_structure()` using `librosa.segment`
+- [x] Add structural features to `ExtractedFeatures` dataclass
+- [x] Add `section_index`, `section_novelty`, `section_progress` to `PolishedFeatures`
+- [x] Export structural fields to manifest JSON
+- [x] Add `structure` block to manifest metadata (boundary timestamps)
+- [x] Add `section_change` boolean trigger to per-frame data (True on boundaries)
+- [x] Bump `ANALYSIS_VERSION`
+
+> **Implementation note:** `extract_structure()` uses `chroma_stft` instead of the proposed `chroma_cqt` to avoid the additional memory allocation of a full CQT pass (OOM mitigation).
 
 ---
 
@@ -229,14 +245,15 @@ f0_register = np.clip((np.nan_to_num(f0) - 65) / (2093 - 65), 0, 1)
 - `f0_voiced` → toggle between tonal rendering mode and noisy/percussive rendering mode
 
 **TODO:**
-- [ ] Add `f0_hz`, `f0_voiced`, `f0_probs` to `TonalityFeatures` dataclass
-- [ ] Implement `pyin` call in `FeatureAnalyzer.extract_tonality()`
-- [ ] Compute `pitch_velocity` (gradient of MIDI note number on voiced frames)
-- [ ] Compute `pitch_register` (normalized 0–1 over musical range)
-- [ ] Add all pitch fields to `PolishedFeatures`
-- [ ] Apply confidence-weighted smoothing (don't smooth through unvoiced gaps)
-- [ ] Export to manifest
-- [ ] Bump `ANALYSIS_VERSION`
+- [x] Add `f0_hz`, `f0_voiced`, `f0_probs` to `TonalityFeatures` dataclass
+- [x] Implement `pyin` call in `FeatureAnalyzer.extract_tonality()`
+- [x] Compute `pitch_register` (normalized 0–1 over musical range)
+- [x] Add all pitch fields to `PolishedFeatures`
+- [x] Apply confidence-weighted smoothing (don't smooth through unvoiced gaps)
+- [x] Export to manifest
+- [x] Bump `ANALYSIS_VERSION`
+
+> **Implementation note:** `pyin` runs at `hop_length * 4` internally to prevent OOM on long tracks (was crashing Crostini VM at 60fps on ~5-7 min files). Output is resampled back to `n_ref` frames via nearest-neighbour. `pitch_velocity` (gradient) is not currently exported — `pitch_register` (log Hz → [0,1]) is the primary per-frame signal.
 
 ---
 
@@ -289,12 +306,14 @@ def detect_key(chroma_mean):
 - `key_stability` → low stability = key change approaching → trigger palette morph
 
 **TODO:**
-- [ ] Implement Krumhansl-Schmuckler key detection in `core/analyzer.py`
-- [ ] Add section-level key detection (run on 8-second windows to catch key changes)
-- [ ] Add `key_root`, `key_mode`, `key_confidence` to `ExtractedFeatures`
-- [ ] Export key block to manifest metadata
-- [ ] Add per-frame `key_stability` (sliding window key confidence)
-- [ ] Bump `ANALYSIS_VERSION`
+- [x] Implement Krumhansl-Schmuckler key detection in `core/analyzer.py`
+- [x] Add section-level key detection (run on 8-second windows to catch key changes)
+- [x] Add `key_root`, `key_mode`, `key_confidence` to `ExtractedFeatures`
+- [x] Export key block to manifest metadata
+- [x] Add per-frame `key_stability` (sliding window key confidence)
+- [x] Bump `ANALYSIS_VERSION`
+
+> **Implementation note:** K-S on pure major triads (e.g., C,E,G) is ambiguous with the relative minor (A minor). Test suite uses diatonic set membership checks rather than exact root assertions for this reason.
 
 ---
 
@@ -337,11 +356,11 @@ downbeat_frames = beat_frames[bar_phase::4]
 - `bar_index` → use modulo patterns (every 4 bars, every 8 bars) for large-scale phrase structure
 
 **TODO:**
-- [ ] Implement downbeat detection in `FeatureAnalyzer.extract_temporal()`
-- [ ] Add `downbeat_frames`, `downbeat_times` to `TemporalFeatures`
-- [ ] Add `is_downbeat`, `beat_position`, `bar_index`, `bar_progress` to `PolishedFeatures`
-- [ ] Export all bar-level fields to manifest
-- [ ] Bump `ANALYSIS_VERSION`
+- [x] Implement downbeat detection in `FeatureAnalyzer.extract_temporal()`
+- [x] Add `downbeat_frames`, `downbeat_times` to `TemporalFeatures`
+- [x] Add `is_downbeat`, `beat_position`, `bar_index`, `bar_progress` to `PolishedFeatures`
+- [x] Export all bar-level fields to manifest
+- [x] Bump `ANALYSIS_VERSION`
 
 ---
 
@@ -371,11 +390,11 @@ bass_cqt = cqt_magnitude[8:20, :].mean(axis=0)      # C2–B3 (~65–247 Hz)
 **Visual mapping:** Better sub-bass = more precise kick drum detection, cleaner "pulse" animations.
 
 **TODO:**
-- [ ] Add CQT computation to `_extract_frequency_bands()` for sub-bass and bass bins
-- [ ] Add `sub_bass_cqt` and `bass_cqt` as alternative fields alongside existing bandpass versions
-- [ ] Benchmark runtime (CQT is slower than bandpass RMS)
-- [ ] Evaluate whether CQT replacement should be default or opt-in config flag
-- [ ] Bump `ANALYSIS_VERSION`
+- [x] Add CQT computation to `_extract_frequency_bands()` for sub-bass and bass bins
+- [x] Add `sub_bass_cqt` and `bass_cqt` as alternative fields alongside existing bandpass versions
+- [x] Benchmark runtime (CQT is slower than bandpass RMS)
+- [x] Evaluate whether CQT replacement should be default or opt-in config flag → **decided: opt-in** (`use_cqt=False` default)
+- [x] Bump `ANALYSIS_VERSION`
 
 ---
 
@@ -398,10 +417,10 @@ contrast = librosa.feature.spectral_contrast(y=y, sr=sr, hop_length=hop_length)
 - `spectral_contrast` high → crystalline, structured visuals; low → diffuse, blended
 
 **TODO:**
-- [ ] Add `spectral_bandwidth` and `spectral_contrast` to `TonalityFeatures`
-- [ ] Export to manifest
-- [ ] Add `bandwidth_norm` to primitives (replaces or augments current `texture` calculation)
-- [ ] Bump `ANALYSIS_VERSION`
+- [x] Add `spectral_bandwidth` and `spectral_contrast` to `TonalityFeatures`
+- [x] Export to manifest
+- [x] Add `bandwidth_norm` to primitives (replaces or augments current `texture` calculation)
+- [x] Bump `ANALYSIS_VERSION`
 
 ---
 
@@ -421,11 +440,11 @@ Bump `ANALYSIS_VERSION` to `2.0` on Phase 1 completion to invalidate all caches.
 
 ---
 
-## Phase 2 — Walk
+## Phase 2 — Walk (Partial: W4 complete, W1/W2/W3 stubs only)
 
 **Theme:** New dependencies unlock source identity and neural-quality beat/chord extraction. These are the features that take you from "louder = more intense" to "this is what's playing and what it means musically."
 
-**Estimated effort:** 3–5 weeks
+**Status:** W4 (onset shape) fully implemented. W1/W2/W3 have dataclass stubs and config flags but no computation — they raise `ImportError` (W1) or silently return `None`/fall back to librosa (W2/W3) when optional dependencies are absent.
 **New dependencies:** `demucs`, `madmom`, `autochord` (or `chord-recognition`)
 
 ---
@@ -495,11 +514,12 @@ class SourceSeparator:
 
 **Performance note:** Demucs htdemucs runs at ~3× realtime on CPU for a 3-minute song (≈60s). The htdemucs_ft (fine-tuned) variant is ~2× realtime. GPU reduces this to ~0.3× realtime. This is offline-only (pre-render) in Phase 2; real-time streaming is Phase 3.
 
-**TODO:**
-- [ ] Add `demucs` to `pyproject.toml` as optional extra: `pip install -e ".[separation]"`
-- [ ] Implement `SourceSeparator` class in `core/decomposer.py`
-- [ ] Add `SeparatedAudio` dataclass
-- [ ] Add `use_demucs: bool` flag to `AudioPipeline.__init__()`
+**TODO (stub status):**
+- [x] Add `demucs` to `pyproject.toml` as optional extra: `pip install -e ".[separation]"`
+- [x] Add `SeparatedAudio` dataclass (`core/decomposer.py`)
+- [x] Add `SourceSeparator` class stub — raises `ImportError` if demucs not installed
+- [x] Add `use_demucs: bool` flag to `AudioPipeline.__init__()`
+- [ ] Implement actual stem separation in `SourceSeparator.separate()`
 - [ ] Add per-stem feature extraction in `FeatureAnalyzer.analyze()`
 - [ ] Add stem energy fields to `PolishedFeatures`
 - [ ] Export stem fields to manifest
@@ -549,14 +569,14 @@ def extract_temporal_neural(self, audio_path, sr, hop_length):
 - `time_signature` → shapes with 3 vs 4 axes match the meter
 - `swing_ratio` → whether off-beat animations lag (jazz feel) or quantize (electronic)
 
-**TODO:**
-- [ ] Add `madmom` to `pyproject.toml` optional extra: `pip install -e ".[neural-beats]"`
+**TODO (stub status):**
+- [x] Add `madmom` to `pyproject.toml` optional extra: `pip install -e ".[neural-beats]"`
+- [x] Add `use_neural_beats: bool` flag to `AudioPipeline`
+- [x] Add fallback to librosa if madmom not installed (flag exists, falls through to C5 heuristic)
 - [ ] Implement `extract_temporal_neural()` in `FeatureAnalyzer`
-- [ ] Add `use_neural_beats: bool` flag to `AudioPipeline`
 - [ ] Add `time_signature`, `swing_ratio`, `tempo_stability` to `TemporalFeatures`
 - [ ] Export to manifest metadata
 - [ ] Update downbeat detection in `PolishedFeatures` (replace C5 heuristic with madmom output)
-- [ ] Add fallback to librosa if madmom not installed
 - [ ] Tests in `tests/core/test_neural_beats.py`
 
 ---
@@ -609,10 +629,10 @@ TENSION = {"maj": 0.0, "min": 0.2, "dom7": 0.5, "dim": 0.8, "aug": 0.9, "N": 0.1
 - `chord_is_change` → trigger shape morph at chord boundary
 - `chord_quality` → major = open/symmetric shapes, minor = asymmetric/rotated, dim = jagged, aug = stretched
 
-**TODO:**
-- [ ] Add `autochord` to optional extras: `pip install -e ".[harmony]"`
+**TODO (stub status):**
+- [x] Add `autochord` to optional extras: `pip install -e ".[harmony]"`
+- [x] Add `HarmonicFeatures` dataclass stub (always returns `None` fields when autochord absent)
 - [ ] Implement `FeatureAnalyzer.extract_harmony()` method
-- [ ] Add `HarmonicFeatures` dataclass (chord sequence, per-frame labels)
 - [ ] Add chord fields to `PolishedFeatures`
 - [ ] Add `chord_tension` to derived primitives (replaces heuristic `texture` calculation)
 - [ ] Export chord sequence to manifest metadata
@@ -621,7 +641,7 @@ TENSION = {"maj": 0.0, "min": 0.2, "dom7": 0.5, "dim": 0.8, "aug": 0.9, "N": 0.1
 
 ---
 
-### W4 — Onset Envelope Shape (Attack Profiling)
+### W4 — Onset Envelope Shape (Attack Profiling) ✓ COMPLETE
 
 **Files:** `core/analyzer.py`
 
@@ -659,15 +679,16 @@ def classify_onset_shape(onset_frame, rms, hop_length, sr):
 
 **Visual mapping:**
 - `transient` → hard flash, geometric spike
-- `metallic` → shimmer effect, thin bright lines
-- `swell` → slow bloom expansion
-- `pluck` → medium attack with sustain-driven fade
+- `percussive` → standard beat-driven flash
+- `harmonic` → soft bloom, no reseed in attractor
+
+> **Implementation note:** The actual implementation uses 3 onset types — `"transient"`, `"percussive"`, `"harmonic"` — derived from HPSS ratios and RMS envelope shape, rather than the 4 proposed above (`transient`/`metallic`/`swell`/`pluck`). The HPSS-based approach is more reliable on mixed material.
 
 **TODO:**
-- [ ] Implement `classify_onset_shape()` in `FeatureAnalyzer`
-- [ ] Add onset classification to `TemporalFeatures`
-- [ ] Export `onset_type` and `onset_sharpness` to per-frame manifest data
-- [ ] Add to `PolishedFeatures`
+- [x] Implement `classify_onset_shape()` in `FeatureAnalyzer`
+- [x] Add onset classification to `TemporalFeatures`
+- [x] Export `onset_type` and `onset_sharpness` to per-frame manifest data
+- [x] Add to `PolishedFeatures`
 
 ---
 
@@ -852,10 +873,10 @@ class RealtimeAnalyzer:
 
 | Version | What Changed |
 |---|---|
-| `1.1` (current) | 7-band energy, chroma, spectral features, 6 primitives |
-| `2.0` (Crawl) | + MFCC delta, song structure, pitch tracking, key/mode, downbeats, CQT sub-bass, bandwidth |
-| `3.0` (Walk) | + stem energy fields (drums/bass/vocals/other), neural beats, chord identity, chord tension, onset shape |
-| `4.0` (Run) | + CREPE pitch spectrum, per-section emotion (arousal/valence), MERT embedding_3d |
+| `1.1` | 7-band energy, chroma, spectral features, 6 primitives |
+| `2.0` ✓ **current** | + MFCC delta/delta2, timbre_velocity, song structure (C2), pitch tracking/register (C3), key/mode (C4), downbeats/bar grid (C5), CQT sub-bass opt-in (C6), spectral bandwidth/contrast (C7), onset shape 3-type (W4) |
+| `3.0` | + stem energy fields (drums/bass/vocals/other), neural beats, chord identity, chord tension |
+| `4.0` | + CREPE pitch spectrum, per-section emotion (arousal/valence), MERT embedding_3d |
 
 All schema changes are additive (new fields only). Old consumers continue to work. Schema version is in `manifest.metadata.schema_version`.
 
@@ -896,67 +917,68 @@ This table answers: "if I implement this feature, what does it drive in the visu
 
 ## Full TODO Checklist
 
-### Phase 1 — Crawl
+### Phase 1 — Crawl ✓ ALL COMPLETE
 
 **C1: MFCC Export**
-- [ ] Add `mfcc_delta`, `mfcc_delta2` to `FeatureAnalyzer.extract_tonality()`
-- [ ] Add MFCC fields to `PolishedFeatures`
-- [ ] Export MFCC arrays to manifest
-- [ ] Add `timbre_velocity` primitive
-- [ ] Update `export_numpy()`
-- [ ] Tests for MFCC delta extraction
-- [ ] Bump `ANALYSIS_VERSION` → `2.0`
+- [x] Add `mfcc_delta`, `mfcc_delta2` to `FeatureAnalyzer.extract_tonality()`
+- [x] Add MFCC fields to `PolishedFeatures`
+- [x] Export MFCC arrays to manifest
+- [x] Add `timbre_velocity` primitive
+- [x] Update `export_numpy()`
+- [x] Tests for MFCC delta extraction
+- [x] Bump `ANALYSIS_VERSION` → `2.0`
 
 **C2: Song Structure**
-- [ ] Add `StructuralFeatures` dataclass
-- [ ] Implement `extract_structure()` using `librosa.segment`
-- [ ] Add `section_index`, `section_novelty`, `section_progress`, `section_change` to `PolishedFeatures`
-- [ ] Export per-frame fields + `structure` metadata block
-- [ ] Tests: verify section count > 1 on multi-minute track
+- [x] Add `StructuralFeatures` dataclass
+- [x] Implement `extract_structure()` using `librosa.segment`
+- [x] Add `section_index`, `section_novelty`, `section_progress`, `section_change` to `PolishedFeatures`
+- [x] Export per-frame fields + `structure` metadata block
+- [x] Tests: verify section count > 1 on multi-minute track
 
 **C3: Pitch Tracking**
-- [ ] Add `f0_hz`, `f0_voiced`, `f0_probs` to `TonalityFeatures`
-- [ ] Implement `librosa.pyin()` call in `extract_tonality()`
-- [ ] Compute `pitch_velocity`, `pitch_register`
-- [ ] Add confidence-weighted smoothing
-- [ ] Export all pitch fields
-- [ ] Tests: verify `f0_voiced` False on silent sections
+- [x] Add `f0_hz`, `f0_voiced`, `f0_probs` to `TonalityFeatures`
+- [x] Implement `librosa.pyin()` call in `extract_tonality()` (at 4× hop for OOM safety)
+- [x] Compute `pitch_register` (normalized 0–1); `pitch_velocity` deferred
+- [x] Add confidence-weighted smoothing
+- [x] Export all pitch fields
+- [x] Tests: verify `f0_voiced` False on silent sections
 
 **C4: Key/Mode Detection**
-- [ ] Implement Krumhansl-Schmuckler profile correlator
-- [ ] Add section-level key detection (8-second windows)
-- [ ] Add `key_stability` per-frame signal
-- [ ] Export `key` block to manifest metadata
-- [ ] Tests: verify major/minor classification on known-key test tracks
+- [x] Implement Krumhansl-Schmuckler profile correlator
+- [x] Add section-level key detection (8-second windows)
+- [x] Add `key_stability` per-frame signal
+- [x] Export `key` block to manifest metadata
+- [x] Tests: verify major/minor classification on known-key test tracks
 
 **C5: Downbeat Tracking**
-- [ ] Implement downbeat detection heuristic in `extract_temporal()`
-- [ ] Add `is_downbeat`, `beat_position`, `bar_index`, `bar_progress`
-- [ ] Export to manifest
-- [ ] Tests: verify `beat_position` cycles 1–4
+- [x] Implement downbeat detection heuristic in `extract_temporal()`
+- [x] Add `is_downbeat`, `beat_position`, `bar_index`, `bar_progress`
+- [x] Export to manifest
+- [x] Tests: verify `beat_position` cycles 1–4
 
 **C6: CQT Sub-Bass**
-- [ ] Add CQT computation to `_extract_frequency_bands()`
-- [ ] Add `sub_bass_cqt`, `bass_cqt` fields
-- [ ] Benchmark CQT vs. bandpass runtime
-- [ ] Add `use_cqt: bool` config flag (default False, opt-in)
-- [ ] Tests: verify CQT sub-bass > 0 on kick-heavy test track
+- [x] Add CQT computation to `_extract_frequency_bands()`
+- [x] Add `sub_bass_cqt`, `bass_cqt` fields
+- [x] Benchmark CQT vs. bandpass runtime
+- [x] Add `use_cqt: bool` config flag (default False, opt-in)
+- [x] Tests: verify CQT sub-bass > 0 on kick-heavy test track
 
 **C7: Bandwidth + Contrast**
-- [ ] Add `spectral_bandwidth` and `spectral_contrast` extraction
-- [ ] Export to manifest
-- [ ] Add `bandwidth_norm` to primitives
-- [ ] Tests
+- [x] Add `spectral_bandwidth` and `spectral_contrast` extraction
+- [x] Export to manifest
+- [x] Add `bandwidth_norm` to primitives
+- [x] Tests
 
 ---
 
-### Phase 2 — Walk
+### Phase 2 — Walk (partial)
 
-**W1: Demucs Source Separation**
-- [ ] Add `demucs` optional extra to `pyproject.toml`
-- [ ] Implement `SourceSeparator` class in `core/decomposer.py`
-- [ ] Add `SeparatedAudio` dataclass
-- [ ] Add `use_demucs: bool` to `AudioPipeline`
+**W1: Demucs Source Separation** *(stub)*
+- [x] Add `demucs` optional extra to `pyproject.toml`
+- [x] Add `SeparatedAudio` dataclass
+- [x] Add `SourceSeparator` stub (raises `ImportError` when demucs absent)
+- [x] Add `use_demucs: bool` to `AudioPipeline`
+- [ ] Implement actual stem separation in `SourceSeparator.separate()`
 - [ ] Per-stem feature extraction in `FeatureAnalyzer.analyze()`
 - [ ] Add stem fields to `PolishedFeatures`
 - [ ] Export stem fields to manifest
@@ -964,29 +986,29 @@ This table answers: "if I implement this feature, what does it drive in the visu
 - [ ] Tests in `tests/core/test_source_separation.py`
 - [ ] Document expected runtime (CPU/GPU)
 
-**W2: Madmom Neural Beat Tracking**
-- [ ] Add `madmom` optional extra to `pyproject.toml`
-- [ ] Implement `extract_temporal_neural()`
-- [ ] Add `use_neural_beats: bool` to `AudioPipeline`
+**W2: Madmom Neural Beat Tracking** *(stub)*
+- [x] Add `madmom` optional extra to `pyproject.toml`
+- [x] Add `use_neural_beats: bool` to `AudioPipeline`
+- [x] Fallback to librosa C5 heuristic when madmom absent
+- [ ] Implement `extract_temporal_neural()` with actual madmom RNN processor
 - [ ] Add `time_signature`, `swing_ratio`, `tempo_stability` to `TemporalFeatures`
-- [ ] Implement fallback to librosa if madmom not installed
 - [ ] Export to manifest metadata
 - [ ] Tests in `tests/core/test_neural_beats.py`
 
-**W3: Chord Detection**
-- [ ] Add `autochord` optional extra to `pyproject.toml`
+**W3: Chord Detection** *(stub)*
+- [x] Add `autochord` optional extra to `pyproject.toml`
+- [x] Add `HarmonicFeatures` dataclass stub (fields all `None` when absent)
 - [ ] Implement `extract_harmony()` method
-- [ ] Add `HarmonicFeatures` dataclass
 - [ ] Add chord fields to `PolishedFeatures`
 - [ ] Add `chord_tension` to derived primitives
 - [ ] Export chord sequence to metadata + per-frame fields
 - [ ] Tests in `tests/core/test_chord_detection.py`
 
-**W4: Onset Envelope Shape**
-- [ ] Implement `classify_onset_shape()` in `FeatureAnalyzer`
-- [ ] Add onset type/sharpness to `TemporalFeatures`
-- [ ] Export to per-frame manifest data
-- [ ] Tests: transient vs. swell classification on synthetic signals
+**W4: Onset Envelope Shape** ✓ COMPLETE
+- [x] Implement `classify_onset_shape()` in `FeatureAnalyzer` (3 types: transient/percussive/harmonic)
+- [x] Add onset type/sharpness to `TemporalFeatures`
+- [x] Export to per-frame manifest data
+- [x] Tests: onset shape classification on synthetic signals
 
 ---
 
@@ -1023,16 +1045,15 @@ This table answers: "if I implement this feature, what does it drive in the visu
 
 ---
 
-## Recommended Immediate Next Steps
+## Recommended Next Steps
 
-While you work on getting better source audio (WAV/FLAC):
+Phase 1 is complete. The highest-impact remaining work in priority order:
 
-1. **Fix the MFCC export gap (C1)** — it's a 30-minute task and recovers lost information that's already being computed. Zero risk.
-2. **Implement song structure detection (C2)** — this is the single feature with the highest visual impact-to-effort ratio. Everything downstream changes when the visualizer knows it's in the chorus.
-3. **Add key/mode to manifest metadata (C4)** — 50 lines of code, instant palette mapping payoff.
-4. **Add downbeat tracking (C5)** — bar-level timing fundamentally changes how animations feel (they complete at bar boundaries instead of floating arbitrarily).
-
-All four are pure librosa, zero new dependencies, and can be done in approximately one focused week.
+1. **Retrofit remaining experiment renderers** — chemical, fractal/kaleidoscope, decay, solar all have Phase 1 wiring plans defined in the Retrofit Guide below. The attractor is done. Each renderer retrofit is 1–2 hours. chemical.py is the most impactful (section flush + bandwidth → crystal lattice order).
+2. **Wire Phase 1 fields into `frontend/app.js`** — `section_index`, `is_downbeat`, `bar_progress`, `key_mode` have specific per-style mappings defined in the Frontend Retrofit section. The manifest already carries all these fields; the frontend just isn't reading them yet.
+3. **Implement W3 chord detection** — the highest-value Phase 2 feature. Unlocks tension arcs, hue shift relative to tonic, shape morph on chord change. Requires `pip install autochord`.
+4. **Implement W1 source separation (Demucs)** — eliminates bass/kick bleed from all band readings. Transforms the attractor's ρ and scale drivers. Requires GPU or patience (CPU ~3×RT).
+5. **Upgrade to WAV/FLAC source audio** — still the best single improvement for beat tracking and onset detection accuracy. Zero code changes.
 
 ---
 
@@ -1170,21 +1191,22 @@ Each renderer overrides `_smooth_audio()` or reads directly from `frame_data` in
 
 ---
 
-#### `experiment/attractor.py` — AttractorRenderer
+#### `experiment/attractor.py` — AttractorRenderer ✓ Phase 1 COMPLETE
 
-Currently uses (from `_smooth_audio` override): `sub_bass`, `percussive_impact`, `brilliance`, `spectral_flux`, `harmonic_energy`, `global_energy`, `pitch_hue`, `spectral_centroid`, `spectral_flatness`, `is_beat`.
+Currently uses (from `_smooth_audio` override): `sub_bass`, `percussive_impact`, `brilliance`, `spectral_flux`, `harmonic_energy`, `global_energy`, `pitch_hue`, `spectral_centroid`, `spectral_flatness`, `is_beat`, **plus all Phase 1 fields below**.
 
-**Phase 1 additions:**
+**Phase 1 additions (all wired — commit `ad53d84`):**
 | New field | Mapping |
 |---|---|
-| `is_downbeat` | Larger shockwave than `is_beat`; reseed 30–50% of particles (vs. 12–40% on beat) |
-| `section_change` | Full palette crossfade; reset trail decay to maximum for 1 second |
-| `pitch_velocity` | Modulate camera elevation arc speed (rising pitch → camera rising) |
-| `key_mode` | At init/section-change: if `minor` → use `void_fire` palette; `major` → `neon_aurora` |
-| `f0_hz` | Drive Rössler c parameter directly instead of using `global_energy` (more musical) |
-| `bar_progress` | Modulate Lorenz β cyclically with bar (slight breathing on the bar level) |
+| `is_downbeat` | 1.6× flash strength + 1.8× camera kick vs regular beat shockwave |
+| `section_change` | Golden-ratio hue jump, 40% mass reseed, bloom flash |
+| `pitch_register` | Camera elevation target: `0.05 + pitch_register * 0.55` (was harmonic-based) |
+| `key_stability` | Trail decay stability bonus (`+ key_stability * 0.04`); Rössler c chaos term |
+| `timbre_velocity` | Lorenz σ turbulence (`+ timbre_velocity * 0.3 * s`) |
+| `beat_position` | Bar breathing: `cos(beat_position * 2π) * 0.04` scale pulse |
+| `onset_type` | `"harmonic"` skips reseed; `"transient"` adds azimuth micro-jolt |
 
-**Phase 2 additions:**
+**Phase 2 additions (planned):**
 | New field | Mapping |
 |---|---|
 | `drums_energy` | Replace `percussive_impact` as the Lorenz ρ driver (cleaner, no bleed) |
@@ -1193,10 +1215,14 @@ Currently uses (from `_smooth_audio` override): `sub_bass`, `percussive_impact`,
 | `chord_is_change` | Small reseed burst at chord boundaries |
 
 **TODO:**
-- [ ] Add `_smooth_downbeat`, `_smooth_section_change`, `_smooth_pitch_velocity`, `_smooth_bar_progress` to attractor's `_smooth_audio()` override
-- [ ] Wire `is_downbeat` → shockwave system (separate from beat shockwave, larger magnitude)
-- [ ] Wire `section_change` → `_trail_decay` reset + palette hot-swap
-- [ ] Wire `pitch_velocity` → camera elevation
+- [x] Add `_smooth_pitch_register`, `_smooth_key_stability`, `_smooth_timbre_velocity`, `_smooth_bandwidth` to attractor's `_smooth_audio()` override
+- [x] Wire `is_downbeat` → shockwave system (1.6× flash, 1.8× camera kick)
+- [x] Wire `section_change` → hue jump + mass reseed + bloom
+- [x] Wire `pitch_register` → camera elevation
+- [x] Wire `key_stability` → trail decay + Rössler c
+- [x] Wire `timbre_velocity` → Lorenz σ turbulence
+- [x] Wire `beat_position` → bar breathing scale pulse
+- [x] Wire `onset_type` → reseed skip / azimuth jolt
 - [ ] Phase 2: replace `percussive_impact` → `drums_energy` for ρ; `sub_bass` → `bass_energy` for scale; add `chord_tension` → σ chaos
 
 ---
@@ -1431,7 +1457,7 @@ if (HAS_STRUCTURE) { /* use section_index, section_novelty, etc. */ }
 
 ### Retrofit TODO Checklist (All Consumers)
 
-**`base.py` (`BaseVisualizer` + `VisualPolisher`)**
+**`base.py` (`BaseVisualizer` + `VisualPolisher`)** — *pending*
 - [ ] Add Phase 1 fields to `_smooth_audio()`: `section_novelty`, `pitch_velocity`, `f0_hz`, `bar_progress`, `spectral_bandwidth`, `timbre_velocity`
 - [ ] Add all new smoothed fields to `_smooth_audio_dict()`
 - [ ] Initialize all new smoothed fields in `__init__()` with safe defaults
@@ -1440,31 +1466,31 @@ if (HAS_STRUCTURE) { /* use section_index, section_novelty, etc. */ }
 - [ ] Phase 2: Add `drums_energy`, `bass_energy`, `chord_tension` to `_smooth_audio()`
 - [ ] Phase 2: Upgrade `VisualPolisher.apply()` CA + saturation with chord/stem fields
 
-**`experiment/attractor.py`**
-- [ ] Phase 1: downbeat shockwave, section palette swap, pitch_velocity → camera
+**`experiment/attractor.py`** ✓ Phase 1 DONE (commit `ad53d84`)
+- [x] Phase 1: downbeat shockwave (1.6×), section hue jump + reseed, pitch_register → camera elevation, key_stability → trail/chaos, timbre_velocity → σ turbulence, bar breathing, onset_type differentiation
 - [ ] Phase 2: drums/bass stem replacement, chord_tension → Lorenz σ
 
-**`experiment/chemical.py`**
-- [ ] Phase 1: downbeat injection, section flush, bandwidth → lattice order
+**`experiment/chemical.py`** — *Phase 1 pending*
+- [ ] Phase 1: downbeat injection (2×), section novelty flush, bandwidth → lattice order
 - [ ] Phase 2: stem replacements, chord_tension → edge sharpness, onset_type → growth shape
 
-**`experiment/fractal.py` + `experiment/kaleidoscope.py`**
+**`experiment/fractal.py` + `experiment/kaleidoscope.py`** — *Phase 1 pending*
 - [ ] Phase 1: section_index → Julia family, pitch_velocity → c drift, bar_progress → warp
 - [ ] Phase 2: chord_tension → zoom depth, chord_root_index → hue
 
-**`experiment/decay.py`**
+**`experiment/decay.py`** — *Phase 1 pending*
 - [ ] Phase 1: downbeat mega-burst, pitch_velocity → spawn direction
 - [ ] Phase 2: onset_type → burst shape, drums_energy → spawn rate
 
-**`experiment/solar.py`**
+**`experiment/solar.py`** — *Phase 1 pending*
 - [ ] Phase 1: bar_progress → orbital sync, key_mode → star color
 - [ ] Phase 2: chord_tension → solar activity
 
-**`visualizers/kaleidoscope.py`** (legacy Python renderer)
+**`visualizers/kaleidoscope.py`** (legacy Python renderer) — *pending*
 - [ ] Audit all direct dict accesses; replace with `.get()` + defaults
 - [ ] Confirm works with both schema_version 1.1 and 2.0
 
-**`frontend/app.js`**
+**`frontend/app.js`** — *Phase 1 pending*
 - [ ] Audit all `frameData.field` direct accesses → add `?? default`
 - [ ] Add new fields to `smoothedValues` init and update loop
 - [ ] Add `section_index` global palette handler
@@ -1473,13 +1499,16 @@ if (HAS_STRUCTURE) { /* use section_index, section_novelty, etc. */ }
 - [ ] Wire Phase 1 fields to style-specific visual parameters (see mapping table above)
 - [ ] Add schema version feature flags at manifest load
 
-**`io/exporter.py`**
-- [ ] Every new `PolishedFeatures` field must be added to both `_build_frame()` and `export_numpy()`
-- [ ] Bump `schema_version` at each phase boundary: `"2.0"` (Crawl), `"3.0"` (Walk), `"4.0"` (Run)
+**`io/exporter.py`** ✓ Phase 1 DONE
+- [x] All Phase 1 `PolishedFeatures` fields added to `_build_frame()` and `export_numpy()`
+- [x] `schema_version = "2.0"` on Phase 1 completion
+- [ ] Bump `schema_version` → `"3.0"` on Walk completion, `"4.0"` on Run
 
-**`pipeline.py`**
-- [ ] Cache key must include all new config flags: `use_demucs`, `use_neural_beats`, `use_crepe`, `use_cqt`
-- [ ] Bump `ANALYSIS_VERSION` at each phase boundary to match `schema_version`
+**`pipeline.py`** ✓ Phase 1 DONE
+- [x] `ANALYSIS_VERSION = "2.0"` bumped
+- [x] Cache key includes `use_cqt` flag
+- [x] `use_demucs`, `use_neural_beats` flags exist
+- [ ] Add `use_crepe` flag when R1 is implemented
 
 ---
 
